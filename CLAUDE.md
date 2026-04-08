@@ -85,5 +85,5 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 - `/wiki-ingest` — Distill documents into vault pages
 - `/tag-taxonomy` — Validate and normalize tags against taxonomy
 - `/cross-linker` — Discover and add missing wikilinks
-- `/claude-history-ingest` — Mine Claude conversations into compiled insights
+- `/claude-history-ingest` — Mine Claude conversations into compiled vault insights via MemPalace (requires `pip install mempalace`)
 - `/data-ingest` — Process logs, transcripts, exports into vault pages

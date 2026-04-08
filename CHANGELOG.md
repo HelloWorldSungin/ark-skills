@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-04-08
+
+### Changed
+- `claude-history-ingest` skill rewritten to use MemPalace (ChromaDB) for indexing and retrieval.
+  Auto-indexes sessions via Stop hook (zero LLM tokens). Compiles insights via semantic search
+  (~10K tokens vs 100-200K previously). Three modes: index, compile, full.
+  Requires `pip install mempalace`.
+
+### Added
+- `skills/claude-history-ingest/hooks/ark-history-hook.sh` — Stop hook for auto-indexing
+- `skills/claude-history-ingest/hooks/install-hook.sh` — One-time setup helper
+
 ## [1.0.2.0] - 2026-04-08
 
 ### Changed
