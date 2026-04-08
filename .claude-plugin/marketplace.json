@@ -8,8 +8,8 @@
     {
       "name": "ark-skills",
       "source": "./",
-      "description": "Shared skills for ArkNode projects: Obsidian vault management, NotebookLM, TaskNotes, code review, and codebase maintenance.",
-      "version": "1.0.2"
+      "description": "Shared skills for ArkNode projects: Obsidian vault management, NotebookLM, TaskNotes, code review, codebase maintenance, and Claude history ingest via MemPalace.",
+      "version": "1.1.0"
     }
   ]
 }
