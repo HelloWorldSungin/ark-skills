@@ -72,17 +72,17 @@ else
     echo -e "${GREEN}[OK]${NC} Hook $ACTION at $HOOK_DST"
 fi
 
-# --- Step 5: Register hook in settings ---
-SETTINGS="$HOME/.claude/settings.json"
-if [ ! -f "$SETTINGS" ]; then
-    SETTINGS="$HOME/.claude/settings.local.json"
-fi
+# --- Step 5: Register hook in project-local settings ---
+# Use .claude/settings.json in the current project (per-project scope, not global)
+# This ensures the hook only fires in projects that explicitly opt in
+PROJ_SETTINGS="$PWD/.claude/settings.json"
+mkdir -p "$PWD/.claude"
 
-if [ -f "$SETTINGS" ] && grep -q "ark-history-hook" "$SETTINGS" 2>/dev/null; then
-    echo -e "${GREEN}[OK]${NC} Hook already registered in $SETTINGS"
+if [ -f "$PROJ_SETTINGS" ] && grep -q "ark-history-hook" "$PROJ_SETTINGS" 2>/dev/null; then
+    echo -e "${GREEN}[OK]${NC} Hook already registered in $PROJ_SETTINGS (project-local)"
 else
-    echo -e "${YELLOW}Registering hook in $SETTINGS...${NC}"
-    SETTINGS_PATH="$SETTINGS" HOOK_CMD="bash $HOOK_DST" python3 -c "
+    echo -e "${YELLOW}Registering hook in $PROJ_SETTINGS (project-local)...${NC}"
+    SETTINGS_PATH="$PROJ_SETTINGS" HOOK_CMD="bash $HOOK_DST" python3 -c "
 import json, os, sys
 path = os.environ['SETTINGS_PATH']
 hook_cmd = os.environ['HOOK_CMD']
@@ -110,7 +110,7 @@ with open(tmp, 'w') as f:
 os.replace(tmp, path)
 print('Hook registered.')
 "
-    echo -e "${GREEN}[OK]${NC} Hook registered in $SETTINGS"
+    echo -e "${GREEN}[OK]${NC} Hook registered in $PROJ_SETTINGS (project-local)"
 fi
 
 # --- Step 6: Create state directory ---

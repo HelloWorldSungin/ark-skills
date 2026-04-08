@@ -18,8 +18,9 @@ command -v mempalace
 # 2. Is the palace initialized?
 ls ~/.mempalace/palace/chroma.sqlite3 2>/dev/null
 
-# 3. Is the hook installed?
+# 3. Is the hook installed and registered for this project?
 ls ~/.claude/hooks/ark-history-hook.sh 2>/dev/null
+grep -q "ark-history-hook" .claude/settings.json 2>/dev/null && echo "Hook registered (project-local)"
 ```
 
 If anything is missing, run the installer:
