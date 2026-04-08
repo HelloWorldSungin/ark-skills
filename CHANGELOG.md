@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 - `skills/claude-history-ingest/hooks/ark-history-hook.sh` — Stop hook for auto-indexing
 - `skills/claude-history-ingest/hooks/install-hook.sh` — One-time setup helper
 
+### Fixed
+- Path encoding now matches Claude Code's convention (replaces both `/` and `.` with `-`)
+- Installer updates existing hook to latest version instead of silently skipping
+
 ## [1.0.2.0] - 2026-04-08
 
 ### Changed
