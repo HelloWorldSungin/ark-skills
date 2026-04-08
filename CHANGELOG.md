@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-04-08
+
+### Fixed
+- Stop hook now registers in per-project `.claude/settings.json` instead of global settings.
+  The hook only fires in projects that explicitly run the installer.
+
 ## [1.1.0] - 2026-04-08
 
 ### Changed
