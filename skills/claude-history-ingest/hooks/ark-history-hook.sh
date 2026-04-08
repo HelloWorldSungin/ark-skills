@@ -40,7 +40,8 @@ if ! command -v mempalace &>/dev/null; then
 fi
 
 # === DERIVE WING KEY ===
-WING=$(echo "$PWD" | sed 's|/|-|g')
+# Claude Code encodes project paths by replacing both / and . with -
+WING=$(echo "$PWD" | sed 's|[/.]|-|g')
 CLAUDE_PROJECT="$HOME/.claude/projects/$WING"
 
 # === CIRCUIT BREAKER ===

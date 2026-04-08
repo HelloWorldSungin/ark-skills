@@ -41,7 +41,8 @@ fi
 echo -e "${GREEN}[OK]${NC} mempalace found: $(command -v mempalace 2>/dev/null || echo 'installed (restart shell to update PATH)')"
 
 # --- Step 3: Initialize palace ---
-PROJECT_DIR=$(echo "$PWD" | sed 's|/|-|g')
+# Claude Code encodes project paths by replacing both / and . with -
+PROJECT_DIR=$(echo "$PWD" | sed 's|[/.]|-|g')
 CLAUDE_PROJECT="$HOME/.claude/projects/$PROJECT_DIR"
 
 if [ ! -f "$HOME/.mempalace/palace/chroma.sqlite3" ]; then

@@ -34,7 +34,7 @@ bash skills/claude-history-ingest/hooks/install-hook.sh
 2. Read `{vault_path}/_meta/vault-schema.md` to understand placement
 3. Read `{vault_path}/_meta/taxonomy.md` for valid tags (compiled insights must use tags from this list)
 4. Read `{vault_path}/_Templates/Compiled-Insight-Template.md` for output format
-5. Derive the wing key: `WING=$(echo "$PWD" | sed 's|/|-|g')`
+5. Derive the wing key: `WING=$(echo "$PWD" | sed 's|[/.]|-|g')`
 
 ## Modes
 
@@ -45,7 +45,7 @@ This skill supports three modes. Default is `full`.
 Zero LLM tokens. Indexes conversations into MemPalace's ChromaDB.
 
 ```bash
-PROJECT_DIR=$(echo "$PWD" | sed 's|/|-|g')
+PROJECT_DIR=$(echo "$PWD" | sed 's|[/.]|-|g')
 WING="$PROJECT_DIR"
 mempalace mine ~/.claude/projects/$PROJECT_DIR/ --mode convos --wing="$WING"
 ```
@@ -74,7 +74,7 @@ mempalace status
 Read the project's memory files directly (small, high-signal):
 
 ```bash
-PROJECT_DIR=$(echo "$PWD" | sed 's|/|-|g')
+PROJECT_DIR=$(echo "$PWD" | sed 's|[/.]|-|g')
 CLAUDE_PROJECT="$HOME/.claude/projects/$PROJECT_DIR"
 ls "$CLAUDE_PROJECT/memory/" 2>/dev/null
 ```
@@ -92,7 +92,7 @@ Query MemPalace for the rooms it detected in this project's wing.
 Parse room names from status output:
 
 ```bash
-WING=$(echo "$PWD" | sed 's|/|-|g')
+WING=$(echo "$PWD" | sed 's|[/.]|-|g')
 mempalace status 2>/dev/null | awk -v wing="$WING" '
     /WING:/ { found=($2 == wing) }
     found && /ROOM:/ { print $2 }
@@ -111,7 +111,7 @@ Combine discovered room names with baseline queries:
 For each topic from Step 2, run a semantic search:
 
 ```bash
-WING=$(echo "$PWD" | sed 's|/|-|g')
+WING=$(echo "$PWD" | sed 's|[/.]|-|g')
 mempalace search "architecture decisions" --wing="$WING" --results 10
 mempalace search "debugging lessons" --wing="$WING" --results 10
 # ... one per topic
@@ -179,7 +179,7 @@ git commit -m "docs: ingest Claude history — {N} compiled insights created"
 After a successful compile, update the threshold state so the auto-compile hook knows the new baseline:
 
 ```bash
-WING=$(echo "$PWD" | sed 's|/|-|g')
+WING=$(echo "$PWD" | sed 's|[/.]|-|g')
 STATE_DIR="$HOME/.mempalace/hook_state"
 # Parse drawer count from text status output
 CURRENT=$(mempalace status 2>/dev/null | awk -v wing="$WING" '
