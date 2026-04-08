@@ -15,6 +15,20 @@ Claude Code plugin providing 14 shared skills to all ArkNode projects. Eliminate
 /wiki-status
 ```
 
+### Prerequisites
+
+The `/claude-history-ingest` skill requires [MemPalace](https://github.com/milla-jovovich/mempalace) for conversation indexing:
+
+```bash
+# Install via pipx (recommended on macOS)
+pipx install "mempalace>=3.0.0,<4.0.0"
+
+# Or run the skill's built-in installer (handles everything)
+bash skills/claude-history-ingest/hooks/install-hook.sh
+```
+
+All other skills have no external dependencies.
+
 ### Development Setup
 
 ```bash
@@ -38,7 +52,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 | `/wiki-ingest` | Vault Maintenance | Distill documents into vault pages | Adapted from obsidian-wiki |
 | `/tag-taxonomy` | Vault Maintenance | Validate and normalize tags against taxonomy | Adapted from obsidian-wiki |
 | `/cross-linker` | Vault Maintenance | Discover and add missing wikilinks | Adapted from obsidian-wiki |
-| `/claude-history-ingest` | Vault Maintenance | Mine Claude conversations into compiled insights | Adapted from obsidian-wiki |
+| `/claude-history-ingest` | Vault Maintenance | Mine Claude conversations into compiled vault insights via MemPalace | Adapted from obsidian-wiki |
 | `/data-ingest` | Vault Maintenance | Process logs, transcripts, exports into vault pages | Adapted from obsidian-wiki |
 
 ## Skill Documentation
@@ -64,6 +78,8 @@ All 10 vault skills use the **tiered retrieval** pattern:
 
 Key operations: `/wiki-lint` audits vault health (broken links, missing frontmatter, stale index, tag violations). `/wiki-update` syncs project knowledge and regenerates `index.md`. `/tag-taxonomy` enforces consistent tagging against `_meta/taxonomy.md`. `/cross-linker` discovers and adds missing wikilinks.
 
+**`/claude-history-ingest`** — Mines Claude Code conversation history into compiled vault insights using MemPalace (ChromaDB). Two-layer pipeline: a Stop hook auto-indexes sessions (zero LLM tokens), and a compile pass synthesizes insights via semantic search (~10K tokens vs 100-200K previously). Three modes: `index`, `compile`, `full` (default). Requires `pip install mempalace`.
+
 ## Context-Discovery Pattern
 
 Every skill uses **context-discovery** — no skill contains hardcoded project names, vault paths, or task prefixes. When invoked, each skill:
@@ -79,7 +95,7 @@ See `CLAUDE.md` in this repo for the full discovery procedure and field referenc
 ```
 ark-skills (Claude Code plugin)
 ├── .claude-plugin/
-│   ├── plugin.json           # Plugin metadata (ark-skills v1.0.0)
+│   ├── plugin.json           # Plugin metadata (ark-skills v1.1.0)
 │   └── marketplace.json      # Repo-level plugin registry
 └── skills/                   # 14 shared skills
       ↓ context-discovery
