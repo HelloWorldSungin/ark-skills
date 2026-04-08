@@ -14,7 +14,7 @@
 - All skills must use context-discovery from CLAUDE.md — zero hardcoded project names, vault paths, or task prefixes
 - Vault TaskNotes structure, frontmatter schema, and Linear sync: ZERO changes
 - obsidian-wiki `.env`, `.manifest.json`, `log.md`, `provenance:` conventions are NOT used — replaced by Ark conventions
-- Only `cross-linker` can be symlinked from obsidian-wiki; the other 9 are copies with adaptation
+- All 10 obsidian-wiki skills are copies with adaptation (Codex review found cross-linker also depends on `.env` and `log.md`)
 
 ---
 
@@ -95,12 +95,28 @@ When a skill says "Run Project Discovery," follow this procedure:
 | Field | Where to Find | Example |
 |-------|--------------|---------|
 | Project name | Header or table | `trading-signal-ai` |
-| Task prefix | "Task Management" row | `ArkSignal-` |
-| Vault path | "Obsidian Vault" row | `vault/Trading-Signal-AI/` |
-| TaskNotes path | "Task Management" row | `vault/TaskNotes/` |
-| Counter file | Derived from prefix | `TaskNotes/meta/ArkSignal-counter` |
+| Task prefix | "Task Management" row, includes trailing dash | `ArkSignal-` |
+| Vault root | Parent of project docs and TaskNotes | `vault/` |
+| Project docs path | "Obsidian Vault" row — project-specific content | `vault/Trading-Signal-AI/` |
+| TaskNotes path | "Task Management" row — sibling of project docs, NOT nested under it | `vault/TaskNotes/` |
+| Counter file | `{tasknotes_path}/meta/{task_prefix}counter` — prefix includes dash | `vault/TaskNotes/meta/ArkSignal-counter` |
 | Deployment targets | Infrastructure section | CT100, CT110, CT120 (if defined) |
-| NotebookLM config | `.notebooklm/config.json` in vault repo | notebook keys, persona |
+| NotebookLM config | `.notebooklm/config.json` in **project repo** (tracked config) | notebook keys, persona |
+
+**Path layout:** `vault/` is the root containing BOTH `vault/{ProjectDocs}/` and `vault/TaskNotes/` as siblings:
+```
+vault/                          # {vault_root}
+├── Trading-Signal-AI/          # {project_docs_path} — project knowledge
+│   ├── Session-Logs/
+│   ├── Research/
+│   └── ...
+└── TaskNotes/                  # {tasknotes_path} — task tracking (sibling, NOT nested)
+    ├── Tasks/
+    ├── Archive/
+    └── meta/ArkSignal-counter
+```
+
+**Counter file convention:** Task prefix always includes the trailing dash (e.g., `ArkSignal-`). Counter filename is `{task_prefix}counter` → `ArkSignal-counter`. No double dash.
 
 4. If a required field is missing, tell the user: "CLAUDE.md is missing [field]. Add it before running this skill."
 
@@ -197,10 +213,14 @@ Before running this skill, discover project context per the plugin CLAUDE.md:
 - [ ] **Step 4: Replace hardcoded vault paths**
 
 Search and replace in `skills/ark-code-review/SKILL.md`:
-- Replace `vault/TaskNotes/Tasks/Epic/*.md` with `{vault_path}/TaskNotes/Tasks/Epic/*.md` (where `{vault_path}` is from Project Discovery)
-- Replace any `vault/ArkNode-Poly/` references with `{vault_path}/`
+- Replace `vault/TaskNotes/Tasks/Epic/*.md` with `{tasknotes_path}/Tasks/Epic/*.md` (TaskNotes is a sibling of project docs, NOT nested under vault_path)
+- Replace any `vault/ArkNode-Poly/` references with `{project_docs_path}/`
 - Replace `ArkPoly-` prefix references with `{task_prefix}` (from Project Discovery)
-- Replace `master` base branch references with: "the project's base branch (typically `master` or `main`)"
+- Replace ALL literal `master` in git commands (e.g., `git diff master...HEAD`, `git log master..HEAD`) with a dynamic base branch detection:
+  ```markdown
+  Detect the base branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'` (fallback to `master`)
+  ```
+  This applies to every `git diff`, `git log`, and `git merge` command in the skill.
 
 - [ ] **Step 5: Make deployment follow-ups conditional**
 
@@ -264,7 +284,24 @@ Read all source files to understand differences. The AI version has 6 workflow f
 ```bash
 cp ArkNode-Poly/.claude/skills/codebase-maintenance/SKILL.md skills/codebase-maintenance/SKILL.md
 cp ArkNode-Poly/.claude/skills/codebase-maintenance/references/cleanup-checklist.md skills/codebase-maintenance/references/cleanup-checklist.md
+# Copy ALL workflow files — SKILL.md routes to these, they MUST exist
+mkdir -p skills/codebase-maintenance/workflows
+cp ArkNode-Poly/.claude/skills/codebase-maintenance/workflows/cleanup-code.md skills/codebase-maintenance/workflows/ 2>/dev/null || true
+cp ArkNode-Poly/.claude/skills/codebase-maintenance/workflows/sync-vault.md skills/codebase-maintenance/workflows/ 2>/dev/null || true
+cp ArkNode-Poly/.claude/skills/codebase-maintenance/workflows/sync-skills.md skills/codebase-maintenance/workflows/ 2>/dev/null || true
+cp ArkNode-Poly/.claude/skills/codebase-maintenance/workflows/full-cleanup.md skills/codebase-maintenance/workflows/ 2>/dev/null || true
+# If Poly version doesn't have some workflows, check AI version
+for wf in cleanup-code sync-vault sync-skills full-cleanup; do
+  [ ! -f "skills/codebase-maintenance/workflows/${wf}.md" ] && \
+    cp "ArkNode-AI/projects/trading-signal-ai/.claude/skills/codebase-maintenance/workflows/${wf}.md" "skills/codebase-maintenance/workflows/" 2>/dev/null || true
+done
 ```
+
+Verify all required workflow files exist:
+```bash
+ls skills/codebase-maintenance/workflows/
+```
+Expected: `cleanup-code.md`, `sync-vault.md`, `sync-skills.md`, `full-cleanup.md`
 
 - [ ] **Step 3: Add context-discovery preamble**
 
@@ -355,8 +392,8 @@ Add at the top of `skills/notebooklm-vault/SKILL.md`:
 ## Project Discovery
 
 Before running this skill, discover project context per the plugin CLAUDE.md:
-1. Read the project's CLAUDE.md to find: project name, vault path
-2. Read the vault repo's `.notebooklm/config.json` for notebook configuration (this is the authoritative source — not the project repo's copy)
+1. Read the project's CLAUDE.md to find: project name, vault root, project docs path
+2. Read the **project repo's** `.notebooklm/config.json` for notebook configuration (this is the tracked, authoritative source). The vault repo holds `.notebooklm/sync-state.json` (runtime state, not config).
 3. Determine notebook structure: single notebook (one key) or multi-notebook (trading + infra)
 4. For tiered retrieval: read vault's `index.md` and use `summary:` fields to scan before reading full pages
 ```
@@ -793,31 +830,94 @@ git commit -m "feat: add tag-taxonomy skill adapted for Ark vaults"
 
 ---
 
-### Task 9: Symlink cross-linker
+### Task 9: Adapt cross-linker
 
 **Files:**
-- Create: `skills/cross-linker/SKILL.md` (symlink)
+- Read: `obsidian-wiki/.skills/cross-linker/SKILL.md` (~152 lines)
+- Create: `skills/cross-linker/SKILL.md`
 
-- [ ] **Step 1: Create symlink**
+**NOTE:** Codex review found the upstream skill depends on `.env`, `OBSIDIAN_VAULT_PATH`, and `log.md` — cannot be symlinked. Must be copied and adapted like the other 9.
 
-```bash
-cd skills/cross-linker
-ln -s ../../obsidian-wiki/.skills/cross-linker/SKILL.md SKILL.md
+- [ ] **Step 1: Read upstream skill**
+
+- [ ] **Step 2: Write adapted skill**
+
+Write to `skills/cross-linker/SKILL.md`:
+
+```markdown
+---
+name: cross-linker
+description: Discover and add missing wikilinks between vault pages
+---
+
+# Cross-Linker
+
+Scan vault pages for unlinked mentions of other pages and add missing wikilinks.
+
+## Project Discovery
+
+1. Read the project's CLAUDE.md to find the vault path
+2. Read `{vault_root}/index.md` for the full page inventory
+
+## Workflow
+
+### Step 1: Build Page Registry
+
+Glob all `.md` files (exclude `.obsidian/`, `.git/`, `_Templates/`, `_meta/`).
+Extract per page: filename, title, aliases (if any), tags, summary.
+
+### Step 2: Scan for Missing Links
+
+For each page:
+1. Read full content
+2. Extract existing `[[wikilinks]]`
+3. Search for unlinked mentions: filenames, titles without `[[...]]` wrapper
+4. Skip: self-references, common words, code blocks, frontmatter
+5. Match case-insensitively
+
+### Step 3: Score and Filter
+
+- **Exact name match in text:** High confidence — apply
+- **Shared tags (2+) but no link:** Medium confidence — apply
+- **Partial name match:** Low confidence — skip
+
+### Step 4: Apply Links
+
+**Inline (preferred):** Find first natural mention, wrap in `[[page-name]]`
+**Related section (fallback):** If term not naturally mentioned but semantically related, add `## Related` section with links
+
+### Step 5: Report
+
+```
+Cross-Linker Report:
+  Pages scanned: N
+  Links added: M
+  Pages modified: P
+  Orphans remaining: Q
 ```
 
-- [ ] **Step 2: Verify symlink works**
+### Step 6: Commit
 
 ```bash
-head -5 skills/cross-linker/SKILL.md
+cd {vault_root}
+git add -A
+git commit -m "docs: add N missing wikilinks from cross-linker pass"
+```
 ```
 
-Expected: Shows the upstream skill content.
+- [ ] **Step 3: Verify no upstream dependencies**
 
-- [ ] **Step 3: Commit**
+```bash
+grep -i "\.env\|OBSIDIAN_VAULT_PATH\|log\.md\|provenance\|category:" skills/cross-linker/SKILL.md
+```
+
+Expected: Zero matches.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add skills/cross-linker/SKILL.md
-git commit -m "feat: symlink cross-linker skill from obsidian-wiki"
+git commit -m "feat: add cross-linker skill adapted for Ark vaults"
 ```
 
 ---
@@ -1670,14 +1770,12 @@ In your project's `.claude/settings.json`:
 
 ## Step 5: Add Vault to linear-updater
 
-**This requires code changes** to `linear-updater/src/config.ts`:
+**PREREQUISITE:** Task 17 (Phase 5) must be completed first — the dynamic vault config refactor must be deployed before a third vault can be added.
 
-The current config is hardcoded for 2 vaults. To add a third:
-1. Update `loadConfig()` to read from a dynamic vault list
-2. Add your vault path to the `.env` config
-3. Deploy the updated linear-updater to CT110
-
-See Phase 5 of the implementation plan for the exact code changes.
+After the refactor is deployed:
+1. Add your vault to the `VAULTS` env var: `VAULTS=ai:/path/ai,poly:/path/poly,newproject:/path/new`
+2. Restart linear-updater on CT110
+3. Verify sync: create a test task, wait 5 minutes, check Linear
 
 ## Step 6: Set Up NotebookLM Sync
 
@@ -1722,9 +1820,85 @@ git commit -m "docs: add new project onboarding guide"
 
 ---
 
+### Task 17: Write README.md
+
+**Files:**
+- Create: `README.md`
+
+- [ ] **Step 1: Write README.md**
+
+Write to `README.md` covering:
+
+**Sections to include:**
+
+1. **Header & Overview** — What this repo is (Claude Code plugin for shared Ark skills), what problem it solves (skill duplication across projects)
+
+2. **Quick Setup** — Step-by-step to install the plugin:
+   - Clone this repo (with `--recurse-submodules`)
+   - Register as a Claude Code plugin
+   - Verify skills are available (invoke `/wiki-status` from any project)
+
+3. **Available Skills** — Table of all 14 skills with:
+   - Skill name (slash command)
+   - Category (Core / Task Automation / Vault Maintenance)
+   - One-line description
+   - Source (generalized, adapted from obsidian-wiki, or new)
+
+4. **Skill Documentation** — For each skill category, describe:
+   - **Core Skills** (`/ark-code-review`, `/codebase-maintenance`, `/notebooklm-vault`): what they do, what context-discovery fields they need, common invocations
+   - **Task Automation** (`/ark-tasknotes`): MCP integration, Obsidian requirements, fallback behavior
+   - **Vault Maintenance** (10 wiki skills): tiered retrieval, index regeneration, lint checks, tag validation, ingestion workflows
+
+5. **Context-Discovery Pattern** — How skills find project-specific values from CLAUDE.md (reference the plugin CLAUDE.md, explain the monorepo precedence rules)
+
+6. **Architecture** — Brief diagram showing:
+   ```
+   Claude Code Plugin (this repo)
+     └── skills/ (14 shared skills)
+           ↓ context-discovery
+   Project CLAUDE.md → vault path, task prefix, deployment targets
+           ↓
+   Obsidian Vault → TaskNotes → linear-updater → Linear
+                  → NotebookLM sync
+   ```
+
+7. **New Project Onboarding** — Link to `docs/onboarding-guide.md` with a 1-paragraph summary
+
+8. **Repository Structure** — Explain the submodules:
+   - `ArkNode-AI/`, `ArkNode-Poly/` — project repos (skill sources for generalization)
+   - `Arknode-AI-Obsidian-Vault/`, `Arknode-Poly-Obsidian-Vault/` — vault repos
+   - `obsidian-wiki/` — upstream skill reference
+   - `tasknotes/` — MCP server reference
+   - `linear-updater/` — Linear sync service
+
+9. **Development** — How to modify skills:
+   - Edit SKILL.md files in `skills/`
+   - Test by invoking from a project
+   - Verify with grep checks (no hardcoded references)
+   - Commit and push
+
+10. **Vault Artifacts** — Explain what the vault restructuring added and how skills leverage it (index.md, summary:, vault-schema.md, taxonomy.md, generate-index.py)
+
+- [ ] **Step 2: Verify no placeholder content**
+
+```bash
+grep -in "TODO\|TBD\|PLACEHOLDER\|coming soon" README.md
+```
+
+Expected: Zero matches.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add README.md
+git commit -m "docs: add comprehensive README with setup, skills reference, and architecture"
+```
+
+---
+
 ## Phase 5: linear-updater Extensibility
 
-### Task 17: Refactor linear-updater for Dynamic Vault Config
+### Task 18: Refactor linear-updater for Dynamic Vault Config
 
 **Files:**
 - Modify: `linear-updater/src/config.ts`
@@ -1748,29 +1922,44 @@ Edit `linear-updater/src/config.ts`. Replace the hardcoded vault array with a dy
 
 ```typescript
 function parseVaults(): VaultConfig[] {
-  // Support legacy format (VAULT_AI_PATH, VAULT_POLY_PATH)
+  // Check for new dynamic format first
+  const vaultsStr = process.env.VAULTS;
+  if (vaultsStr) {
+    return vaultsStr.split(",").map((entry) => {
+      const colonIdx = entry.indexOf(":");
+      if (colonIdx === -1) {
+        throw new Error(`Invalid vault entry: "${entry}". Expected format: name:/path`);
+      }
+      const name = entry.slice(0, colonIdx).trim();
+      const path = entry.slice(colonIdx + 1).trim();
+      if (!name || !path) {
+        throw new Error(`Invalid vault entry: "${entry}". Expected format: name:/path`);
+      }
+      return { name, path };
+    });
+  }
+
+  // Legacy format: require BOTH vars (preserves current fail-fast behavior)
   const legacyAi = process.env.VAULT_AI_PATH;
   const legacyPoly = process.env.VAULT_POLY_PATH;
 
+  if (legacyAi && legacyPoly) {
+    return [
+      { name: "ai", path: legacyAi },
+      { name: "poly", path: legacyPoly },
+    ];
+  }
+
   if (legacyAi || legacyPoly) {
-    const vaults: VaultConfig[] = [];
-    if (legacyAi) vaults.push({ name: "ai", path: legacyAi });
-    if (legacyPoly) vaults.push({ name: "poly", path: legacyPoly });
-    return vaults;
+    throw new Error(
+      "Legacy vault config requires BOTH VAULT_AI_PATH and VAULT_POLY_PATH. " +
+      "For flexible vault configuration, use VAULTS=name:/path,name2:/path2 instead."
+    );
   }
 
-  // New format: VAULTS=name1:/path1,name2:/path2
-  const vaultsStr = process.env.VAULTS;
-  if (!vaultsStr) {
-    throw new Error("No vault configuration found. Set VAULTS=name:/path,... or legacy VAULT_AI_PATH/VAULT_POLY_PATH");
-  }
-
-  return vaultsStr.split(",").map((entry) => {
-    const [name, path] = entry.split(":");
-    if (!name || !path) {
-      throw new Error(`Invalid vault entry: "${entry}". Expected format: name:/path`);
-    }
-    return { name: name.trim(), path: path.trim() };
+  throw new Error(
+    "No vault configuration found. Set VAULTS=name:/path,... or legacy VAULT_AI_PATH + VAULT_POLY_PATH"
+  );
   });
 }
 ```
@@ -1817,7 +2006,7 @@ git commit -m "feat: support dynamic vault list in config (backward compatible)"
 
 ## Phase 6: Cleanup
 
-### Task 18: Remove Duplicate Skills and Update Project CLAUDEs
+### Task 19: Remove Duplicate Skills and Update Project CLAUDEs
 
 **Files:**
 - Delete: `ArkNode-AI/projects/trading-signal-ai/.claude/skills/ark-code-review/`
@@ -1923,17 +2112,18 @@ Phase 2b (heavy adaptation, parallel):
 Phase 3:
   Task 15 (ark-tasknotes, independent)
 
-Phase 4:
-  Task 16 (onboarding guide, after all skills done)
+Phase 4 (docs, after skills verified + Phase 5 complete):
+  Task 16 (onboarding guide)
+  Task 17 (README.md)
 
 Phase 5:
-  Task 17 (linear-updater, independent)
+  Task 18 (linear-updater, independent — but must complete before Phase 4)
 
 Phase 6:
-  Task 18 (cleanup, MUST be last — depends on all skills being working)
+  Task 19 (cleanup, MUST be last — depends on all skills being working)
 ```
 
-Tasks within each phase are independent and can be parallelized. Phases 1, 2a, 2b, 3, and 5 can all run in parallel. Phase 4 should wait until skills are verified. Phase 6 must be last.
+Tasks within each phase are independent and can be parallelized. Phases 1, 2a, 2b, 3, and 5 can all run in parallel. Phase 4 (docs, including onboarding guide and README) should wait until skills are verified AND Phase 5 is complete (onboarding references the dynamic vault config). Phase 6 must be last.
 
 ---
 
@@ -1941,13 +2131,25 @@ Tasks within each phase are independent and can be parallelized. Phases 1, 2a, 2
 
 After all tasks complete:
 
-- [ ] All 14 skill directories exist under `skills/`
-- [ ] Zero hardcoded project references in any skill: `grep -rn "ArkPoly\|ArkSignal\|trading-signal-ai\|arknode-poly\|CT100\|CT110\|CT120\|192\.168\|Polymarket" skills/`
+### Static checks (grep)
+- [ ] All 14 skill directories exist with SKILL.md: `find skills -name SKILL.md | wc -l` → 14
+- [ ] Zero hardcoded project references: `grep -rn "ArkPoly\|ArkSignal\|trading-signal-ai\|arknode-poly\|CT100\|CT110\|CT120\|192\.168\|Polymarket" skills/`
 - [ ] Zero `.env` or `OBSIDIAN_VAULT_PATH` references: `grep -rn "\.env\|OBSIDIAN_VAULT_PATH" skills/`
 - [ ] Zero `.manifest.json` or `log.md` references: `grep -rn "manifest\.json\|log\.md" skills/`
-- [ ] cross-linker is a symlink: `ls -la skills/cross-linker/SKILL.md`
+- [ ] Zero `category:` or `provenance:` references: `grep -rn "category:\|provenance:" skills/`
+
+### Structural checks (file dependencies)
+- [ ] codebase-maintenance has all workflow files: `ls skills/codebase-maintenance/workflows/` → cleanup-code.md, sync-vault.md, sync-skills.md, full-cleanup.md
+- [ ] All skills reference "Project Discovery" or "CLAUDE.md": `grep -rL "Project Discovery\|CLAUDE.md" skills/*/SKILL.md` → empty (no misses)
+- [ ] Path model uses correct variables: `grep -rn "vault_path}/TaskNotes" skills/` → zero matches (should use `tasknotes_path`, not `vault_path/TaskNotes`)
+
+### Functional checks (invoke from each project)
+- [ ] From ArkNode-AI/projects/trading-signal-ai/: invoke `/wiki-status`, verify it discovers the vault and reads index.md
+- [ ] From ArkNode-Poly/: invoke `/wiki-status`, verify same
+- [ ] From ArkNode-Poly/: invoke `/ark-tasknotes` dry-run, verify it finds the counter file and correct prefix
 - [ ] Plugin CLAUDE.md exists with context-discovery pattern
+- [ ] README.md exists with setup instructions and skill documentation
 - [ ] Onboarding guide exists at `docs/onboarding-guide.md`
-- [ ] linear-updater supports dynamic vault config
+- [ ] linear-updater: `cd linear-updater && npm test` passes
 - [ ] Duplicate skills removed from both projects
 - [ ] Both project CLAUDEs reference the shared plugin
