@@ -1,0 +1,21 @@
+[submodule "ArkNode-AI"]
+	path = ArkNode-AI
+	url = git@github.com:HelloWorldSungin/ArkNode-AI.git
+[submodule "ArkNode-Poly"]
+	path = ArkNode-Poly
+	url = git@github.com:HelloWorldSungin/ArkNode-Poly.git
+[submodule "Arknode-AI-Obsidian-Vault"]
+	path = Arknode-AI-Obsidian-Vault
+	url = git@github.com:HelloWorldSungin/Arknode-AI-Obsidian-Vault.git
+[submodule "Arknode-Poly-Obsidian-Vault"]
+	path = Arknode-Poly-Obsidian-Vault
+	url = git@github.com:HelloWorldSungin/Arknode-Poly-Obsidian-Vault.git
+[submodule "linear-updater"]
+	path = linear-updater
+	url = git@github.com:HelloWorldSungin/linear-updater.git
+[submodule "tasknotes"]
+	path = tasknotes
+	url = https://github.com/callumalpass/tasknotes.git
+[submodule "obsidian-wiki"]
+	path = obsidian-wiki
+	url = https://github.com/Ar9av/obsidian-wiki.git
