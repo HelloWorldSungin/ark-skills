@@ -45,9 +45,12 @@ This skill supports three modes. Default is `full`.
 
 Zero LLM tokens. Indexes conversations into MemPalace's ChromaDB.
 
+Mine the **project directory root only** — do NOT mine subdirectories (like `memory/`) individually. Memory files are read directly by Claude during compile, not indexed by mempalace.
+
 ```bash
 PROJECT_DIR=$(echo "$PWD" | sed 's|[/.]|-|g')
 WING="$PROJECT_DIR"
+# Mine the root project directory — mempalace handles subdirectories automatically
 mempalace mine ~/.claude/projects/$PROJECT_DIR/ --mode convos --wing="$WING"
 ```
 
