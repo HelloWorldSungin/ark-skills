@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-04-08
+
+### Fixed
+- SKILL.md index mode now explicitly states to mine the project root directory only,
+  preventing errors from attempting to mine subdirectories like `memory/`
+
 ## [1.1.1] - 2026-04-08
 
 ### Fixed
