@@ -63,12 +63,13 @@ HOOK_DST="$HOME/.claude/hooks/ark-history-hook.sh"
 
 mkdir -p "$HOME/.claude/hooks"
 
-if [ -f "$HOOK_DST" ]; then
-    echo -e "${GREEN}[OK]${NC} Hook already installed at $HOOK_DST"
+if [ -f "$HOOK_DST" ] && cmp -s "$HOOK_SRC" "$HOOK_DST"; then
+    echo -e "${GREEN}[OK]${NC} Hook up to date at $HOOK_DST"
 else
+    [ -f "$HOOK_DST" ] && ACTION="updated" || ACTION="installed"
     cp "$HOOK_SRC" "$HOOK_DST"
     chmod +x "$HOOK_DST"
-    echo -e "${GREEN}[OK]${NC} Hook installed to $HOOK_DST"
+    echo -e "${GREEN}[OK]${NC} Hook $ACTION at $HOOK_DST"
 fi
 
 # --- Step 5: Register hook in settings ---
