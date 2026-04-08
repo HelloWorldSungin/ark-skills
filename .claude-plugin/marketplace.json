@@ -9,7 +9,7 @@
       "name": "ark-skills",
       "source": "./",
       "description": "Shared skills for ArkNode projects: Obsidian vault management, NotebookLM, TaskNotes, code review, and codebase maintenance.",
-      "version": "1.0.0"
+      "version": "1.0.1"
     }
   ]
 }

@@ -1,0 +1,11 @@
+# Obsidian — ignore transient state, track plugins and core config
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/graph.json
+.obsidian/themes/
+
+# Plugin data.json files may contain credentials — gitignore them
+.obsidian/plugins/*/data.json
+
+# NotebookLM sync state is runtime-generated
+.notebooklm/sync-state.json

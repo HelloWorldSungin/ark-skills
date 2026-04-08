@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1.0] - 2026-04-08
+
+### Added
+- Ark vault for this repo (`vault/`) with standard structure, templates, metadata, and task tracking
+- Obsidian configuration with TaskNotes (v4.5.1) and Obsidian Git plugins pre-installed
+- NotebookLM config template (`.notebooklm/config.json`) with placeholder notebook ID
+- Project Configuration section in CLAUDE.md for context-discovery
+
+### Changed
+- wiki-setup skill now includes Obsidian plugin installation (Steps 8-9), NotebookLM config (Step 10), and expanded post-setup checklist
+- Onboarding guide rewritten with full CLAUDE.md template, three layout examples (standalone, separate repo, monorepo), plugin documentation, and NotebookLM config reference
+
 ## [1.0.0.0] - 2026-04-08
 
 ### Added

@@ -58,6 +58,14 @@ All Ark vaults have these standard artifacts from the vault restructuring:
 
 Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:` (not `sources:`). They do NOT use `provenance:` markers. See each vault's `_meta/vault-schema.md` for the complete frontmatter spec.
 
+## Project Configuration
+
+| Topic | Location |
+|-------|----------|
+| **Obsidian Vault** | `vault/` |
+| **Session Logs** | `vault/Session-Logs/` (when created) |
+| **Task Management** | `vault/TaskNotes/` — prefix: `Arkskill-`, project: `ark-skills` |
+
 ## Available Skills
 
 ### Core (generalized from existing)
