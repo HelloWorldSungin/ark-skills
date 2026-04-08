@@ -22,6 +22,15 @@ Central navigation hub for the ark-skills plugin project.
 ### Skills Development
 - Skill authoring, testing, and publishing
 
+### Compiled Insights
+- [[Compiled-Insights/Plugin-Architecture-and-Context-Discovery|Plugin Architecture & Context-Discovery]]
+- [[Compiled-Insights/Session-Log-Knowledge-Burial|Session Log Knowledge Burial]]
+- [[Compiled-Insights/TaskNotes-MCP-Integration-Model|TaskNotes MCP Integration]]
+- [[Compiled-Insights/Development-Workflow-Patterns|Development Workflow Patterns]]
+- [[Compiled-Insights/Ecosystem-Architecture-Map|Ecosystem Architecture Map]]
+- [[Compiled-Insights/Plugin-Versioning-and-Cache-Pitfalls|Plugin Versioning & Cache Pitfalls]]
+- [[Compiled-Insights/Vault-Hosting-Evolution|Vault Hosting Evolution]]
+
 ### Vault Maintenance
 - [[_meta/vault-schema|Vault Schema]]
 - [[_meta/taxonomy|Tag Taxonomy]]
