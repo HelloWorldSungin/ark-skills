@@ -47,10 +47,12 @@ A Stop hook fires at session end. It does NOT use mempalace's built-in `mempal_s
 
 ### Process
 
-1. Derive the project's Claude directory: `PROJECT_DIR=$(echo "$PWD" | sed 's|/|-|g')`
-2. Check `~/.mempalace/hook_state/{project}_last_indexed` for what's already been mined
-3. Run `mempalace mine ~/.claude/projects/$PROJECT_DIR/ --mode convos` with wing set to the project name
-4. Update state file with new timestamp and drawer count
+1. Read `session_id` and `transcript_path` from the hook's stdin JSON
+2. Derive the project's Claude directory: `PROJECT_DIR=$(echo "$PWD" | sed 's|/|-|g')`
+3. Derive the wing key: `WING=$PROJECT_DIR`
+4. **Incremental mining:** if `transcript_path` is provided and the file exists, mine only that file: `mempalace mine "$TRANSCRIPT_PATH" --mode convos --wing "$WING"`. This is the precise incremental signal — one session's JSONL, not the entire project directory.
+5. **Fallback:** if `transcript_path` is missing or empty, mine the full directory: `mempalace mine ~/.claude/projects/$PROJECT_DIR/ --mode convos --wing "$WING"`. This handles first-run and catch-up scenarios.
+6. Update state files with new timestamp and drawer count
 
 ### Wing/Room Mapping
 
@@ -65,16 +67,40 @@ A Stop hook fires at session end. It does NOT use mempalace's built-in `mempal_s
 
 ### Performance
 
-The hook runs `mempalace mine` in background (`&`) and returns `{}` immediately to avoid exceeding the 60s hook timeout. Because mining is async, the threshold check on any given session end uses the *previous* session's mining results. This means compile is always one session behind index — acceptable since it's not time-critical.
+The hook spawns `mempalace mine` via `nohup` so it survives shell exit:
+
+```bash
+LOCK="$STATE_DIR/${WING}.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+    echo "{}"  # another index is running, skip
+    exit 0
+fi
+nohup bash -c "
+    mempalace mine \"$CLAUDE_PROJECT\" --mode convos 2>>\"$STATE_DIR/mine.log\"
+    date +%s > \"$STATE_DIR/${WING}_last_indexed\"
+    mempalace status --json | python3 -c \"import sys,json; print(json.load(sys.stdin)['total_drawers'])\" > \"$STATE_DIR/${WING}_drawer_count\"
+    touch \"$STATE_DIR/${WING}_done\"
+    rmdir \"$LOCK\"
+" &>/dev/null &
+echo "{}"  # return immediately
+```
+
+Key properties:
+- **Lock directory** prevents concurrent indexing (two terminals ending at once)
+- **`nohup`** survives hook shell exit
+- **Completion marker** (`{wing}_done`) signals the next session that results are ready
+- **Threshold check** on any given session end uses the *previous* session's mining results. Compile is always one session behind index — acceptable since it's not time-critical.
 
 ### State Files
 
+Wing keys are the path-derived directory names (matching the ChromaDB wing). Human-readable project names are only used in vault page output.
+
 ```
 ~/.mempalace/hook_state/
-├── ark-skills_last_indexed          # timestamp of last mine
-├── ark-skills_drawer_count          # drawer count after last index
-├── trading-signal-ai_last_indexed
-└── compile_threshold.json           # per-project: {drawers_at_last_compile: N}
+├── -Users-sunginkim--superset-projects-ark-skills_last_indexed
+├── -Users-sunginkim--superset-projects-ark-skills_drawer_count
+├── -Users-sunginkim--superset-projects-trading-signal-ai_last_indexed
+└── compile_threshold.json           # per-project keyed by wing: {drawers_at_last_compile: N}
 ```
 
 ## Layer 2: Auto-Compile
@@ -93,22 +119,25 @@ if new_drawers >= COMPILE_THRESHOLD:
 
 When threshold is met, the hook returns `{"decision": "block", "reason": "...compile instructions..."}` which instructs Claude to run the compile pass before the session ends.
 
+**Important: the hook never writes to the vault or runs git.** It only returns the block decision. Claude receives the compile instructions, runs the search queries, writes insight pages, and controls what gets staged and committed. This keeps git operations under Claude's judgment (e.g., checking for dirty worktree, avoiding `git add -A` in favor of specific file adds, handling auth failures gracefully).
+
 ### Compile Process
 
 1. **Read memory files directly** — `~/.claude/projects/{project}/memory/*.md`. Small, high-signal, read raw. No change from current skill.
 
-2. **Query mempalace for topic clusters** — ~5-10 targeted semantic searches:
-   - `mempalace_search("architecture decisions", wing="project-name", n_results=10)`
-   - `mempalace_search("debugging lessons", wing="project-name", n_results=10)`
-   - `mempalace_search("failed approaches", wing="project-name", n_results=10)`
-   - `mempalace_search("performance discoveries", wing="project-name", n_results=10)`
-   - `mempalace_search("workflow patterns", wing="project-name", n_results=10)`
+2. **Dynamic topic discovery** — query `mempalace_list_rooms(wing=WING)` to get the actual room names mempalace detected (e.g., `auth-migration`, `ci-pipeline`, `graphql-switch`). Combine these with a baseline set of general queries (`"architecture decisions"`, `"debugging lessons"`, `"failed approaches"`). This prevents recall loss from relying only on pre-defined search terms — any topic mempalace detected gets searched.
 
-3. **Diff against existing insights** — read existing compiled insight pages. Only generate new pages for clusters with genuinely new information.
+3. **Query mempalace for each topic** — run semantic searches using the path-derived wing key, one per topic from step 2:
+   - `mempalace_search("architecture decisions", wing="-Users-sunginkim--superset-projects-ark-skills", n_results=10)`
+   - `mempalace_search("auth-migration", wing="-Users-sunginkim--superset-projects-ark-skills", n_results=10)`
+   - `mempalace_search("ci-pipeline", wing="-Users-sunginkim--superset-projects-ark-skills", n_results=10)`
+   - (one search per discovered room + baseline topics)
 
-4. **Write compiled insight pages** — same Ark frontmatter schema, same template, same vault location (`{vault_path}/{project_area}/Research/Compiled-Insights/`). `source-sessions:` populated from mempalace drawer metadata.
+4. **Diff against existing insights** — read existing compiled insight pages. Only generate new pages for clusters with genuinely new information.
 
-5. **Update index and commit** — `generate-index.py`, git add, commit, push.
+5. **Write compiled insight pages** — same Ark frontmatter schema, same template, same vault location (`{vault_path}/{project_area}/Research/Compiled-Insights/`). `source-sessions:` populated from mempalace drawer metadata.
+
+6. **Update index and commit** — `generate-index.py`, then stage only the new/modified insight pages and index.md (not `git add -A`), commit, push.
 
 ### Token Budget
 
@@ -130,7 +159,9 @@ The rewritten SKILL.md supports three modes:
 |------|-------------|------------|
 | `index` | Force `mempalace mine` on current project (or all with `--scope all`) | 0 |
 | `compile` | Force compile regardless of threshold | ~10K |
-| `full` (default) | Index then compile | ~10K |
+| `full` (default) | Index synchronously, then compile regardless of threshold | ~10K |
+
+Note: `full` mode always compiles (it's a manual invocation, so threshold gating doesn't apply). Auto-compile via the Stop hook is the only path that respects the threshold — it fires only when enough new drawers have accumulated.
 
 ## Setup & Prerequisites
 
@@ -180,10 +211,13 @@ Missing prerequisites produce actionable error messages.
 ## New File: `~/.claude/hooks/ark-history-hook.sh`
 
 A custom Stop hook script created during setup. Responsibilities:
-- Read `session_id` and `transcript_path` from stdin JSON
-- Run `mempalace mine` in background on the project's Claude directory
-- Check drawer count against compile threshold
-- Return `{"decision": "block", "reason": "..."}` if compile is needed, or `{}` otherwise
+- Read `session_id`, `transcript_path`, and `stop_hook_active` from stdin JSON
+- If `stop_hook_active` is true, return `{}` (prevents infinite block loop)
+- Acquire lock directory; skip if another index is running
+- Run `mempalace mine` via `nohup` on the session's transcript file (incremental) or full project directory (fallback)
+- Check drawer count against compile threshold (using previous session's results)
+- Return `{"decision": "block", "reason": "...compile instructions..."}` if threshold met, or `{}` otherwise
+- **Never** writes to the vault, runs git, or modifies project files — only returns the block decision
 - Track state in `~/.mempalace/hook_state/`
 
 ## Edge Cases
@@ -205,6 +239,16 @@ Uses full Claude project directory name (path-derived) as the wing identifier. C
 
 ### MCP server unavailable
 Compile falls back to `mempalace search` CLI via bash. Functionally identical, slightly less structured output.
+
+## Implementation Concerns (from Codex review)
+
+These are valid concerns to address during implementation, documented here for tracking:
+
+- **Version pinning:** Pin `mempalace` to a tested version range. ChromaDB version drift (#257) is a known risk. Use a virtualenv or document the interpreter requirement.
+- **Privacy/retention:** Add a `.mempalace-ignore` pattern (similar to `.gitignore`) so users can exclude sensitive session files from indexing. Document the delete/reset path (`mempalace` CLI or direct ChromaDB deletion).
+- **ARM64 circuit breaker:** Track consecutive failures in state. After 3 consecutive segfaults, disable auto-indexing and log a warning instead of retrying forever.
+- **Deterministic diffing:** During compile, use mempalace drawer IDs (content hashes) as stable identifiers. Track which drawer IDs have been compiled into which insight pages via a `compiled_drawers.json` state file.
+- **CLI vs MCP parity:** Document exactly which metadata fields are available in each mode. If `source-sessions:` can't be reliably extracted from CLI output, make MCP a hard requirement for compile (not optional).
 
 ## What Changes vs. Current Skill
 
