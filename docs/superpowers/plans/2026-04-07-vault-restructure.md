@@ -11,12 +11,55 @@
 **Spec:** `docs/vault-audit.md`
 
 **Constraints:**
-- TaskNotes folders, frontmatter, and Linear sync: ZERO changes
+- TaskNotes folders, structure, and Linear-synced fields (`task-id`, `status`, `priority`, `task-type`, `project`, etc.): ZERO changes to existing fields
+- Adding `summary:` as a NEW field to TaskNotes and session logs is allowed — it does not conflict with Linear sync (Linear ignores unknown frontmatter fields) and does not modify any existing field
 - Session log format and `prev:`/`epic:` chaining: preserved
 - Existing folder hierarchy: no reorganization
 - File and folder names: no renames
 - Canvas diagrams: untouched
 - `00-Home.md` and MOC hierarchy: kept as-is
+
+---
+
+## Phase 0: Setup
+
+### Task 0: Create Feature Branches in Both Vault Repos
+
+**Files:**
+- No file changes — git branch operations only
+
+Each vault is a git submodule with its own history. All restructuring work happens on feature branches, not directly on the main branch.
+
+- [ ] **Step 1: Create feature branch in AI vault**
+
+```bash
+cd Arknode-AI-Obsidian-Vault
+git checkout -b vault-restructure
+```
+
+- [ ] **Step 2: Create feature branch in Poly vault**
+
+```bash
+cd Arknode-Poly-Obsidian-Vault
+git checkout -b vault-restructure
+```
+
+- [ ] **Step 3: Verify both branches are active**
+
+```bash
+echo "AI vault:" && cd Arknode-AI-Obsidian-Vault && git branch --show-current
+echo "Poly vault:" && cd Arknode-Poly-Obsidian-Vault && git branch --show-current
+```
+
+Expected: Both show `vault-restructure`.
+
+**Note:** After each phase completes, update the parent repo to record the new submodule SHAs:
+
+```bash
+cd /Users/sunginkim/.superset/worktrees/ark-skills/HelloWorldSungin/create-ark-skills
+git add Arknode-AI-Obsidian-Vault Arknode-Poly-Obsidian-Vault
+git commit -m "chore: update vault submodule refs after restructure phase N"
+```
 
 ---
 
@@ -360,6 +403,18 @@ git commit -m "feat: add Compiled Insights section to Research Index"
 
 ---
 
+### Phase 1 Checkpoint: Update Parent Repo
+
+After all Phase 1 tasks are complete:
+
+```bash
+cd /Users/sunginkim/.superset/worktrees/ark-skills/HelloWorldSungin/create-ark-skills
+git add Arknode-AI-Obsidian-Vault
+git commit -m "chore: update AI vault submodule ref after Phase 1 session log extraction"
+```
+
+---
+
 ## Phase 2: LLM Navigation Improvements (Both Vaults)
 
 ### Task 8: Write Vault Schema for AI Vault
@@ -456,19 +511,34 @@ prev: "[[Session-NNN]]"
 summary: "<=200 char description of what was discovered/decided"
 ```
 
-### TaskNotes (DO NOT MODIFY — synced with Linear)
+### TaskNotes (DO NOT MODIFY existing fields — synced with Linear)
+
+Core fields (present in nearly all TaskNotes):
 ```yaml
+title: "Task Title"
+tags: [task, epic|story|bug|task]
 task-id: "ArkSignal-NNN"
 task-type: epic|story|bug|task
 status: backlog|todo|in-progress|done
 priority: low|medium|high|critical
 project: "trading-signal-ai"
 work-type: docs|research|deployment|development
-component: module_name
+urgency: blocking|high|normal|low
 created: "YYYY-MM-DD"
-resolved: "YYYY-MM-DD"
-session: "NNN"
-related: [wikilinks to related tasks]
+```
+
+Common optional fields:
+```yaml
+component: module_name              # ~116 files
+session: "NNN"                      # ~117 files — links to session log
+scheduled: "YYYY-MM-DD"            # ~81 files
+due: "YYYY-MM-DD"                  # ~81 files
+projects: ["project-name"]         # ~83 files (array form)
+blockedBy: ["[[Task-ID]]"]         # ~43 files
+related: ["[[Task-ID]]"]           # ~19 files
+resolved: "YYYY-MM-DD"            # ~7 files
+severity: low|medium|high|critical # bugs only, ~11 files
+pr: "#NNN"                         # ~6 files
 ```
 
 ### Compiled Insights
@@ -531,7 +601,7 @@ Also read `00-Home.md`, `ArkNode-Poly/00-Project-Overview.md`, and `TaskNotes/00
 
 Write to `Arknode-Poly-Obsidian-Vault/_meta/vault-schema.md` following the same structure as Task 8, but reflecting this vault's specific:
 - Directory layout (`ArkNode-Poly/Architecture/`, `ArkNode-Poly/Research/`, etc.)
-- TaskNotes frontmatter fields (this vault uses `parent:` and `depends-on:` instead of `related:` and `component:`)
+- TaskNotes frontmatter: uses the same core fields as AI vault (`task-id`, `status`, `priority`, `task-type`, `project`, `work-type`, `urgency`, `created`) PLUS Poly-specific optional fields: `parent:` (~5 files), `depends-on:` (~4 files), `updated:` (~11 files), `completed:` (~5 files). Also uses `component:` (~53 files), `blockedBy:` (~30 files), `related:` (~53 files) — do NOT claim these were replaced.
 - Session log conventions (24 sessions, `S001`-`S024`)
 - The Poly vault's specific `type` values
 
@@ -624,7 +694,10 @@ If any summary is weak, rewrite it.
 
 ```bash
 cd Arknode-AI-Obsidian-Vault
-git add -A
+# Stage only the 10 specific files modified in this batch
+git add 00-Home.md 00-Onboarding.md Infrastructure/Database-Architecture.md Infrastructure/Hardware/Proxmox-Server.md Trading-Signal-AI/Source-Code-Architecture.md Trading-Signal-AI/00-Project-Overview.md Trading-Signal-AI/Research/00-Research-Index.md
+# Add the remaining 3 files from the sample batch
+git add <remaining-files-modified>
 git commit -m "feat: add summary: frontmatter to 10 high-value pages (sample batch)"
 ```
 
@@ -652,13 +725,15 @@ For each batch:
 1. Read each page's content
 2. Generate a <=200 char summary
 3. Add `summary:` to frontmatter
-4. After each batch of 20, commit:
+4. After each batch of 10, commit only the files modified in that batch:
 
 ```bash
 cd Arknode-AI-Obsidian-Vault
-git add -A
+git add <list each modified file explicitly>
 git commit -m "feat: add summary: frontmatter to pages (batch N of M)"
 ```
+
+**Note on effort:** This is AI-assisted work. Claude Code reads each page and generates the summary; the human reviews and approves. At ~10 pages per batch with review, expect ~30 batches for the AI vault. This is not hand-authoring 321 summaries — it's reviewing AI-generated summaries for accuracy.
 
 **Important:** For TaskNotes pages, the summary should describe the task outcome/finding, not just restate the title. Example:
 - Bad: "Bug report for signal pipeline"
@@ -730,15 +805,19 @@ Write to `Arknode-AI-Obsidian-Vault/_meta/generate-index.py`:
 
 import os
 import re
-import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 VAULT_ROOT = Path(__file__).parent.parent
-EXCLUDE_DIRS = {'.obsidian', '.git', '.claude-plugin', '.github', '.notebooklm', '_Templates', '_Attachments', '_meta'}
+# Only exclude non-content dirs; _meta IS content (schema, taxonomy)
+EXCLUDE_DIRS = {'.obsidian', '.git', '.claude-plugin', '.github', '.notebooklm', '_Templates', '_Attachments'}
 
 def extract_frontmatter(filepath):
-    """Extract YAML frontmatter fields from a markdown file."""
+    """Extract YAML frontmatter fields from a markdown file.
+    
+    Handles both flat fields (key: value) and list fields (tags: [a, b])
+    as well as multi-line list syntax (tags:\\n  - a\\n  - b).
+    """
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -750,12 +829,38 @@ def extract_frontmatter(filepath):
         return None
 
     fm = {}
-    for line in match.group(1).split('\n'):
-        # Simple YAML parsing for flat fields
-        kv = re.match(r'^(\w[\w-]*):\s*(.+)', line)
+    lines = match.group(1).split('\n')
+    current_key = None
+
+    for line in lines:
+        # Multi-line list item: "  - value"
+        list_item = re.match(r'^  - (.+)', line)
+        if list_item and current_key:
+            if current_key not in fm:
+                fm[current_key] = []
+            if isinstance(fm[current_key], list):
+                fm[current_key].append(list_item.group(1).strip())
+            continue
+
+        # Flat key: value
+        kv = re.match(r'^(\w[\w-]*):\s*(.*)', line)
         if kv:
-            key, value = kv.group(1), kv.group(2).strip().strip('"').strip("'")
-            fm[key] = value
+            key = kv.group(1)
+            value = kv.group(2).strip().strip('"').strip("'")
+            current_key = key
+            if value:
+                # Inline list: [a, b, c]
+                inline_list = re.match(r'^\[(.+)\]$', value)
+                if inline_list:
+                    fm[key] = [v.strip().strip('"').strip("'") for v in inline_list.group(1).split(',')]
+                else:
+                    fm[key] = value
+            else:
+                # Empty value — might be start of multi-line list
+                fm[key] = []
+        else:
+            current_key = None
+
     return fm
 
 def main():
@@ -776,13 +881,25 @@ def main():
             title = fm.get('title', fname.replace('.md', '').replace('-', ' '))
             category = fm.get('type', fm.get('task-type', 'uncategorized'))
             summary = fm.get('summary', '')
-            wikilink = fname.replace('.md', '')
+            if isinstance(summary, list):
+                summary = ''
+
+            # Use relative path as wikilink to avoid ambiguity from duplicate basenames
+            wikilink = str(rel_path).replace('.md', '')
+
+            # Extract tags as comma-separated string
+            tags = fm.get('tags', [])
+            if isinstance(tags, list):
+                tags_str = ', '.join(tags)
+            else:
+                tags_str = str(tags)
 
             pages.append({
                 'wikilink': wikilink,
                 'title': title,
                 'category': category,
                 'path': str(rel_path.parent),
+                'tags': tags_str,
                 'summary': summary,
             })
 
@@ -792,7 +909,8 @@ def main():
         cat = page['category']
         categories.setdefault(cat, []).append(page)
 
-    # Generate index
+    # Generate index with UTC timestamp
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [
         '---',
         'title: Vault Index',
@@ -801,7 +919,7 @@ def main():
         '  - index',
         '  - auto-generated',
         f'summary: "Machine-readable catalog of all {len(pages)} pages in this vault, grouped by type."',
-        f'generated: {datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")}',
+        f'generated: {now_utc}',
         '---',
         '',
         '# Vault Index',
@@ -815,8 +933,12 @@ def main():
         lines.append(f'## {cat} ({len(cat_pages)} pages)')
         lines.append('')
         for p in cat_pages:
-            summary_part = f' — {p["summary"]}' if p['summary'] else ''
-            lines.append(f'- [[{p["wikilink"]}]]{summary_part}')
+            parts = [f'[[{p["wikilink"]}]]']
+            if p['tags']:
+                parts.append(f'`{p["tags"]}`')
+            if p['summary']:
+                parts.append(p['summary'])
+            lines.append(f'- {" — ".join(parts)}')
         lines.append('')
 
     output_path = VAULT_ROOT / 'index.md'
@@ -892,6 +1014,18 @@ git commit -m "feat: add machine-readable index.md and generation script"
 
 ---
 
+### Phase 2 Checkpoint: Update Parent Repo
+
+After all Phase 2 tasks are complete:
+
+```bash
+cd /Users/sunginkim/.superset/worktrees/ark-skills/HelloWorldSungin/create-ark-skills
+git add Arknode-AI-Obsidian-Vault Arknode-Poly-Obsidian-Vault
+git commit -m "chore: update vault submodule refs after Phase 2 LLM navigation improvements"
+```
+
+---
+
 ## Phase 3: Automated Maintenance Tooling (Both Vaults)
 
 ### Task 15: Create Tag Taxonomy for AI Vault
@@ -901,12 +1035,51 @@ git commit -m "feat: add machine-readable index.md and generation script"
 
 - [ ] **Step 1: Audit existing tags**
 
+Extract tags from YAML frontmatter only (not prose bullets). This script reads each file, finds the `tags:` block in frontmatter, and extracts only those values:
+
 ```bash
 cd Arknode-AI-Obsidian-Vault
-grep -rh "^  - " --include="*.md" . | grep -v '.obsidian' | sort | uniq -c | sort -rn | head -40
+python3 -c "
+import re, os
+from pathlib import Path
+from collections import Counter
+
+tags = Counter()
+for root, dirs, files in os.walk('.'):
+    dirs[:] = [d for d in dirs if d not in {'.obsidian','.git','.claude-plugin','.github','.notebooklm'}]
+    for f in files:
+        if not f.endswith('.md'): continue
+        try:
+            content = open(os.path.join(root, f), encoding='utf-8').read()
+        except: continue
+        m = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+        if not m: continue
+        fm = m.group(1)
+        # Find tags section and extract list items
+        in_tags = False
+        for line in fm.split('\n'):
+            if re.match(r'^tags:', line):
+                in_tags = True
+                # Check inline: tags: [a, b, c]
+                inline = re.match(r'^tags:\s*\[(.+)\]', line)
+                if inline:
+                    for t in inline.group(1).split(','):
+                        tags[t.strip().strip('\"').strip(\"'\")] += 1
+                    in_tags = False
+                continue
+            if in_tags:
+                item = re.match(r'^  - (.+)', line)
+                if item:
+                    tags[item.group(1).strip()] += 1
+                else:
+                    in_tags = False
+
+for tag, count in tags.most_common(50):
+    print(f'{count:4d}  {tag}')
+"
 ```
 
-This shows all tags used with frequency counts.
+This correctly extracts only YAML frontmatter tags, ignoring prose bullets and checklists.
 
 - [ ] **Step 2: Write taxonomy.md**
 
@@ -986,7 +1159,8 @@ sed -i '' 's/  - walkforward/  - walk-forward/' <filepath>
 ```bash
 cd Arknode-AI-Obsidian-Vault
 git add _meta/taxonomy.md
-git add -A  # include any tag fixes
+# Stage only the files where walkforward was replaced
+git add <list each file with normalized tags>
 git commit -m "feat: add tag taxonomy and normalize walk-forward spelling"
 ```
 
@@ -999,9 +1173,45 @@ git commit -m "feat: add tag taxonomy and normalize walk-forward spelling"
 
 - [ ] **Step 1: Audit existing tags**
 
+Use the same frontmatter-only tag extraction as Task 15:
+
 ```bash
 cd Arknode-Poly-Obsidian-Vault
-grep -rh "^  - " --include="*.md" . | grep -v '.obsidian' | sort | uniq -c | sort -rn | head -40
+python3 -c "
+import re, os
+from collections import Counter
+
+tags = Counter()
+for root, dirs, files in os.walk('.'):
+    dirs[:] = [d for d in dirs if d not in {'.obsidian','.git','.claude-plugin','.github','.notebooklm'}]
+    for f in files:
+        if not f.endswith('.md'): continue
+        try:
+            content = open(os.path.join(root, f), encoding='utf-8').read()
+        except: continue
+        m = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+        if not m: continue
+        fm = m.group(1)
+        in_tags = False
+        for line in fm.split('\n'):
+            if re.match(r'^tags:', line):
+                in_tags = True
+                inline = re.match(r'^tags:\s*\[(.+)\]', line)
+                if inline:
+                    for t in inline.group(1).split(','):
+                        tags[t.strip().strip('\"').strip(\"'\")] += 1
+                    in_tags = False
+                continue
+            if in_tags:
+                item = re.match(r'^  - (.+)', line)
+                if item:
+                    tags[item.group(1).strip()] += 1
+                else:
+                    in_tags = False
+
+for tag, count in tags.most_common(50):
+    print(f'{count:4d}  {tag}')
+"
 ```
 
 - [ ] **Step 2: Write taxonomy.md**
@@ -1062,7 +1272,8 @@ For each broken link or missing frontmatter issue:
 
 ```bash
 cd Arknode-AI-Obsidian-Vault
-git add -A
+# Stage only files that were fixed
+git add <list each fixed file>
 git commit -m "fix: resolve broken wikilinks and missing frontmatter (wiki-lint pass)"
 ```
 
@@ -1095,24 +1306,32 @@ find . -name "*.md" ! -path './.obsidian/*' ! -path './.git/*' ! -path './.claud
 done
 ```
 
-- [ ] **Step 3: Fix orphaned files**
+- [ ] **Step 3: Regenerate full orphan list and fix**
 
-The audit identified 12 orphaned files (6.6%) in the Poly vault. For each:
-1. Determine if it should be linked from an existing MOC or index
-2. Add the appropriate wikilink from the parent page
+The audit identified 12 orphaned files (6.6%) but only named 5. Regenerate the complete list:
 
-Known orphans to check:
-- `TaskNotes/Tasks/Story/ArkPoly-130-wire-routes-shared-helpers.md`
-- `TaskNotes/Tasks/Story/ArkPoly-131-fragment-templates-wiring.md`
-- `TaskNotes/Tasks/Story/ArkPoly-132-route-tests-verification.md`
-- `ArkNode-Poly/Operations/Deployment-Guide.md`
-- `ArkNode-Poly/Operations/CT110-Setup.md`
+```bash
+cd Arknode-Poly-Obsidian-Vault
+# Find all pages that are never referenced by a [[wikilink]] from another page
+find . -name "*.md" ! -path './.obsidian/*' ! -path './.git/*' ! -path './.claude*' ! -path './.github/*' ! -path './.notebooklm/*' ! -path './_Templates/*' | while read f; do
+  basename=$(basename "$f" .md)
+  # Count incoming wikilinks from OTHER files
+  incoming=$(grep -rl "\[\[$basename" --include="*.md" . 2>/dev/null | grep -v "$f" | wc -l | tr -d ' ')
+  [ "$incoming" -eq 0 ] && echo "ORPHAN: $f"
+done
+```
+
+For each orphan found:
+1. Determine if it should be linked from an existing MOC, parent epic, or index page
+2. Add the appropriate `[[wikilink]]` from the parent page
+3. If it's a template or config file, it's expected to be orphaned — skip it
 
 - [ ] **Step 4: Commit fixes**
 
 ```bash
 cd Arknode-Poly-Obsidian-Vault
-git add -A
+# Stage only files that were fixed
+git add <list each fixed file>
 git commit -m "fix: resolve broken wikilinks, orphans, and missing frontmatter (wiki-lint pass)"
 ```
 
@@ -1156,12 +1375,20 @@ Review all proposed link additions. Accept only high-confidence matches (exact p
 
 ```bash
 cd Arknode-AI-Obsidian-Vault
-git add -A
+git add <list each file with new wikilinks>
 git commit -m "feat: add missing wikilinks discovered by cross-linker pass"
 
 cd ../Arknode-Poly-Obsidian-Vault
-git add -A
+git add <list each file with new wikilinks>
 git commit -m "feat: add missing wikilinks discovered by cross-linker pass"
+```
+
+- [ ] **Step 4: Update parent repo submodule refs**
+
+```bash
+cd /Users/sunginkim/.superset/worktrees/ark-skills/HelloWorldSungin/create-ark-skills
+git add Arknode-AI-Obsidian-Vault Arknode-Poly-Obsidian-Vault
+git commit -m "chore: update vault submodule refs after Phase 3 maintenance"
 ```
 
 ---
@@ -1169,14 +1396,19 @@ git commit -m "feat: add missing wikilinks discovered by cross-linker pass"
 ## Task Dependency Map
 
 ```
+Phase 0 (setup):
+  Task 0 (create branches) → all other tasks
+
 Phase 1 (AI Vault only):
-  Task 1 → Task 2, 3, 4, 5, 6 (parallel) → Task 7
+  Task 1 → Task 2, 3, 4, 5, 6 (parallel) → Task 7 → Phase 1 Checkpoint
 
 Phase 2 (both vaults, independent):
   Task 8, 9 (parallel, independent vaults)
   Task 10 → Task 11 (sample must be approved before bulk)
   Task 12 (Poly vault, independent of AI)
-  Task 11, 12 → Task 13, 14 (index needs summaries)
+  Task 11 → Task 13 (AI index needs AI summaries)
+  Task 12 → Task 14 (Poly index needs Poly summaries)
+  Task 13 → Task 14 (Poly copies generate-index.py from AI vault)
 
 Phase 3 (both vaults, independent):
   Task 15, 16 (parallel, independent vaults)
