@@ -27,10 +27,10 @@
 **Files:**
 - None (environment setup)
 
-- [ ] **Step 1: Install mempalace via pip**
+- [ ] **Step 1: Install mempalace via pip (pinned range)**
 
 ```bash
-pip install mempalace
+pip install "mempalace>=3.0.0,<4.0.0"
 ```
 
 Expected: installs successfully, prints version info.
@@ -182,7 +182,8 @@ if mkdir "$LOCK" 2>/dev/null; then
         if mempalace mine \"$MINE_TARGET\" --mode convos --wing \"$WING\" 2>>\"$STATE_DIR/mine.log\"; then
             echo 0 > \"$FAIL_FILE\"
             date +%s > \"$STATE_DIR/${WING}_last_indexed\"
-            mempalace status --json 2>/dev/null | python3 -c \"import sys,json; print(json.load(sys.stdin).get('total_drawers',0))\" > \"$STATE_DIR/${WING}_drawer_count\" 2>/dev/null
+            # Count drawers for THIS wing only (not global total)
+            mempalace status --json 2>/dev/null | python3 -c \"import sys,json; print(json.load(sys.stdin).get('wings',{}).get('$WING',0))\" > \"$STATE_DIR/${WING}_drawer_count\" 2>/dev/null
             touch \"$STATE_DIR/${WING}_done\"
         else
             PREV=\$(cat \"$FAIL_FILE\" 2>/dev/null || echo 0)
@@ -232,7 +233,7 @@ if [ "$NEW_DRAWERS" -ge "$COMPILE_THRESHOLD" ] && [ "$CURRENT_DRAWERS" -gt 0 ]; 
     cat << HOOKJSON
 {
   "decision": "block",
-  "reason": "AUTO-COMPILE checkpoint. Run /claude-history-ingest compile to synthesize new insights from the ${NEW_DRAWERS} new conversation chunks indexed since last compile. Use mempalace_search or 'mempalace search' CLI to query topics, diff against existing vault insights, and write only genuinely new compiled insight pages. Stage only the new files (not git add -A). The wing key for this project is: ${WING}"
+  "reason": "AUTO-COMPILE checkpoint. Run /claude-history-ingest compile to synthesize new insights from the ${NEW_DRAWERS} new conversation chunks indexed since last compile. Use mempalace_search or 'mempalace search' CLI to query topics, diff against existing vault insights, and write only genuinely new compiled insight pages. Stage only the new files (not git add -A). The wing key for this project is: ${WING}. IMPORTANT: After compile, you MUST run Step 7 (Update Compile Threshold State) to prevent re-triggering."
 }
 HOOKJSON
 else
@@ -316,13 +317,13 @@ fi
 PROJECT_DIR=$(echo "$PWD" | sed 's|/|-|g')
 CLAUDE_PROJECT="$HOME/.claude/projects/$PROJECT_DIR"
 
-if [ ! -d "$HOME/.mempalace/palace" ]; then
+if [ ! -d "$HOME/.mempalace/palace" ] || [ ! -f "$HOME/.mempalace/palace/chroma.sqlite3" ]; then
     if [ -d "$CLAUDE_PROJECT" ]; then
         echo -e "${YELLOW}Initializing palace for: $CLAUDE_PROJECT${NC}"
         mempalace init "$CLAUDE_PROJECT" --yes
     else
-        echo -e "${YELLOW}No Claude project dir at $CLAUDE_PROJECT — initializing empty palace${NC}"
-        mkdir -p "$HOME/.mempalace/palace"
+        echo -e "${YELLOW}Initializing palace with current directory...${NC}"
+        mempalace init "$PWD" --yes
     fi
 else
     echo -e "${GREEN}[OK]${NC} Palace already initialized at ~/.mempalace/palace/"
@@ -343,26 +344,38 @@ else
 fi
 
 # --- Step 5: Register hook in settings ---
-SETTINGS="$HOME/.claude/settings.local.json"
+# Try global settings first, fall back to local
+SETTINGS="$HOME/.claude/settings.json"
+if [ ! -f "$SETTINGS" ]; then
+    SETTINGS="$HOME/.claude/settings.local.json"
+fi
 
 if [ -f "$SETTINGS" ] && grep -q "ark-history-hook" "$SETTINGS" 2>/dev/null; then
     echo -e "${GREEN}[OK]${NC} Hook already registered in $SETTINGS"
 else
-    echo ""
-    echo -e "${YELLOW}NOTE: Add this Stop hook to your Claude Code settings.${NC}"
-    echo ""
-    echo "  File: $SETTINGS"
-    echo ""
-    echo '  Add to "hooks.Stop" array:'
-    echo '  {'
-    echo '    "hooks": [{'
-    echo '      "type": "command",'
-    echo "      \"command\": \"bash $HOOK_DST\","
-    echo '      "timeout": 60'
-    echo '    }]'
-    echo '  }'
-    echo ""
-    echo "  Or add to ~/.claude/settings.json under hooks.Stop if you want it global."
+    echo -e "${YELLOW}Registering hook in $SETTINGS...${NC}"
+    python3 -c "
+import json, os
+path = '$SETTINGS'
+data = {}
+if os.path.exists(path):
+    with open(path) as f:
+        data = json.load(f)
+hooks = data.setdefault('hooks', {})
+stop_hooks = hooks.setdefault('Stop', [])
+entry = {
+    'hooks': [{
+        'type': 'command',
+        'command': 'bash $HOOK_DST',
+        'timeout': 60
+    }]
+}
+stop_hooks.append(entry)
+with open(path, 'w') as f:
+    json.dump(data, f, indent=2)
+print('Hook registered.')
+"
+    echo -e "${GREEN}[OK]${NC} Hook registered in $SETTINGS"
 fi
 
 # --- Step 6: Create state directory ---
@@ -451,8 +464,9 @@ bash skills/claude-history-ingest/hooks/install-hook.sh
 
 1. Read the project's CLAUDE.md to find: project name, vault path
 2. Read `{vault_path}/_meta/vault-schema.md` to understand placement
-3. Read `{vault_path}/_Templates/Compiled-Insight-Template.md` for output format
-4. Derive the wing key: `WING=$(echo "$PWD" | sed 's|/|-|g')`
+3. Read `{vault_path}/_meta/taxonomy.md` for valid tags (compiled insights must use tags from this list)
+4. Read `{vault_path}/_Templates/Compiled-Insight-Template.md` for output format
+5. Derive the wing key: `WING=$(echo "$PWD" | sed 's|/|-|g')`
 
 ## Modes
 
@@ -540,21 +554,52 @@ Collect all returned chunks. Deduplicate by content (same chunk may appear in mu
 
 #### Step 4: Diff Against Existing Insights
 
-Read existing compiled insight pages in `{vault_path}/Compiled-Insights/`:
+Read the drawer tracking file to know which drawers have already been compiled:
+
+\`\`\`bash
+STATE_DIR="$HOME/.mempalace/hook_state"
+WING=$(echo "$PWD" | sed 's|/|-|g')
+cat "$STATE_DIR/${WING}_compiled_drawers.json" 2>/dev/null || echo '{"compiled_ids":[]}'
+\`\`\`
+
+Read existing compiled insight pages in `vault/Compiled-Insights/`:
 
 \`\`\`bash
 ls vault/Compiled-Insights/*.md 2>/dev/null
 \`\`\`
 
-For each page, read the title and Summary section. Compare against the search results.
-Skip any topic that is already well-covered by an existing insight page.
-Only generate new pages for clusters that surface genuinely new information.
+For each page, read the title and Summary section. For each search result from Step 3, check:
+1. Is the drawer ID (from mempalace metadata) already in `compiled_drawers.json`? If yes, skip.
+2. Does the content overlap significantly with an existing insight page's Summary? If yes, skip.
+
+Only generate new pages for clusters that surface genuinely new, uncompiled information.
+
+After writing new insight pages, update the tracking file:
+
+\`\`\`bash
+# Append newly compiled drawer IDs to the tracking file
+python3 -c "
+import json, os
+path = '$STATE_DIR/${WING}_compiled_drawers.json'
+data = {'compiled_ids': []}
+if os.path.exists(path):
+    with open(path) as f:
+        data = json.load(f)
+# NEW_IDS is the list of drawer IDs used in this compile pass
+data['compiled_ids'].extend(NEW_IDS)
+data['compiled_ids'] = list(set(data['compiled_ids']))  # dedupe
+with open(path, 'w') as f:
+    json.dump(data, f, indent=2)
+"
+\`\`\`
+
+(Replace `NEW_IDS` with the actual list of drawer IDs from the search results used in this compile.)
 
 #### Step 5: Write Compiled Insight Pages
 
-For each new cluster, create a page in `{vault_path}/Compiled-Insights/`:
+For each new cluster, create a page in `vault/Compiled-Insights/` (this is the actual path in this repo — NOT `Research/Compiled-Insights/` as the old skill said):
 
-Use the template from `{vault_path}/_Templates/Compiled-Insight-Template.md`:
+Use the template from `vault/_Templates/Compiled-Insight-Template.md`:
 
 \`\`\`yaml
 ---
@@ -562,7 +607,7 @@ title: "{Insight Title}"
 type: compiled-insight
 tags:
   - compiled-insight
-  - {domain-tag from taxonomy}
+  - {domain-tag from vault/_meta/taxonomy.md — e.g., skill, plugin, vault, infrastructure}
 summary: "{<=200 char finding summary}"
 source-sessions: []
 source-tasks: []
@@ -599,17 +644,21 @@ After a successful compile, update the threshold state so the auto-compile hook 
 \`\`\`bash
 WING=$(echo "$PWD" | sed 's|/|-|g')
 STATE_DIR="$HOME/.mempalace/hook_state"
-CURRENT=$(cat "$STATE_DIR/${WING}_drawer_count" 2>/dev/null || echo 0)
+# Get per-wing drawer count (not global total)
+CURRENT=$(mempalace status --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('wings',{}).get('$(echo "$PWD" | sed "s|/|-|g")',0))" 2>/dev/null || cat "$STATE_DIR/${WING}_drawer_count" 2>/dev/null || echo 0)
 python3 -c "
-import json, os
+import json, os, fcntl
 path = '$STATE_DIR/compile_threshold.json'
 data = {}
 if os.path.exists(path):
     with open(path) as f:
         data = json.load(f)
 data['$WING'] = {'drawers_at_last_compile': $CURRENT}
-with open(path, 'w') as f:
+# Atomic write via temp file
+tmp = path + '.tmp'
+with open(tmp, 'w') as f:
     json.dump(data, f, indent=2)
+os.replace(tmp, path)
 print(f'Updated compile threshold: $WING = $CURRENT drawers')
 "
 \`\`\`
@@ -734,7 +783,9 @@ git commit -m "docs: ingest Claude history — N compiled insights created"
 
 **Files:**
 - Modify: `CLAUDE.md` (add mempalace dependency note)
-- Modify: `CHANGELOG.md` (add entry)
+- Modify: `CHANGELOG.md` (add versioned entry matching existing format)
+- Modify: `.claude-plugin/plugin.json` (bump version)
+- Modify: `VERSION` (bump version)
 
 - [ ] **Step 1: Update CLAUDE.md skill description**
 
@@ -750,15 +801,29 @@ New:
 - `/claude-history-ingest` — Mine Claude conversations into compiled vault insights via MemPalace (requires `pip install mempalace`)
 ```
 
-- [ ] **Step 2: Update CHANGELOG.md**
+- [ ] **Step 2: Bump version**
 
-Add entry at the top of the changelog:
+Read `VERSION` and `.claude-plugin/plugin.json` for the current version. Bump the minor version (e.g., `1.0.2` -> `1.1.0`).
+
+Update `VERSION`:
+```
+1.1.0
+```
+
+Update `.claude-plugin/plugin.json` line 3:
+```json
+"version": "1.1.0",
+```
+
+- [ ] **Step 3: Update CHANGELOG.md**
+
+Add a versioned entry at the top (after the header), matching the existing format:
 
 ```markdown
-## [Unreleased]
+## [1.1.0] - 2026-04-08
 
 ### Changed
-- `/claude-history-ingest` — Rewritten to use MemPalace (ChromaDB) for indexing and retrieval.
+- `claude-history-ingest` skill rewritten to use MemPalace (ChromaDB) for indexing and retrieval.
   Auto-indexes sessions via Stop hook (zero LLM tokens). Compiles insights via semantic search
   (~10K tokens vs 100-200K previously). Three modes: index, compile, full.
   Requires `pip install mempalace`.
@@ -768,9 +833,9 @@ Add entry at the top of the changelog:
 - `skills/claude-history-ingest/hooks/install-hook.sh` — One-time setup helper
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add CLAUDE.md CHANGELOG.md
-git commit -m "docs: update CLAUDE.md and CHANGELOG for MemPalace integration"
+git add CLAUDE.md CHANGELOG.md VERSION .claude-plugin/plugin.json
+git commit -m "chore: bump to 1.1.0 — MemPalace integration for claude-history-ingest"
 ```
