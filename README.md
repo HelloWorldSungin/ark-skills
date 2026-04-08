@@ -2,15 +2,24 @@
 
 Claude Code plugin providing 14 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
 
-## Quick Setup
+## Installation
 
 ```bash
-# 1. Clone with submodules
-git clone --recurse-submodules git@github.com:HelloWorldSungin/create-ark-skills.git
+# Add the marketplace
+/plugin marketplace add HelloWorldSungin/ark-skills
 
-# 2. Register as a Claude Code plugin in your settings
+# Install the plugin (user-scoped — available in all projects)
+/plugin install ark-skills@ark-skills
 
-# 3. Verify skills are available — invoke /wiki-status from any project
+# Verify skills are available
+/wiki-status
+```
+
+### Development Setup
+
+```bash
+# Clone with submodules (for contributing)
+git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 ```
 
 ## Available Skills
@@ -68,11 +77,14 @@ See `CLAUDE.md` in this repo for the full discovery procedure and field referenc
 ## Architecture
 
 ```
-Claude Code Plugin (this repo)
-  └── skills/ (14 shared skills)
-        ↓ context-discovery
+ark-skills (Claude Code plugin)
+├── .claude-plugin/
+│   ├── plugin.json           # Plugin metadata (ark-skills v1.0.0)
+│   └── marketplace.json      # Repo-level plugin registry
+└── skills/                   # 14 shared skills
+      ↓ context-discovery
 Project CLAUDE.md → vault path, task prefix, deployment targets
-        ↓
+      ↓
 Obsidian Vault → TaskNotes → linear-updater → Linear
                → NotebookLM sync
 ```
@@ -85,6 +97,7 @@ See [docs/onboarding-guide.md](docs/onboarding-guide.md) for step-by-step instru
 
 | Directory | Purpose |
 |-----------|---------|
+| `.claude-plugin/` | Plugin manifest (plugin.json, marketplace.json) |
 | `skills/` | 14 shared skill definitions (SKILL.md files) |
 | `docs/` | Design specs, plans, onboarding guide |
 | `ArkNode-AI/` | Submodule: AI trading project (skill source for generalization) |
