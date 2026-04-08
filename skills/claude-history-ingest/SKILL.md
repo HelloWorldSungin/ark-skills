@@ -5,7 +5,7 @@ description: Mine Claude Code conversation history and memory files into compile
 
 # Claude History Ingest
 
-Extract knowledge from Claude Code conversation history (`~/.claude/`) and distill into compiled insight pages in the project's vault.
+Extract knowledge from the **current project's** Claude Code conversation history and distill into compiled insight pages in the project's vault.
 
 ## Project Discovery
 
@@ -15,22 +15,30 @@ Extract knowledge from Claude Code conversation history (`~/.claude/`) and disti
 
 ## Workflow
 
-### Step 1: Survey Claude History
+### Step 1: Locate Current Project's Claude Directory
+
+Claude Code stores per-project data in `~/.claude/projects/` using a directory name derived from the project's absolute path (slashes become dashes, with a leading dash).
 
 ```bash
-# Find project-specific Claude data
-ls ~/.claude/projects/*/
-ls ~/.claude/projects/*/memory/*.md 2>/dev/null
+# Derive the project directory name from the current working directory
+PROJECT_DIR=$(echo "$PWD" | sed 's|/|-|g')
+CLAUDE_PROJECT="$HOME/.claude/projects/$PROJECT_DIR"
+
+# Verify it exists
+ls "$CLAUDE_PROJECT/" 2>/dev/null
+ls "$CLAUDE_PROJECT/memory/" 2>/dev/null
 ```
 
+Only ingest from this single project directory. Do NOT scan other projects.
+
 Identify:
-- **Memory files** (highest value) — `~/.claude/projects/*/memory/*.md`
-- **MEMORY.md indexes** — `~/.claude/projects/*/MEMORY.md`
-- **Conversation JSONL** — `~/.claude/projects/*/*.jsonl` (large, lower signal-to-noise)
+- **Memory files** (highest value) — `{CLAUDE_PROJECT}/memory/*.md`
+- **MEMORY.md index** — `{CLAUDE_PROJECT}/memory/MEMORY.md`
+- **Conversation JSONL** — `{CLAUDE_PROJECT}/*.jsonl` (large, lower signal-to-noise)
 
 ### Step 2: Read Memory Files First
 
-Parse YAML frontmatter from memory files. Prioritize by type:
+Parse YAML frontmatter from the project's memory files. Prioritize by type:
 - `type: user` -> knowledge about the developer
 - `type: feedback` -> workflow preferences and corrections
 - `type: project` -> project decisions and context
@@ -38,7 +46,7 @@ Parse YAML frontmatter from memory files. Prioritize by type:
 
 ### Step 3: Parse Conversations (Optional)
 
-If the user wants deeper mining, parse JSONL files:
+If the user wants deeper mining, parse the project's JSONL files:
 - Extract `user` and `assistant` messages only
 - Skip `thinking`, `tool_use`, `progress` entries
 - Focus on messages containing decisions, discoveries, or lessons

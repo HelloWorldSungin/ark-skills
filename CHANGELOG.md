@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2.0] - 2026-04-08
+
+### Changed
+- `claude-history-ingest` skill now scopes to current project's Claude directory instead of scanning all projects
+
 ## [1.0.1.0] - 2026-04-08
 
 ### Added
