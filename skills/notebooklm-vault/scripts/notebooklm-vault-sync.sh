@@ -11,9 +11,15 @@
 
 set -euo pipefail
 
+# --- Helpers (must be defined before any top-level usage) ---
+die() { echo "ERROR: $*" >&2; exit 1; }
+
 # --- Configuration ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+
+# Prereqs needed for config parsing
+command -v jq >/dev/null 2>&1 || die "jq not found. Install with: brew install jq"
 
 # Config: check project's .notebooklm/ first, then vault's .notebooklm/
 if [[ -f "$PROJECT_ROOT/.notebooklm/config.json" ]]; then
@@ -39,9 +45,6 @@ EXCLUDES=(".obsidian" ".git" "_Templates" "_Attachments" ".claude-plugin")
 # Batched state management temp files
 PENDING_UPDATES=""
 PENDING_REMOVES=""
-
-# --- Helpers ---
-die() { echo "ERROR: $*" >&2; exit 1; }
 
 check_prereqs() {
     command -v notebooklm >/dev/null 2>&1 || die "notebooklm CLI not found. Install with: pipx install notebooklm-py"
