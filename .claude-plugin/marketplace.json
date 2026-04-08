@@ -1,0 +1,15 @@
+{
+  "name": "create-ark-skills",
+  "owner": {
+    "name": "HelloWorldSungin",
+    "url": "https://github.com/HelloWorldSungin"
+  },
+  "plugins": [
+    {
+      "name": "ark-skills",
+      "source": "./",
+      "description": "Shared skills for ArkNode projects: Obsidian vault management, NotebookLM, TaskNotes, code review, and codebase maintenance.",
+      "version": "1.0.0"
+    }
+  ]
+}
