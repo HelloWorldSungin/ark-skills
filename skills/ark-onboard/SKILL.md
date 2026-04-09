@@ -816,8 +816,7 @@ Use `/ark-tasknotes` to create tasks via the TaskNotes MCP, or create markdown f
 # Plugin data.json files may contain credentials — gitignore them
 .obsidian/plugins/*/data.json
 
-# NotebookLM sync state is runtime-generated
-.notebooklm/sync-state.json
+# NotebookLM sync state is tracked (shared across environments)
 ```
 
 **`{vault_path}/.obsidian/app.json`:**

@@ -16,7 +16,13 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 
 # --- Configuration ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# Support both installed (.claude/skills/notebooklm-vault/scripts/) and
+# standalone (skills/notebooklm-vault/scripts/) layouts.
+if [[ "$SCRIPT_DIR" == */.claude/skills/* ]]; then
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+else
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+fi
 
 # Prereqs needed for config parsing
 command -v jq >/dev/null 2>&1 || die "jq not found. Install with: brew install jq"
