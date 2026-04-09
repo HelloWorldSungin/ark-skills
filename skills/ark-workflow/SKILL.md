@@ -74,3 +74,54 @@ If no pattern matches clearly, ask:
 > C) Ship — getting code out the door
 > D) Knowledge Capture — documenting what happened
 > E) Hygiene — cleanup, refactor, audit
+
+## Triage
+
+Classify the task as **light**, **medium**, or **heavy**. **Risk is the primary signal** — a one-file auth change is heavy regardless of file count.
+
+| Factor | Light | Medium | Heavy |
+|--------|-------|--------|-------|
+| **Risk** | Low (internal, non-breaking) | Moderate (API changes, schema) | High (infra, auth, data migration, secrets, permissions) |
+| **Decision density** | Obvious fix | Some trade-offs | Architecture choices |
+| **Files touched** | 1-3 | 4-10 | 10+ |
+| **Duration** | < 30 min | 30 min - few hours | Half day+ |
+| **Has UI?** | No | Maybe | Yes, user-facing changes |
+
+If unsure, ask:
+
+> How would you classify this task?
+> A) Light — quick fix, 1-3 files, low risk
+> B) Medium — some trade-offs, moderate scope
+> C) Heavy — architecture decisions, high risk, or large scope
+
+**Re-triage rule:** If a task reveals more complexity mid-flight (e.g., a "light" bug turns out to involve auth), escalate to the appropriate class and pick up the remaining phases from there. Don't restart — just add the phases you would have run.
+
+## Workflow
+
+This is the concrete algorithm. Follow these steps in order:
+
+### Step 1: Run Project Discovery
+Execute the Project Discovery section above. Record: `HAS_UI`, `HAS_VAULT`, `HAS_STANDARD_DOCS`, `HAS_CI`.
+
+### Step 2: Detect Scenario
+Match the user's request against the Scenario Detection table. If ambiguous, ask the multiple-choice question.
+
+### Step 3: Classify Weight
+For scenarios that use weight classes (Greenfield, Bugfix, Hygiene), classify using the Triage table. Ship and Knowledge Capture skip this step.
+
+### Step 4: Look Up Skill Chain
+Find the matching chain in the Skill Chains section below using scenario + weight class.
+
+### Step 5: Resolve Conditions
+Walk through the chain and resolve every conditional:
+- `(if UI)` → check `HAS_UI`. If false, output "Skipping `/qa` — no UI detected"
+- `(if vault)` → check `HAS_VAULT`. If false, skip the step silently (vault skills are optional)
+- `(if standard docs exist)` → check `HAS_STANDARD_DOCS`. If false, output "Skipping `/document-release` — no standard docs found"
+- `(if security-relevant)` → evaluate against the security triggers listed in Condition Resolution
+- `(if deploy risk)` → evaluate against the deploy risk triggers listed in Condition Resolution
+
+### Step 6: Present the Resolved Chain
+Output the numbered skill chain with all conditions resolved. Include the session handoff marker if applicable (medium+ design phase).
+
+### Step 7: Hand Off
+The skill is done. The user or Claude follows the chain, invoking each skill in order. `/ark-workflow` does not invoke downstream skills itself.
