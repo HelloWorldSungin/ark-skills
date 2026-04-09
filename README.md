@@ -17,17 +17,25 @@ Claude Code plugin providing 14 shared skills to all ArkNode projects. Eliminate
 
 ### Prerequisites
 
-The `/claude-history-ingest` skill requires [MemPalace](https://github.com/milla-jovovich/mempalace) for conversation indexing:
+**Required for all skills:** None — skills are instruction-only with no external dependencies by default.
+
+**Optional — enhances vault retrieval (see Vault Retrieval Defaults in CLAUDE.md):**
+
+| Dependency | Skills Enhanced | Install |
+|------------|----------------|---------|
+| [MemPalace](https://github.com/milla-jovovich/mempalace) | `/wiki-query` (T2), `/claude-history-ingest` | `pipx install "mempalace>=3.0.0,<4.0.0"` |
+| [NotebookLM CLI](https://github.com/nichochar/notebooklm-cli) | `/wiki-query` (T1), `/notebooklm-vault` | `pipx install notebooklm-cli` + `notebooklm login` |
+| [Obsidian CLI](https://help.obsidian.md/cli) | `/wiki-query` (T3), `/cross-linker` (Phase 2) | Requires Obsidian app running. Uses `obsidian:obsidian-cli` skill. |
+
+**First-time MemPalace vault setup:**
 
 ```bash
-# Install via pipx (recommended on macOS)
-pipx install "mempalace>=3.0.0,<4.0.0"
+# Index vault markdown files into MemPalace (one-time)
+bash skills/shared/mine-vault.sh
 
-# Or run the skill's built-in installer (handles everything)
+# Install the conversation auto-indexing hook (per-project)
 bash skills/claude-history-ingest/hooks/install-hook.sh
 ```
-
-All other skills have no external dependencies.
 
 ### Development Setup
 
@@ -71,10 +79,13 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 
 ### Vault Maintenance
 
-All 10 vault skills use the **tiered retrieval** pattern:
-1. **Tier 1 — Index scan:** Read `index.md` for page catalog with summaries
-2. **Tier 2 — Summary scan:** Read `summary:` frontmatter (<=200 chars each)
-3. **Tier 3 — Full read:** Only open top 3-5 candidates
+`/wiki-query` supports **multi-backend retrieval** (Phase 1) via the Vault Retrieval Defaults in CLAUDE.md:
+- **T1 (NotebookLM):** Pre-synthesized answers for factual lookups (~500 tokens)
+- **T2 (MemPalace):** Deep context and synthesis from vault pages + conversation history (~2,500 tokens)
+- **T3 (Obsidian-CLI):** Full-text search across all vault files (~119 tokens + selective reads)
+- **T4 (index.md scan):** Zero-dependency fallback using the existing 3-step index/summary/full-read pattern (~2,100 tokens)
+
+Other vault skills continue to use the T4 (index.md scan) pattern. Multi-backend support for additional skills is planned for Phase 2.
 
 Key operations: `/wiki-lint` audits vault health (broken links, missing frontmatter, stale index, tag violations). `/wiki-update` syncs project knowledge and regenerates `index.md`. `/tag-taxonomy` enforces consistent tagging against `_meta/taxonomy.md`. `/cross-linker` discovers and adds missing wikilinks.
 
