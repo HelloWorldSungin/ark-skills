@@ -51,3 +51,26 @@ echo "HAS_CI=$HAS_CI"
 
 6. Store these values for condition resolution in later steps.
 7. If `HAS_VAULT=false`, tell the user: "No vault configured for this project. Vault skills (`/wiki-update`, `/wiki-ingest`, `/cross-linker`, `/wiki-lint`, etc.) will be skipped. Run `/wiki-setup` to initialize a vault if needed."
+
+## Scenario Detection
+
+Identify which scenario applies based on the user's request. Ask if ambiguous.
+
+| Scenario | Trigger Patterns | Description |
+|----------|-----------------|-------------|
+| **Greenfield** | "build", "create", "add feature", "new component", "implement" | Building something new from scratch |
+| **Bugfix** | "fix", "bug", "broken", "error", "investigate", "not working", "crash" | Something's broken, find and fix it |
+| **Ship** | "ship", "deploy", "push", "PR", "merge", "release", "cherry-pick" | Getting code reviewed, merged, deployed |
+| **Knowledge Capture** | "document", "vault", "catch up", "knowledge", "wiki", "update docs" | Catch up the vault with what's happened |
+| **Hygiene** | "cleanup", "refactor", "audit", "hygiene", "dead code", "maintenance", "security audit" | Cleanup, refactor, security audit |
+
+If the user's request matches multiple scenarios (e.g., "fix this bug and ship it"), use the primary scenario (bugfix) — the ship phase is included in the bugfix workflow.
+
+If no pattern matches clearly, ask:
+
+> What kind of task is this?
+> A) Greenfield — building something new
+> B) Bugfix — something's broken
+> C) Ship — getting code out the door
+> D) Knowledge Capture — documenting what happened
+> E) Hygiene — cleanup, refactor, audit
