@@ -1,6 +1,6 @@
 # Ark Skills Plugin
 
-Claude Code plugin providing 16 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
+Claude Code plugin providing 17 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
 
 ## Installation
 
@@ -48,6 +48,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 
 | Skill | Category | Description | Source |
 |-------|----------|-------------|--------|
+| `/ark-workflow` | Workflow Orchestration | Task triage and skill chain orchestration | New |
 | `/ark-code-review` | Core | Multi-agent code review with fan-out architecture | Generalized |
 | `/codebase-maintenance` | Core | Repo cleanup, vault sync, skill health | Generalized |
 | `/notebooklm-vault` | Core | NotebookLM vault context and sync | Generalized |
@@ -62,11 +63,14 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 | `/cross-linker` | Vault Maintenance | Discover and add missing wikilinks | Adapted from obsidian-wiki |
 | `/claude-history-ingest` | Vault Maintenance | Mine Claude conversations into compiled vault insights via MemPalace | Adapted from obsidian-wiki |
 | `/data-ingest` | Vault Maintenance | Process logs, transcripts, exports into vault pages | Adapted from obsidian-wiki |
-| `/ark-workflow` | Core | Task triage and skill chain orchestration (planned — no SKILL.md yet) | Planned |
 | `/ark-onboard` | Onboarding | Interactive setup wizard — greenfield, migration, repair | New |
 | `/ark-health` | Onboarding | Diagnostic check for Ark ecosystem health | New |
 
 ## Skill Documentation
+
+### Workflow Orchestration
+
+**`/ark-workflow`** — Task triage and skill chain orchestration. Detects scenario (greenfield, bugfix, ship, knowledge capture, hygiene), classifies weight (light/medium/heavy) with risk as the primary signal, and outputs an ordered skill chain with project-specific conditions resolved. Entry point for all non-trivial work.
 
 ### Core Skills
 
@@ -119,7 +123,7 @@ ark-skills (Claude Code plugin)
 ├── .claude-plugin/
 │   ├── plugin.json           # Plugin metadata (ark-skills v1.3.0)
 │   └── marketplace.json      # Repo-level plugin registry
-└── skills/                   # 16 shared skills
+└── skills/                   # 17 shared skills
       ↓ context-discovery
 Project CLAUDE.md → vault path, task prefix, deployment targets
       ↓
