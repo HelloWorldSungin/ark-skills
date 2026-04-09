@@ -367,3 +367,24 @@ If the task changes class mid-flight (a "light" bug that turns out to involve au
 2. Re-classify using the triage table
 3. Pick up the remaining phases from the new weight class
 4. Don't restart — just add the phases you would have run
+
+## Routing Rules Template
+
+Projects can add this block to their CLAUDE.md to auto-trigger `/ark-workflow`:
+
+`````markdown
+## Skill routing — Ark Workflow
+
+When starting any non-trivial task, invoke `/ark-workflow` first to triage and get the
+skill chain. Pattern triggers:
+
+- "build", "create", "add feature", "new component" → /ark-workflow (greenfield)
+- "fix", "bug", "broken", "error", "investigate" → /ark-workflow (bugfix)
+- "ship", "deploy", "push", "PR", "merge" → /ark-workflow (ship)
+- "document", "vault", "catch up", "knowledge" → /ark-workflow (knowledge capture)
+- "cleanup", "refactor", "audit", "hygiene", "dead code" → /ark-workflow (hygiene)
+
+For trivial tasks (single obvious change, no ambiguity), skip triage and work directly.
+`````
+
+To add routing to a new project, copy the block above into the project's CLAUDE.md. The `/ark-workflow` skill is already available globally via the ark-skills plugin.
