@@ -302,6 +302,7 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 6. `/ship` → `/land-and-deploy`
 7. `/canary` (if deploy risk)
 8. `/wiki-update` (if vault) + session log
+9. `/claude-history-ingest`
 
 ---
 
