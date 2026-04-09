@@ -16,12 +16,12 @@ Adding a new project requires four things:
 
 1. **Vault** — An Obsidian vault with Ark standard structure
 2. **CLAUDE.md** — Project config that skills read via context-discovery
-3. **Plugin** — ark-skills installed so all 14 shared skills are available
+3. **Plugin** — ark-skills installed so all 16 shared skills are available
 4. **Integrations** — TaskNotes MCP, Linear sync, NotebookLM (optional)
 
 ## Step 1: Install the Plugin
 
-Add `ark-skills` as a Claude Code plugin. All 14 shared skills become available.
+Add `ark-skills` as a Claude Code plugin. All 16 shared skills become available.
 
 ```bash
 # Add the marketplace

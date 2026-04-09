@@ -1544,7 +1544,7 @@ Use this exact format for all scorecard output:
 
 | Tier | Condition |
 |------|-----------|
-| Quick | Checks 1-9 pass, checks 10-11 may fail |
+| Quick | Checks 1-11 all pass |
 | Standard | Checks 1-13 all pass |
 | Full | Checks 1-19 all pass |
 | Below Quick | Any critical check (1, 4-9) failing |
