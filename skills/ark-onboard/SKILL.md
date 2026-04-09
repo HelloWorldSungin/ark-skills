@@ -868,27 +868,94 @@ For monorepo layout, adjust the Obsidian Vault row to point at the project docs 
 
 > **You are at Step 11 of 18 — Obsidian plugin setup (Standard+ only). Skip to Step 16 if Quick tier.**
 
-Ask the user if they have a reference vault to copy plugin binaries from.
+Install plugin binaries and generate `data.json` configs so the user does not need to configure anything through the Obsidian GUI.
 
-**If reference vault available:**
+**Primary: Download from GitHub releases (automatic)**
+
+Look up the plugin repos from the Obsidian community plugin registry, then download the latest release assets:
+
 ```bash
-# TaskNotes plugin (do NOT copy data.json — it's gitignored and project-specific)
-cp {reference_vault}/.obsidian/plugins/tasknotes/main.js {vault_path}/.obsidian/plugins/tasknotes/
-cp {reference_vault}/.obsidian/plugins/tasknotes/manifest.json {vault_path}/.obsidian/plugins/tasknotes/
-cp {reference_vault}/.obsidian/plugins/tasknotes/styles.css {vault_path}/.obsidian/plugins/tasknotes/
+# Step 1: Resolve plugin repos from Obsidian's community plugin registry
+COMMUNITY_PLUGINS=$(curl -sfL "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json" 2>/dev/null)
 
-# Obsidian Git plugin
-cp {reference_vault}/.obsidian/plugins/obsidian-git/main.js {vault_path}/.obsidian/plugins/obsidian-git/
-cp {reference_vault}/.obsidian/plugins/obsidian-git/manifest.json {vault_path}/.obsidian/plugins/obsidian-git/
-cp {reference_vault}/.obsidian/plugins/obsidian-git/styles.css {vault_path}/.obsidian/plugins/obsidian-git/
-cp {reference_vault}/.obsidian/plugins/obsidian-git/obsidian_askpass.sh {vault_path}/.obsidian/plugins/obsidian-git/ 2>/dev/null
+if [ -n "$COMMUNITY_PLUGINS" ]; then
+  TASKNOTES_REPO=$(echo "$COMMUNITY_PLUGINS" | python3 -c "
+import sys, json
+for p in json.load(sys.stdin):
+    if p['id'] == 'tasknotes':
+        print(p['repo']); break
+" 2>/dev/null)
+
+  GIT_REPO=$(echo "$COMMUNITY_PLUGINS" | python3 -c "
+import sys, json
+for p in json.load(sys.stdin):
+    if p['id'] == 'obsidian-git':
+        print(p['repo']); break
+" 2>/dev/null)
+fi
+
+DOWNLOAD_OK=true
+
+# Step 2: Download TaskNotes plugin
+if [ -n "$TASKNOTES_REPO" ]; then
+  for FILE in main.js manifest.json styles.css; do
+    curl -sfL "https://github.com/$TASKNOTES_REPO/releases/latest/download/$FILE" \
+      -o "{vault_path}/.obsidian/plugins/tasknotes/$FILE"
+  done
+  if [ -s "{vault_path}/.obsidian/plugins/tasknotes/main.js" ]; then
+    echo "OK: TaskNotes plugin downloaded from $TASKNOTES_REPO"
+  else
+    echo "WARN: TaskNotes download failed"
+    DOWNLOAD_OK=false
+  fi
+else
+  echo "WARN: Could not resolve TaskNotes repo from registry"
+  DOWNLOAD_OK=false
+fi
+
+# Step 3: Download Obsidian Git plugin
+if [ -n "$GIT_REPO" ]; then
+  for FILE in main.js manifest.json styles.css; do
+    curl -sfL "https://github.com/$GIT_REPO/releases/latest/download/$FILE" \
+      -o "{vault_path}/.obsidian/plugins/obsidian-git/$FILE"
+  done
+  if [ -s "{vault_path}/.obsidian/plugins/obsidian-git/main.js" ]; then
+    echo "OK: Obsidian Git plugin downloaded from $GIT_REPO"
+  else
+    echo "WARN: Obsidian Git download failed"
+    DOWNLOAD_OK=false
+  fi
+else
+  echo "WARN: Could not resolve Obsidian Git repo from registry"
+  DOWNLOAD_OK=false
+fi
 ```
 
-**If no reference vault:**
+**Fallback 1: Copy from reference vault (if download failed)**
 
-Tell the user:
+If any download failed, ask the user if they have a reference vault:
+
+```bash
+if [ "$DOWNLOAD_OK" = "false" ]; then
+  echo "Some plugin downloads failed. Do you have a reference vault to copy from?"
+  # If yes:
+  # TaskNotes (do NOT copy data.json — it's gitignored and project-specific)
+  cp {reference_vault}/.obsidian/plugins/tasknotes/main.js {vault_path}/.obsidian/plugins/tasknotes/
+  cp {reference_vault}/.obsidian/plugins/tasknotes/manifest.json {vault_path}/.obsidian/plugins/tasknotes/
+  cp {reference_vault}/.obsidian/plugins/tasknotes/styles.css {vault_path}/.obsidian/plugins/tasknotes/
+
+  # Obsidian Git
+  cp {reference_vault}/.obsidian/plugins/obsidian-git/main.js {vault_path}/.obsidian/plugins/obsidian-git/
+  cp {reference_vault}/.obsidian/plugins/obsidian-git/manifest.json {vault_path}/.obsidian/plugins/obsidian-git/
+  cp {reference_vault}/.obsidian/plugins/obsidian-git/styles.css {vault_path}/.obsidian/plugins/obsidian-git/
+fi
 ```
-No reference vault available. You will need to install plugins manually:
+
+**Fallback 2: Manual install (last resort)**
+
+If both download and reference vault fail:
+```
+Plugin binaries could not be installed automatically. Install manually:
   1. Open the vault in Obsidian
   2. Settings > Community Plugins > Browse
   3. Install "TaskNotes" and "Obsidian Git"
@@ -897,33 +964,101 @@ No reference vault available. You will need to install plugins manually:
 PAUSE — manual handoff. Continue when plugins are installed, or type "skip" to proceed without plugins.
 ```
 
-**PAUSE for manual handoff.** Wait for user confirmation before continuing.
+**PAUSE for manual handoff** only if reaching Fallback 2. If download or reference vault succeeded, continue automatically.
 
-### Greenfield Step 12: Configure TaskNotes MCP (Standard+ tier only)
+### Greenfield Step 12: Configure plugin data + TaskNotes MCP (Standard+ tier only)
 
-> **You are at Step 12 of 18 — TaskNotes MCP configuration (Standard+ only). Skip to Step 16 if Quick tier.**
+> **You are at Step 12 of 18 — Plugin configuration + TaskNotes MCP (Standard+ only). Skip to Step 16 if Quick tier.**
 
-Generate TaskNotes `data.json`:
+Generate `data.json` for both plugins so the user does not need to configure anything through the Obsidian GUI. These files are gitignored (per Step 9's `.gitignore`), so each vault gets its own config.
+
+**TaskNotes `data.json`:**
 
 Write `{vault_path}/.obsidian/plugins/tasknotes/data.json`:
 ```json
 {
   "tasksFolder": "TaskNotes/Tasks",
+  "moveArchivedTasks": false,
   "archiveFolder": "TaskNotes/Archive",
   "taskTag": "task",
+  "taskIdentificationMethod": "tag",
+  "taskFilenameFormat": "zettel",
+  "storeTitleInFilename": true,
+  "defaultTaskStatus": "open",
+  "defaultTaskPriority": "normal",
   "enableAPI": true,
   "apiPort": 8080,
   "enableMCP": true,
+  "enableNaturalLanguageInput": true,
+  "nlpDefaultToScheduled": true,
+  "enableTaskLinkOverlay": true,
+  "enableInstantTaskConvert": true,
+  "useDefaultsOnInstantConvert": true,
+  "enableBases": true,
   "commandFileMapping": {
-    "all-tasks": "TaskNotes/Views/all-tasks.md",
-    "active-tasks": "TaskNotes/Views/active-tasks.md"
+    "open-calendar-view": "TaskNotes/Views/mini-calendar-default.base",
+    "open-kanban-view": "TaskNotes/Views/kanban-default.base",
+    "open-tasks-view": "TaskNotes/Views/tasks-default.base",
+    "open-advanced-calendar-view": "TaskNotes/Views/calendar-default.base",
+    "open-agenda-view": "TaskNotes/Views/agenda-default.base",
+    "relationships": "TaskNotes/Views/relationships.base"
+  },
+  "customStatuses": [
+    { "id": "none", "value": "none", "label": "None", "color": "#cccccc", "isCompleted": false, "order": 0, "autoArchive": false, "autoArchiveDelay": 5 },
+    { "id": "open", "value": "open", "label": "Open", "color": "#808080", "isCompleted": false, "order": 1, "autoArchive": false, "autoArchiveDelay": 5 },
+    { "id": "in-progress", "value": "in-progress", "label": "In progress", "color": "#0066cc", "isCompleted": false, "order": 2, "autoArchive": false, "autoArchiveDelay": 5 },
+    { "id": "done", "value": "done", "label": "Done", "color": "#00cc66", "isCompleted": true, "order": 3, "autoArchive": false, "autoArchiveDelay": 5 },
+    { "id": "cancelled", "value": "cancelled", "label": "Cancelled", "color": "#cc0000", "isCompleted": true, "order": 4, "autoArchive": false, "autoArchiveDelay": 5 }
+  ],
+  "fieldMapping": {
+    "title": "title",
+    "status": "status",
+    "priority": "priority",
+    "due": "due",
+    "scheduled": "scheduled",
+    "contexts": "contexts",
+    "projects": "projects",
+    "timeEstimate": "timeEstimate",
+    "completedDate": "completedDate",
+    "dateCreated": "dateCreated",
+    "dateModified": "dateModified",
+    "recurrence": "recurrence",
+    "recurrenceAnchor": "recurrence_anchor",
+    "archiveTag": "archived",
+    "timeEntries": "timeEntries",
+    "completeInstances": "complete_instances",
+    "skippedInstances": "skipped_instances",
+    "blockedBy": "blockedBy",
+    "pomodoros": "pomodoros",
+    "reminders": "reminders",
+    "sortOrder": "tasknotes_manual_order"
   }
 }
 ```
 
-Note: `data.json` is gitignored. Adjust `apiPort` if user has multiple Obsidian instances (suggest unique ports: 8080, 8081, 8082).
+Note: `data.json` is gitignored. Adjust `apiPort` if user has multiple Obsidian instances (suggest unique ports: 8080, 8081, 8082). TaskNotes will populate any missing fields with defaults on first launch — this config covers Ark-specific settings (folder paths, statuses, field mappings, Bases views) so the plugin works correctly without GUI configuration.
 
-Configure MCP in `.mcp.json` (project root):
+**Obsidian Git `data.json`:**
+
+Write `{vault_path}/.obsidian/plugins/obsidian-git/data.json`:
+```json
+{
+  "autoSaveInterval": 5,
+  "autoPushInterval": 5,
+  "autoPullInterval": 10,
+  "autoPullOnBoot": true,
+  "disablePush": false,
+  "pullBeforePush": true,
+  "syncMethod": "merge",
+  "autoCommitMessage": "vault backup: {{date}}",
+  "commitDateFormat": "YYYY-MM-DD HH:mm:ss",
+  "listChangedFilesInMessageBody": false
+}
+```
+
+Note: This gives sensible defaults (auto-save every 5 min, auto-pull on open, merge strategy). The user can adjust intervals in Obsidian settings later.
+
+**Configure TaskNotes MCP in `.mcp.json` (project root):**
 
 ```bash
 # Pre-validation: check if .mcp.json exists and is valid JSON
@@ -1106,13 +1241,18 @@ Then show follow-up reminders:
 ```
 Setup complete! Follow-up reminders:
 
-1. Open the vault in Obsidian and enable TaskNotes + Obsidian Git plugins
+1. Open the vault in Obsidian — plugins are pre-configured (if downloaded/copied)
+   OR: Install TaskNotes + Obsidian Git via Community Plugins (if manual fallback was needed)
 2. Fill in NotebookLM notebook ID in .notebooklm/config.json (if Full tier)
 3. Run /ark-health anytime to check ecosystem health
 4. Run /ark-onboard again to upgrade tiers
 ```
 
-Adjust reminders based on what was actually set up (omit plugin reminder if plugins were copied from reference vault, omit NotebookLM if not Full tier, etc.).
+Adjust reminders based on what was actually set up:
+- If plugins were downloaded from GitHub or copied from reference vault: use "Open the vault in Obsidian — plugins are pre-configured, just enable them in Settings > Community Plugins"
+- If manual fallback was needed: use "Install TaskNotes + Obsidian Git via Settings > Community Plugins > Browse"
+- Omit NotebookLM reminder if not Full tier
+- Omit plugin reminder entirely if Quick tier
 
 ---
 
@@ -1413,7 +1553,7 @@ Fix checks in order (Critical first, then Standard). For each fix:
 **Standard fixes (checks 10-13):**
 - Check 10 (index): Regenerate with `python3 _meta/generate-index.py`
 - Check 11 (counter): Create counter file: `echo "1" > {path}`
-- Check 12 (plugins): Prompt user to install in Obsidian, PAUSE for manual handoff
+- Check 12 (plugins): Download from GitHub releases (see Greenfield Step 11). If download fails, fall back to reference vault copy, then manual install as last resort
 - Check 13 (MCP): Add `mcpServers.tasknotes` to `.mcp.json`
 
 ### Repair Step 4: Offer tier upgrade
@@ -1574,6 +1714,7 @@ Changes: {N} fixes applied, {N} upgrades added
 - **Graceful degradation.** Every Full-tier step (MemPalace, NotebookLM, history hook) includes a "warn and skip" fallback. Installation failures never block the wizard.
 - **Hook pre-validation.** Before running `install-hook.sh`, verify `.claude/settings.json` is valid JSON. The install script uses Python and will fail on malformed JSON.
 - **MemPalace wing distinction.** Check 15 covers the vault content wing (indexed by `mine-vault.sh`). The conversation history wing is managed separately by `ark-history-hook.sh` (check 16). They are independent.
+- **Zero-GUI plugin setup.** Step 11 downloads plugin binaries from GitHub releases using the Obsidian community-plugins.json registry to resolve repo URLs. Step 12 generates `data.json` for both TaskNotes and Obsidian Git with Ark-specific defaults (folder paths, custom statuses, field mappings, Bases views, auto-sync intervals). The user only needs to open Obsidian and enable the plugins — no manual configuration required. Falls back to reference vault copy, then manual GUI install as last resort.
 - **MCP check is config-only.** Check 13 verifies `mcpServers.tasknotes` presence in `.mcp.json` (project root), not endpoint reachability. Obsidian must be running for the endpoint to respond.
 - **Clear step markers.** Each step includes "You are at Step X of Y" markers so Claude can track progress and the user knows where they are in the wizard.
 - **No hardcoded references.** No project names, vault paths, or task prefixes are hardcoded anywhere in this skill. All values come from user input or runtime detection.

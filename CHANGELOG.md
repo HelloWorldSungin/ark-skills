@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2026-04-09
+
+### Changed
+- `/ark-onboard` Step 11 now downloads Obsidian plugin binaries (TaskNotes, Obsidian Git)
+  directly from GitHub releases via the community-plugins.json registry. Falls back to
+  reference vault copy, then manual GUI install as last resort.
+- `/ark-onboard` Step 12 generates full `data.json` configs for both plugins — TaskNotes
+  gets Ark-specific folder paths, custom statuses, field mappings, and Bases view bindings;
+  Obsidian Git gets auto-save/pull/push intervals and merge strategy. No GUI configuration
+  required.
+- Repair path check 12 fix updated to use GitHub download instead of manual install.
+
 ## [1.4.0] - 2026-04-08
 
 ### Added
