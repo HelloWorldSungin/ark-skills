@@ -121,7 +121,7 @@ See `CLAUDE.md` in this repo for the full discovery procedure and field referenc
 ```
 ark-skills (Claude Code plugin)
 ├── .claude-plugin/
-│   ├── plugin.json           # Plugin metadata (ark-skills v1.3.0)
+│   ├── plugin.json           # Plugin metadata (ark-skills v1.4.0)
 │   └── marketplace.json      # Repo-level plugin registry
 └── skills/                   # 17 shared skills
       ↓ context-discovery
