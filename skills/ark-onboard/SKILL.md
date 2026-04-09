@@ -986,7 +986,6 @@ Write `{vault_path}/.obsidian/plugins/tasknotes/data.json`:
   "storeTitleInFilename": true,
   "defaultTaskStatus": "open",
   "defaultTaskPriority": "normal",
-  "enableAPI": true,
   "apiPort": 8080,
   "enableMCP": true,
   "enableNaturalLanguageInput": true,
@@ -1071,18 +1070,19 @@ if [ -f .mcp.json ]; then
 fi
 ```
 
-Add or merge `tasknotes` into `.mcp.json`:
+Add or merge `tasknotes` into `.mcp.json` (TaskNotes v4.5+ exposes a built-in MCP server via HTTP on its API port — there is no separate `tasknotes-mcp` npm package):
 ```json
 {
   "mcpServers": {
     "tasknotes": {
-      "command": "npx",
-      "args": ["-y", "tasknotes-mcp"],
-      "env": { "OBSIDIAN_PORT": "8080" }
+      "type": "http",
+      "url": "http://localhost:{apiPort}/mcp"
     }
   }
 }
 ```
+
+Where `{apiPort}` comes from the TaskNotes `data.json` above (default: `8080`). Alternatively, use the CLI: `claude mcp add --transport http --scope project tasknotes http://localhost:{apiPort}/mcp`.
 
 ### Greenfield Step 13: Install MemPalace (Full tier only)
 
@@ -1554,7 +1554,7 @@ Fix checks in order (Critical first, then Standard). For each fix:
 - Check 10 (index): Regenerate with `python3 _meta/generate-index.py`
 - Check 11 (counter): Create counter file: `echo "1" > {path}`
 - Check 12 (plugins): Download from GitHub releases (see Greenfield Step 11). If download fails, fall back to reference vault copy, then manual install as last resort
-- Check 13 (MCP): Add `mcpServers.tasknotes` to `.mcp.json`
+- Check 13 (MCP): Add tasknotes HTTP transport to `.mcp.json`: `{"mcpServers":{"tasknotes":{"type":"http","url":"http://localhost:{apiPort}/mcp"}}}` (or run `claude mcp add --transport http --scope project tasknotes http://localhost:{apiPort}/mcp`)
 
 ### Repair Step 4: Offer tier upgrade
 

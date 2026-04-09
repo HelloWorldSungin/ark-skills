@@ -295,16 +295,16 @@ cat .mcp.json 2>/dev/null | grep -q "tasknotes" && echo "PASS: tasknotes MCP con
 ```
 
 - **Pass:** `tasknotes` entry exists in `.mcp.json` (project root)
-- **Fail action:** Add tasknotes MCP to `.mcp.json`. Example entry:
+- **Fail action:** Add tasknotes HTTP transport to `.mcp.json` (TaskNotes v4.5+ has a built-in MCP server on its API port). Example entry:
   ```json
   "mcpServers": {
     "tasknotes": {
-      "command": "npx",
-      "args": ["-y", "tasknotes-mcp"],
-      "env": { "OBSIDIAN_PORT": "8080" }
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
     }
   }
   ```
+  Or use CLI: `claude mcp add --transport http --scope project tasknotes http://localhost:8080/mcp`
 
 ---
 
@@ -504,7 +504,7 @@ Vault Structure
 Integrations
   OK  Obsidian vault plugins installed
   !!  TaskNotes MCP -- not in .mcp.json
-      Fix: Add tasknotes MCP to .mcp.json in project root
+      Fix: Add tasknotes HTTP transport to .mcp.json (type: http, url: http://localhost:{apiPort}/mcp)
   --  MemPalace -- not installed
       Unlock: T2 retrieval for /wiki-query (deep synthesis, experiential recall)
       Install: pipx install "mempalace>=3.0.0,<4.0.0"
