@@ -239,3 +239,67 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 12. `/cross-linker` (if vault)
 13. Session log
 14. `/claude-history-ingest`
+
+---
+
+### Shipping & Deploying
+
+*Standalone ship — cherry-pick, config change, dependency bump. No weight class needed.*
+
+1. `/review` — pre-landing PR diff review
+2. `/cso` (if security-relevant)
+3. `/ship` → `/land-and-deploy`
+4. `/canary` (if deploy risk)
+5. `/wiki-update` (if vault)
+6. `/document-release` (if standard docs exist)
+
+---
+
+### Knowledge Capture
+
+*Catch up the vault with what's happened. No weight class needed. Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` first.*
+
+1. `/wiki-status` — vault statistics
+2. `/wiki-lint` — broken links, missing frontmatter, tag violations
+3. `/wiki-update` — sync recent changes
+4. `/wiki-ingest` — distill external documents if needed
+5. `/cross-linker` — discover missing wikilinks
+6. `/tag-taxonomy` — normalize tags
+7. `/claude-history-ingest` — mine recent sessions
+8. Session log
+
+---
+
+### Codebase Hygiene
+
+**Light:**
+
+1. `/codebase-maintenance` — audit
+2. Implement cleanup
+3. `/cso` (if security-relevant)
+4. `/ship` → `/land-and-deploy`
+5. `/canary` (if deploy risk)
+6. `/wiki-update` (if vault)
+
+**Medium:**
+
+1. `/codebase-maintenance` — audit
+2. `/cso` (if security-relevant)
+3. `/TDD` — tests before restructuring
+4. Implement cleanup
+5. `/ark-code-review --quick` → `/simplify`
+6. `/ship` → `/land-and-deploy`
+7. `/canary` (if deploy risk)
+8. `/wiki-update` (if vault) + session log
+
+**Heavy:**
+
+1. `/codebase-maintenance` — audit
+2. `/cso` — infrastructure, dependency, secrets audit
+3. `/TDD` — tests before restructuring
+4. Implement cleanup
+5. `/ark-code-review --thorough` + `/codex` → `/simplify`
+6. `/ship` → `/land-and-deploy`
+7. `/canary` (if deploy risk)
+8. `/wiki-update` (if vault) + session log
+9. `/claude-history-ingest`
