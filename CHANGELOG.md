@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-04-08
+
+### Added
+- Multi-backend vault retrieval tiers for `/wiki-query`: T1 (NotebookLM), T2 (MemPalace),
+  T3 (Obsidian-CLI), T4 (index.md scan). Routes queries by type with automatic fallback.
+- `skills/shared/mine-vault.sh` — one-time helper to index vault .md files into MemPalace.
+  Accepts vault path argument, detects symlink vs real dir, derives wing name.
+- Vault Retrieval Defaults section in CLAUDE.md: tier table, availability checks,
+  failure messaging, and 7-rule query routing guide.
+- Optional dependency table in README (MemPalace, NotebookLM CLI, Obsidian CLI).
+
+### Changed
+- `wiki-query` SKILL.md rewritten: query classification (factual, synthesis, gap, search,
+  browse), tier availability check, per-type routing, T4 fallback guard, CONVO_WING for
+  shared vaults. Old Tier 1/2/3 renamed to Step 3a/3b/3c within T4.
+- README Vault Maintenance section updated for multi-backend language scoped to wiki-query (Phase 1).
+
 ## [1.1.2] - 2026-04-08
 
 ### Fixed
