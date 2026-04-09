@@ -60,13 +60,7 @@ Derived values:
 
 Detect by checking if superpowers skills are available in the current session. Look for: `superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:test-driven-development`.
 
-Detection: These skills appear in the session's available skill list if the plugin is loaded. If unavailable, report fail.
-
-```bash
-# No filesystem check needed — plugin detection relies on skill availability in session.
-# Check if superpowers skills appear in /skills list or available skill context.
-# If running in a context where skills are listed, grep for "superpowers:" prefix.
-```
+Detection: Read the `system-reminder` skill list in your current session context. Search for entries prefixed with `superpowers:` (e.g., `superpowers:brainstorming`, `superpowers:writing-plans`). If at least one matching entry exists, pass.
 
 - **Pass:** At least one `superpowers:*` skill is available in the current session
 - **Fail action:** Install with `/plugin install superpowers@claude-plugins-official` (marketplace: `anthropics/claude-plugins-official`)
@@ -80,10 +74,7 @@ Best-effort detection: check if gstack skills are loadable in the current sessio
 
 Note: Plugin detection relies on skill availability in the session, not filesystem inspection of `~/.claude/plugins/`.
 
-```bash
-# No filesystem check — check if gstack skill aliases appear in session skill list.
-# Skills like /browse, /qa, /ship, /review signal gstack is loaded.
-```
+Detection: Read the `system-reminder` skill list in your current session context. Search for gstack skill entries (e.g., `browse`, `qa`, `ship`, `review`, `design-review`). If at least one matching entry exists, pass.
 
 - **Pass:** At least one gstack skill (`browse`, `qa`, `ship`, `review`) is available in the current session
 - **Fail action:** Check `/plugin marketplace list` for gstack source and install
@@ -95,9 +86,7 @@ Note: Plugin detection relies on skill availability in the session, not filesyst
 
 Detect by checking if `obsidian:obsidian-cli` skill is available in the current session.
 
-```bash
-# No filesystem check — verify obsidian:obsidian-cli appears in session skill list.
-```
+Detection: Read the `system-reminder` skill list in your current session context. Search for entries prefixed with `obsidian:` (e.g., `obsidian:obsidian-cli`). If at least one matching entry exists, pass.
 
 - **Pass:** `obsidian:obsidian-cli` skill is available in the current session
 - **Fail action:** Install with `/plugin install obsidian@obsidian-skills` (marketplace: `kepano/obsidian-skills`)
@@ -391,11 +380,22 @@ command -v notebooklm 2>/dev/null && notebooklm --version 2>/dev/null && echo "P
 Config may be in either the vault or the project root.
 
 ```bash
-# Check project root first
-ls .notebooklm/config.json 2>/dev/null && echo "config: project root" && cat .notebooklm/config.json | grep -q '"notebook' && echo "notebook ID: present" || echo "notebook ID: MISSING"
+# Check project root first, then vault root
+CONFIG_FOUND=""
+if [ -f .notebooklm/config.json ]; then
+  echo "config: project root"
+  CONFIG_FOUND=".notebooklm/config.json"
+elif [ -f "${VAULT_ROOT}.notebooklm/config.json" ]; then
+  echo "config: vault root"
+  CONFIG_FOUND="${VAULT_ROOT}.notebooklm/config.json"
+else
+  echo "FAIL: .notebooklm/config.json not found in project root or vault root"
+fi
 
-# Check vault path if not found in project root
-ls "${VAULT_ROOT}.notebooklm/config.json" 2>/dev/null && echo "config: vault root" || echo "config: not found in vault root either"
+# If config found, check for non-empty notebook ID
+if [ -n "$CONFIG_FOUND" ]; then
+  grep -q '"id":\s*"[^"]' "$CONFIG_FOUND" && echo "notebook ID: present" || echo "notebook ID: MISSING or empty"
+fi
 ```
 
 Parse the config and verify the notebook ID field is non-empty.
@@ -528,15 +528,6 @@ Run /ark-onboard to fix or upgrade
 - Summary line format: `Score: {tier} tier | {fails} fix, {warns} warning, {upgrades} upgrades available`
 - Use singular (`1 fix`, not `1 fixes`) when count is 1
 - Always end with `Run /ark-onboard to fix or upgrade`
-
-## Output Symbols
-
-| Symbol | Meaning |
-|--------|---------|
-| `OK` | Check passed — no action needed |
-| `!!` | Fail — actionable fix required |
-| `~~` | Warning — non-blocking, worth addressing |
-| `--` | Available upgrade — optional, explains what it unlocks |
 
 ## Design Decisions
 
