@@ -1,6 +1,6 @@
 # Ark Skills Plugin
 
-Claude Code plugin providing 14 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
+Claude Code plugin providing 16 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
 
 ## Installation
 
@@ -62,6 +62,9 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 | `/cross-linker` | Vault Maintenance | Discover and add missing wikilinks | Adapted from obsidian-wiki |
 | `/claude-history-ingest` | Vault Maintenance | Mine Claude conversations into compiled vault insights via MemPalace | Adapted from obsidian-wiki |
 | `/data-ingest` | Vault Maintenance | Process logs, transcripts, exports into vault pages | Adapted from obsidian-wiki |
+| `/ark-workflow` | Core | Task triage and skill chain orchestration (planned — no SKILL.md yet) | Planned |
+| `/ark-onboard` | Onboarding | Interactive setup wizard — greenfield, migration, repair | New |
+| `/ark-health` | Onboarding | Diagnostic check for Ark ecosystem health | New |
 
 ## Skill Documentation
 
@@ -91,6 +94,12 @@ Key operations: `/wiki-lint` audits vault health (broken links, missing frontmat
 
 **`/claude-history-ingest`** — Mines Claude Code conversation history into compiled vault insights using MemPalace (ChromaDB). Two-layer pipeline: a Stop hook auto-indexes sessions (zero LLM tokens), and a compile pass synthesizes insights via semantic search (~10K tokens vs 100-200K previously). Three modes: `index`, `compile`, `full` (default). Requires `pip install mempalace`.
 
+### Onboarding
+
+**`/ark-onboard`** — Interactive setup wizard and single entry point for new Ark projects. Detects project state (greenfield, non-Ark vault, partial Ark, healthy) and guides setup through Quick, Standard, or Full tiers. Absorbs `/wiki-setup` functionality. Handles vault creation, CLAUDE.md configuration, Obsidian plugin setup, TaskNotes MCP, MemPalace, history hook, and NotebookLM.
+
+**`/ark-health`** — Diagnostic check that runs 19 checks across plugins, project configuration, vault structure, and integrations. Produces a scored scorecard with actionable fix and upgrade instructions. No auto-fix — always points to `/ark-onboard` for remediation.
+
 ## Context-Discovery Pattern
 
 Every skill uses **context-discovery** — no skill contains hardcoded project names, vault paths, or task prefixes. When invoked, each skill:
@@ -101,6 +110,8 @@ Every skill uses **context-discovery** — no skill contains hardcoded project n
 
 See `CLAUDE.md` in this repo for the full discovery procedure and field reference.
 
+**Exemption:** `/ark-onboard` and `/ark-health` are exempt from context-discovery — they must work when CLAUDE.md is missing, broken, or incomplete.
+
 ## Architecture
 
 ```
@@ -108,7 +119,7 @@ ark-skills (Claude Code plugin)
 ├── .claude-plugin/
 │   ├── plugin.json           # Plugin metadata (ark-skills v1.1.0)
 │   └── marketplace.json      # Repo-level plugin registry
-└── skills/                   # 14 shared skills
+└── skills/                   # 16 shared skills
       ↓ context-discovery
 Project CLAUDE.md → vault path, task prefix, deployment targets
       ↓
@@ -118,14 +129,16 @@ Obsidian Vault → TaskNotes → linear-updater → Linear
 
 ## New Project Onboarding
 
-See [docs/onboarding-guide.md](docs/onboarding-guide.md) for step-by-step instructions to add a new project to the Ark ecosystem with shared skills, vault, and Linear sync.
+Run `/ark-onboard` for interactive guided setup. It detects your project state and walks you through the appropriate setup path.
+
+For manual setup, see [docs/onboarding-guide.md](docs/onboarding-guide.md).
 
 ## Repository Structure
 
 | Directory | Purpose |
 |-----------|---------|
 | `.claude-plugin/` | Plugin manifest (plugin.json, marketplace.json) |
-| `skills/` | 14 shared skill definitions (SKILL.md files) |
+| `skills/` | 16 shared skill definitions (SKILL.md files) |
 | `docs/` | Design specs, plans, onboarding guide |
 | `ArkNode-AI/` | Submodule: AI trading project (skill source for generalization) |
 | `ArkNode-Poly/` | Submodule: Polymarket project (skill source for generalization) |
@@ -150,8 +163,8 @@ See [docs/onboarding-guide.md](docs/onboarding-guide.md) for step-by-step instru
 ### Verification Checks
 
 ```bash
-# All 14 skills exist
-find skills -name SKILL.md | wc -l  # → 14
+# All 16 skills exist
+find skills -name SKILL.md | wc -l  # → 16
 
 # Zero hardcoded project references
 grep -rn "ArkPoly\|ArkSignal\|trading-signal-ai\|arknode-poly" skills/

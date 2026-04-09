@@ -36,6 +36,8 @@ Add `ark-skills` as a Claude Code plugin. All 14 shared skills become available.
 
 ## Step 2: Create the Vault
 
+> **Recommended:** Run `/ark-onboard` instead of manually following these steps. It automates the entire process.
+
 Run the `/wiki-setup` skill from this plugin. It will prompt you for:
 
 - **Project name** — e.g., `my-new-project`
@@ -366,6 +368,8 @@ The `sync-state.json` file is auto-generated at runtime by the sync process and 
 5. Add sync timer on CT110 (copy existing timer, update paths)
 
 ## Step 7: Verify Everything
+
+> Run `/ark-health` for a quick verification of your setup.
 
 ### Run baseline lint
 
