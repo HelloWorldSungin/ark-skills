@@ -290,12 +290,12 @@ ls "${VAULT_ROOT}.obsidian/plugins/obsidian-git/main.js" 2>/dev/null && echo "ob
 Config check only — not connectivity. Obsidian must be running for the endpoint to respond.
 
 ```bash
-# Check project-local .claude/settings.json for mcpServers.tasknotes entry
-cat .claude/settings.json 2>/dev/null | grep -q "tasknotes" && echo "PASS: tasknotes MCP configured" || echo "FAIL: mcpServers.tasknotes not found in .claude/settings.json"
+# Check .mcp.json in project root for tasknotes MCP entry
+cat .mcp.json 2>/dev/null | grep -q "tasknotes" && echo "PASS: tasknotes MCP configured" || echo "FAIL: tasknotes not found in .mcp.json"
 ```
 
-- **Pass:** `mcpServers.tasknotes` entry exists in `.claude/settings.json`
-- **Fail action:** Add `mcpServers.tasknotes` to `.claude/settings.json`. Example entry:
+- **Pass:** `tasknotes` entry exists in `.mcp.json` (project root)
+- **Fail action:** Add tasknotes MCP to `.mcp.json`. Example entry:
   ```json
   "mcpServers": {
     "tasknotes": {
@@ -503,8 +503,8 @@ Vault Structure
 
 Integrations
   OK  Obsidian vault plugins installed
-  !!  TaskNotes MCP -- not in .claude/settings.json
-      Fix: Add mcpServers.tasknotes to .claude/settings.json (port 8080)
+  !!  TaskNotes MCP -- not in .mcp.json
+      Fix: Add tasknotes MCP to .mcp.json in project root
   --  MemPalace -- not installed
       Unlock: T2 retrieval for /wiki-query (deep synthesis, experiential recall)
       Install: pipx install "mempalace>=3.0.0,<4.0.0"

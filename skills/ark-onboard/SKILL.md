@@ -83,7 +83,7 @@ Derived values:
 | # | Check | Tier | Pass Condition |
 |---|-------|------|----------------|
 | 12 | Obsidian vault plugins | Standard | `tasknotes/main.js` and `obsidian-git/main.js` in `.obsidian/plugins/` |
-| 13 | TaskNotes MCP | Standard | `mcpServers.tasknotes` in `.claude/settings.json` (config only, not connectivity; Obsidian must be running for endpoint to respond) |
+| 13 | TaskNotes MCP | Standard | `mcpServers.tasknotes` in `.mcp.json` (config only, not connectivity; Obsidian must be running for endpoint to respond) |
 | 14 | MemPalace installed | Full | `mempalace` CLI on PATH |
 | 15 | MemPalace wing indexed | Full | `mempalace status` shows wing for project (vault content wing; conversation history wing is separate) |
 | 16 | History auto-index hook | Full | `~/.claude/hooks/ark-history-hook.sh` exists AND registered in `.claude/settings.json` |
@@ -923,21 +923,20 @@ Write `{vault_path}/.obsidian/plugins/tasknotes/data.json`:
 
 Note: `data.json` is gitignored. Adjust `apiPort` if user has multiple Obsidian instances (suggest unique ports: 8080, 8081, 8082).
 
-Configure MCP in `.claude/settings.json`:
+Configure MCP in `.mcp.json` (project root):
 
 ```bash
-# Pre-validation: check if .claude/settings.json exists and is valid JSON
-mkdir -p .claude
-if [ -f .claude/settings.json ]; then
-  python3 -c "import json; json.load(open('.claude/settings.json'))" 2>/dev/null
+# Pre-validation: check if .mcp.json exists and is valid JSON
+if [ -f .mcp.json ]; then
+  python3 -c "import json; json.load(open('.mcp.json'))" 2>/dev/null
   if [ $? -ne 0 ]; then
-    echo "WARNING: .claude/settings.json is malformed JSON. Back up and recreate."
-    cp .claude/settings.json .claude/settings.json.bak
+    echo "WARNING: .mcp.json is malformed JSON. Back up and recreate."
+    cp .mcp.json .mcp.json.bak
   fi
 fi
 ```
 
-Add or merge `mcpServers.tasknotes` into `.claude/settings.json`:
+Add or merge `tasknotes` into `.mcp.json`:
 ```json
 {
   "mcpServers": {
@@ -1090,11 +1089,11 @@ git config user.email 2>/dev/null || echo "WARNING: git user.email not set. Run:
 
 Commit:
 ```bash
-git add {vault_path}/ CLAUDE.md .claude/settings.json .notebooklm/ 2>/dev/null
+git add {vault_path}/ CLAUDE.md .mcp.json .claude/settings.json .notebooklm/ 2>/dev/null
 git commit -m "feat: initialize {project_name} vault with Ark structure"
 ```
 
-If `.claude/settings.json` was modified (Standard+ tier), include it in the commit.
+If `.mcp.json` or `.claude/settings.json` was modified (Standard+ tier), include them in the commit.
 
 ### Greenfield Step 18: Final diagnostic + reminders
 
@@ -1415,7 +1414,7 @@ Fix checks in order (Critical first, then Standard). For each fix:
 - Check 10 (index): Regenerate with `python3 _meta/generate-index.py`
 - Check 11 (counter): Create counter file: `echo "1" > {path}`
 - Check 12 (plugins): Prompt user to install in Obsidian, PAUSE for manual handoff
-- Check 13 (MCP): Add `mcpServers.tasknotes` to `.claude/settings.json`
+- Check 13 (MCP): Add `mcpServers.tasknotes` to `.mcp.json`
 
 ### Repair Step 4: Offer tier upgrade
 
@@ -1575,7 +1574,7 @@ Changes: {N} fixes applied, {N} upgrades added
 - **Graceful degradation.** Every Full-tier step (MemPalace, NotebookLM, history hook) includes a "warn and skip" fallback. Installation failures never block the wizard.
 - **Hook pre-validation.** Before running `install-hook.sh`, verify `.claude/settings.json` is valid JSON. The install script uses Python and will fail on malformed JSON.
 - **MemPalace wing distinction.** Check 15 covers the vault content wing (indexed by `mine-vault.sh`). The conversation history wing is managed separately by `ark-history-hook.sh` (check 16). They are independent.
-- **MCP check is config-only.** Check 13 verifies `mcpServers.tasknotes` presence in `.claude/settings.json`, not endpoint reachability. Obsidian must be running for the endpoint to respond.
+- **MCP check is config-only.** Check 13 verifies `mcpServers.tasknotes` presence in `.mcp.json` (project root), not endpoint reachability. Obsidian must be running for the endpoint to respond.
 - **Clear step markers.** Each step includes "You are at Step X of Y" markers so Claude can track progress and the user knows where they are in the wizard.
 - **No hardcoded references.** No project names, vault paths, or task prefixes are hardcoded anywhere in this skill. All values come from user input or runtime detection.
 - **`/ark-health` is authoritative.** The diagnostic checklist in this file is a convenience copy. If it drifts from `/ark-health`'s definitions, `/ark-health` is the source of truth.
