@@ -32,22 +32,32 @@
 
 set -euo pipefail
 
-# === STEP 1: Find vault path from CLAUDE.md ===
-if [ ! -f "CLAUDE.md" ]; then
-    echo "ERROR: No CLAUDE.md in current directory. Run from project root."
-    exit 1
-fi
+# === STEP 1: Find vault path ===
+# Accept vault path as argument (for monorepo hub setups where context-discovery
+# resolves through sub-project CLAUDEs — Claude does the discovery, passes the path).
+# If no argument, extract from CLAUDE.md's Project Configuration table.
+if [ -n "${1:-}" ] && [ -e "$1" ]; then
+    VAULT_PATH="${1%/}"
+    echo "Using vault path from argument: $VAULT_PATH"
+else
+    if [ ! -f "CLAUDE.md" ]; then
+        echo "ERROR: No CLAUDE.md in current directory. Run from project root."
+        echo "Usage: bash skills/shared/mine-vault.sh [vault_path]"
+        exit 1
+    fi
 
-# Extract vault path — look for "Obsidian Vault" row in Project Configuration table
-VAULT_PATH=$(grep -A1 "Obsidian Vault" CLAUDE.md | tail -1 | sed 's/.*`\([^`]*\)`.*/\1/' | tr -d '/' | xargs -I{} echo "{}")
-# Fallback: check common locations
-if [ -z "$VAULT_PATH" ] || [ ! -e "$VAULT_PATH" ]; then
-    for CANDIDATE in vault/ Vault/ obsidian/; do
-        if [ -e "$CANDIDATE" ]; then
-            VAULT_PATH="$CANDIDATE"
-            break
-        fi
-    done
+    # Extract vault path — find the backtick-enclosed value on the "Obsidian Vault" row
+    VAULT_PATH=$(grep "Obsidian Vault" CLAUDE.md | grep -o '`[^`]*`' | head -1 | tr -d '`' | sed 's|/$||')
+
+    # Fallback: check common locations
+    if [ -z "$VAULT_PATH" ] || [ ! -e "$VAULT_PATH" ]; then
+        for CANDIDATE in vault Vault obsidian; do
+            if [ -e "$CANDIDATE" ]; then
+                VAULT_PATH="$CANDIDATE"
+                break
+            fi
+        done
+    fi
 fi
 
 # Normalize: strip trailing slash
@@ -55,7 +65,8 @@ VAULT_PATH="${VAULT_PATH%/}"
 
 if [ ! -e "$VAULT_PATH" ]; then
     echo "ERROR: Vault not found at '$VAULT_PATH'."
-    echo "Check CLAUDE.md's 'Obsidian Vault' row or create a symlink:"
+    echo "Usage: bash skills/shared/mine-vault.sh [vault_path]"
+    echo "Or check CLAUDE.md's 'Obsidian Vault' row, or create a symlink:"
     echo "  ln -s /path/to/your/vault ./vault"
     exit 1
 fi
@@ -165,14 +176,14 @@ Use the first available backend appropriate for the query type.
 |------|---------|----------|------------|
 | T1 | NotebookLM | Factual lookups, pre-synthesized answers | ~500 |
 | T2 | MemPalace | Deep context, synthesis, experiential recall | ~2,500 |
-| T3 | Obsidian-CLI (via `/obsidian-cli` skill) | Full-text search, inline mentions | ~119 + reads |
+| T3 | Obsidian-CLI (via `obsidian:obsidian-cli` skill) | Full-text search, inline mentions | ~119 + reads |
 | T4 | index.md scan | Structured browse, page discovery, zero-dep fallback | ~2,100 |
 
 ### Availability Checks
 
-- **T1:** `{vault_path}/.notebooklm/config.json` exists + `notebooklm` CLI authenticated
+- **T1:** `notebooklm` CLI authenticated + config exists at `{vault_path}/.notebooklm/config.json` OR `.notebooklm/config.json` in project root
 - **T2:** `mempalace` installed + project-specific wing exists in `mempalace status`
-- **T3:** Obsidian app running. Always invoke via `/obsidian-cli` skill.
+- **T3:** Obsidian app running. Always invoke via `obsidian:obsidian-cli` skill.
 - **T4:** `{vault_path}/index.md` exists. Always available.
 
 ### Failure Messaging
@@ -245,10 +256,12 @@ Before routing, check which backends are available:
 # Derive vault_path from context-discovery
 VAULT_PATH="<from CLAUDE.md>"
 
-# T1: NotebookLM
+# T1: NotebookLM — check vault path and project root for config
 HAS_T1=false
-if command -v notebooklm &>/dev/null && [ -f "$VAULT_PATH/.notebooklm/config.json" ]; then
-    HAS_T1=true
+if command -v notebooklm &>/dev/null; then
+    if [ -f "$VAULT_PATH/.notebooklm/config.json" ] || [ -f ".notebooklm/config.json" ]; then
+        HAS_T1=true
+    fi
 fi
 
 # T2: MemPalace — check for the specific project wing
@@ -264,7 +277,7 @@ if command -v mempalace &>/dev/null; then
     fi
 fi
 
-# T3: Obsidian-CLI — will check by invoking /obsidian-cli skill
+# T3: Obsidian-CLI — will check by invoking obsidian:obsidian-cli skill
 HAS_T3="check-at-use"
 
 # T4: index.md — always available
@@ -273,7 +286,7 @@ HAS_T4=false
 ```
 
 Log unavailable tiers:
-- If T1 unavailable: "T1 not available — NotebookLM not configured at {vault_path}/.notebooklm/config.json."
+- If T1 unavailable: "T1 not available — NotebookLM config not found at {vault_path}/.notebooklm/config.json or .notebooklm/config.json."
 - If T2 unavailable: "T2 not available — MemPalace wing '{wing}' not found. Run: bash skills/shared/mine-vault.sh"
 
 ## Workflow
@@ -292,12 +305,12 @@ Determine query type:
 
 **Factual lookup:**
 1. If T1 available → query NotebookLM:
-   - Read `{vault_path}/.notebooklm/config.json` to get notebook ID
+   - Read `.notebooklm/config.json` (check `{vault_path}/.notebooklm/` first, then project root `.notebooklm/`) to get notebook ID
    - Run: `notebooklm ask "{query}" --notebook {notebook_id}`
    - If answer is sufficient, return it with NotebookLM citations. Done.
 2. Fallback → T4 (Step 3 below)
 
-**Synthesis / Relationship / Gap:**
+**Synthesis / Relationship:**
 1. If T2 available → query MemPalace:
    - Derive wing name (same logic as availability check above)
    - For shared vaults, also search the conversation wing: `$(echo "$PWD" | sed 's|[/.]|-|g')`
@@ -306,12 +319,18 @@ Determine query type:
    - Synthesize answer from returned chunks. Cite source files. Done.
 2. Fallback → T4 (Step 3 below)
 
+**Gap (what don't we know):**
+1. If T2 available → query MemPalace (surfaces what WAS discussed/tried)
+2. If T1 available → query NotebookLM (cross-reference what's documented vs what MemPalace found)
+3. Fallback → T4 (Step 3 below)
+The gap between T2 results (experiential) and T1/T4 results (documented) reveals what's known but not yet captured.
+
 **Search (find all mentions):**
-1. If T3 available → invoke `/obsidian-cli` skill:
+1. If T3 available → invoke `obsidian:obsidian-cli` skill:
    - Run: `obsidian search query="{search term}" limit=10`
    - Read top 3-5 results with `obsidian read file="{name}"`
    - Done.
-2. Fallback → T4 (Step 3 below)
+2. Fallback → T4 (Step 3 below). **Note:** T4 searches index.md titles/tags/summaries only — it returns likely matches, not an exhaustive search. Inform the user: "Obsidian not available for full-text search. Showing likely matches from index.md."
 
 **Browse (what pages exist):**
 - Always → T4 (Step 3 below). index.md is the structured catalog.
@@ -399,7 +418,7 @@ Replace lines 19-30 (the current Prerequisites section) with:
 |------------|----------------|---------|
 | [MemPalace](https://github.com/milla-jovovich/mempalace) | `/wiki-query` (T2), `/claude-history-ingest` | `pipx install "mempalace>=3.0.0,<4.0.0"` |
 | [NotebookLM CLI](https://github.com/nichochar/notebooklm-cli) | `/wiki-query` (T1), `/notebooklm-vault` | `pipx install notebooklm-cli` + `notebooklm login` |
-| [Obsidian CLI](https://help.obsidian.md/cli) | `/wiki-query` (T3), `/cross-linker` (Phase 2) | Requires Obsidian app running. Uses `/obsidian-cli` skill. |
+| [Obsidian CLI](https://help.obsidian.md/cli) | `/wiki-query` (T3), `/cross-linker` (Phase 2) | Requires Obsidian app running. Uses `obsidian:obsidian-cli` skill. |
 
 **First-time MemPalace vault setup:**
 
@@ -414,21 +433,21 @@ bash skills/claude-history-ingest/hooks/install-hook.sh
 
 - [ ] **Step 2: Update the Vault Maintenance section**
 
-Replace lines 72-81 (the current vault maintenance description) with:
+Replace lines 74-79 only (the paragraph starting "All 10 vault skills use the **tiered retrieval** pattern" through the "3. **Tier 3 — Full read**" line). Preserve the `/claude-history-ingest` paragraph at line 81 and everything after it.
+
+Replace with:
 
 ```markdown
-### Vault Maintenance
-
-Vault skills support **multi-backend retrieval** via the Vault Retrieval Defaults in CLAUDE.md:
+`/wiki-query` supports **multi-backend retrieval** (Phase 1) via the Vault Retrieval Defaults in CLAUDE.md:
 - **T1 (NotebookLM):** Pre-synthesized answers for factual lookups (~500 tokens)
 - **T2 (MemPalace):** Deep context and synthesis from vault pages + conversation history (~2,500 tokens)
 - **T3 (Obsidian-CLI):** Full-text search across all vault files (~119 tokens + selective reads)
-- **T4 (index.md scan):** Zero-dependency fallback using structured page catalog (~2,100 tokens)
+- **T4 (index.md scan):** Zero-dependency fallback using the existing 3-step index/summary/full-read pattern (~2,100 tokens)
 
-Skills check availability at runtime and fall back gracefully. T4 is always available. See CLAUDE.md for the full query routing guide.
-
-Key operations: `/wiki-lint` audits vault health (broken links, missing frontmatter, stale index, tag violations). `/wiki-update` syncs project knowledge and regenerates `index.md`. `/tag-taxonomy` enforces consistent tagging against `_meta/taxonomy.md`. `/cross-linker` discovers and adds missing wikilinks.
+Other vault skills continue to use the T4 (index.md scan) pattern. Multi-backend support for additional skills is planned for Phase 2.
 ```
+
+Preserve the existing paragraph about key operations and `/claude-history-ingest` below it.
 
 - [ ] **Step 3: Verify README renders correctly**
 
