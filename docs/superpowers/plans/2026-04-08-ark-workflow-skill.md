@@ -37,32 +37,39 @@ Triage any task into a weight class (light / medium / heavy), detect the scenari
 
 ## Project Discovery
 
-1. Read the current project's CLAUDE.md to find:
-   - Project name
-   - Vault path (if configured)
-   - Task prefix (if configured)
-2. Detect project characteristics:
+Follow the context-discovery pattern documented in this plugin's CLAUDE.md:
+
+1. Read the `CLAUDE.md` in the current working directory
+2. If it's a monorepo hub (contains a "Projects" table linking to sub-project CLAUDEs), follow the link for the active project based on your current working directory
+3. Extract from the most specific CLAUDE.md:
+   - Project name (from header or table)
+   - Vault root (parent of project docs and TaskNotes)
+   - Project docs path (from "Obsidian Vault" row)
+   - TaskNotes path (from "Task Management" row)
+4. If a required field is missing, note it — vault skills will be skipped for projects without vault configuration
+
+5. Detect project characteristics:
 
 \`\`\`bash
-# Has UI? Check for frontend indicators
-ls package.json tsconfig.json 2>/dev/null && grep -l "react\|vue\|svelte\|next\|angular" package.json 2>/dev/null && echo "HAS_UI=true" || echo "HAS_UI=false"
+# Has UI? Check for frontend indicators (any one is sufficient)
+HAS_UI=false
+if [ -f "package.json" ]; then
+  grep -qE "react|vue|svelte|next|angular|@remix|solid-js" package.json 2>/dev/null && HAS_UI=true
+fi
+[ -f "tsconfig.json" ] && grep -q "jsx\|tsx" tsconfig.json 2>/dev/null && HAS_UI=true
+echo "HAS_UI=$HAS_UI"
 
 # Has standard docs outside docs/superpowers/?
-HAS_DOCS=false
-for f in README.md ARCHITECTURE.md CONTRIBUTING.md; do
-  [ -f "$f" ] && HAS_DOCS=true && break
+HAS_STANDARD_DOCS=false
+for f in README.md ARCHITECTURE.md CONTRIBUTING.md CHANGELOG.md; do
+  [ -f "$f" ] && HAS_STANDARD_DOCS=true && break
 done
-# Exclude docs/superpowers/ from consideration
-echo "HAS_STANDARD_DOCS=$HAS_DOCS"
+echo "HAS_STANDARD_DOCS=$HAS_STANDARD_DOCS"
 
-# Has vault?
-HAS_VAULT=false
-VAULT_PATH=""
-# Read from CLAUDE.md Project Configuration table
-grep -A1 "Obsidian Vault" CLAUDE.md 2>/dev/null | grep -oP '`[^`]+`' | tr -d '`' | while read p; do
-  [ -d "$p" ] && echo "HAS_VAULT=true" && echo "VAULT_PATH=$p"
-done
-[ "$HAS_VAULT" = "false" ] && echo "HAS_VAULT=false"
+# Has vault? (extracted from CLAUDE.md in step 3 above)
+# If vault root was found and directory exists: HAS_VAULT=true
+# If no vault configured or directory missing: HAS_VAULT=false
+echo "HAS_VAULT=$HAS_VAULT"
 
 # Has CI/CD?
 HAS_CI=false
@@ -70,7 +77,8 @@ HAS_CI=false
 echo "HAS_CI=$HAS_CI"
 \`\`\`
 
-3. Store these values for condition resolution in later steps.
+6. Store these values for condition resolution in later steps.
+7. If `HAS_VAULT=false`, tell the user: "No vault configured for this project. Vault skills (`/wiki-update`, `/wiki-ingest`, `/cross-linker`, `/wiki-lint`, etc.) will be skipped. Run `/wiki-setup` to initialize a vault if needed."
 ```
 
 - [ ] **Step 3: Verify the file was created**
@@ -141,7 +149,7 @@ git commit -m "feat(ark-workflow): add scenario detection section"
 
 ---
 
-### Task 3: Add the Triage System section
+### Task 3: Add the Triage System and Workflow Algorithm sections
 
 **Files:**
 - Modify: `skills/ark-workflow/SKILL.md`
@@ -171,21 +179,51 @@ If unsure, ask:
 > C) Heavy — architecture decisions, high risk, or large scope
 
 **Re-triage rule:** If a task reveals more complexity mid-flight (e.g., a "light" bug turns out to involve auth), escalate to the appropriate class and pick up the remaining phases from there. Don't restart — just add the phases you would have run.
+
+## Workflow
+
+This is the concrete algorithm. Follow these steps in order:
+
+### Step 1: Run Project Discovery
+Execute the Project Discovery section above. Record: `HAS_UI`, `HAS_VAULT`, `HAS_STANDARD_DOCS`, `HAS_CI`.
+
+### Step 2: Detect Scenario
+Match the user's request against the Scenario Detection table. If ambiguous, ask the multiple-choice question.
+
+### Step 3: Classify Weight
+For scenarios that use weight classes (Greenfield, Bugfix, Hygiene), classify using the Triage table. Ship and Knowledge Capture skip this step.
+
+### Step 4: Look Up Skill Chain
+Find the matching chain in the Skill Chains section below using scenario + weight class.
+
+### Step 5: Resolve Conditions
+Walk through the chain and resolve every conditional:
+- `(if UI)` → check `HAS_UI`. If false, output "Skipping `/qa` — no UI detected"
+- `(if vault)` → check `HAS_VAULT`. If false, skip the step silently (vault skills are optional)
+- `(if standard docs exist)` → check `HAS_STANDARD_DOCS`. If false, output "Skipping `/document-release` — no standard docs found"
+- `(if security-relevant)` → evaluate against the security triggers listed in Condition Resolution
+- `(if deploy risk)` → evaluate against the deploy risk triggers listed in Condition Resolution
+
+### Step 6: Present the Resolved Chain
+Output the numbered skill chain with all conditions resolved. Include the session handoff marker if applicable (medium+ design phase).
+
+### Step 7: Hand Off
+The skill is done. The user or Claude follows the chain, invoking each skill in order. `/ark-workflow` does not invoke downstream skills itself.
 ```
 
 - [ ] **Step 2: Verify**
 
 ```bash
-grep -c "## Triage" skills/ark-workflow/SKILL.md
+grep -c "## Triage\|## Workflow" skills/ark-workflow/SKILL.md
 ```
 
-Expected: `1`
+Expected: `2`
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add skills/ark-workflow/SKILL.md
-git commit -m "feat(ark-workflow): add triage system section"
+git commit -m "feat(ark-workflow): add triage system and workflow algorithm"
 ```
 
 ---
@@ -211,10 +249,11 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 **Light** (rare for greenfield):
 
 1. Implement directly
-2. `/ship` → `/land-and-deploy`
-3. `/wiki-update`
-4. `/cso` (if security-relevant)
-5. `/canary` (if deploy risk)
+2. `/cso` (if security-relevant)
+3. `/ship` → `/land-and-deploy`
+4. `/canary` (if deploy risk)
+5. `/wiki-update` (if vault)
+6. `/document-release` (if standard docs exist)
 
 **Medium:**
 
@@ -225,7 +264,7 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 
 *Session 2 — Implementation:*
 4. Read spec from `docs/superpowers/specs/`
-5. `/executing-plans` with `/TDD` per step
+5. `/TDD` — write tests first, implement against them
 6. `/ark-code-review --quick` → `/simplify`
 7. `/qa` (if UI)
 8. `/cso` (if security-relevant)
@@ -233,9 +272,9 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 10. `/canary` (if deploy risk)
 
 *Document:*
-11. `/wiki-update`
-12. `/wiki-ingest` (if new component needs its own vault page)
-13. `/cross-linker`
+11. `/wiki-update` (if vault)
+12. `/wiki-ingest` (if vault + new component needs its own page)
+13. `/cross-linker` (if vault)
 14. `/document-release` (if standard docs exist)
 15. Session log
 
@@ -261,9 +300,9 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 15. `/canary` (if deploy risk)
 
 *Document:*
-16. `/wiki-update`
-17. `/wiki-ingest` (if new component needs its own vault page)
-18. `/cross-linker`
+16. `/wiki-update` (if vault)
+17. `/wiki-ingest` (if vault + new component needs its own page)
+18. `/cross-linker` (if vault)
 19. `/document-release` (if standard docs exist)
 20. Session log
 21. `/claude-history-ingest`
@@ -304,10 +343,10 @@ Add after the Greenfield section:
 
 1. `/investigate` — root cause analysis
 2. Fix directly
-3. `/ship` → `/land-and-deploy`
-4. `/cso` (if security-relevant)
+3. `/cso` (if security-relevant)
+4. `/ship` → `/land-and-deploy`
 5. `/canary` (if deploy risk)
-6. `/wiki-update`
+6. `/wiki-update` (if vault)
 7. Session log (only if surprising root cause)
 
 **Medium:**
@@ -321,7 +360,7 @@ Add after the Greenfield section:
 7. `/cso` (if security-relevant)
 8. `/ship` → `/land-and-deploy`
 9. `/canary` (if deploy risk)
-10. `/wiki-update`
+10. `/wiki-update` (if vault)
 11. Session log
 
 **Heavy:**
@@ -335,9 +374,9 @@ Add after the Greenfield section:
 7. `/cso` (if security-relevant)
 8. `/ship` → `/land-and-deploy`
 9. `/canary` (if deploy risk)
-10. `/wiki-update`
-11. `/wiki-ingest` (if the fix introduces a new concept)
-12. `/cross-linker`
+10. `/wiki-update` (if vault)
+11. `/wiki-ingest` (if vault + fix introduces a new concept)
+12. `/cross-linker` (if vault)
 13. Session log
 14. `/claude-history-ingest`
 ```
@@ -379,13 +418,14 @@ Add after the Bugfix section:
 2. `/cso` (if security-relevant)
 3. `/ship` → `/land-and-deploy`
 4. `/canary` (if deploy risk)
-5. `/wiki-update`
+5. `/wiki-update` (if vault)
+6. `/document-release` (if standard docs exist)
 
 ---
 
 ### Knowledge Capture
 
-*Catch up the vault with what's happened. No weight class needed.*
+*Catch up the vault with what's happened. No weight class needed. Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` first.*
 
 1. `/wiki-status` — vault statistics
 2. `/wiki-lint` — broken links, missing frontmatter, tag violations
@@ -404,10 +444,10 @@ Add after the Bugfix section:
 
 1. `/codebase-maintenance` — audit
 2. Implement cleanup
-3. `/ship` → `/land-and-deploy`
-4. `/cso` (if security-relevant)
+3. `/cso` (if security-relevant)
+4. `/ship` → `/land-and-deploy`
 5. `/canary` (if deploy risk)
-6. `/wiki-update`
+6. `/wiki-update` (if vault)
 
 **Medium:**
 
@@ -418,7 +458,7 @@ Add after the Bugfix section:
 5. `/ark-code-review --quick` → `/simplify`
 6. `/ship` → `/land-and-deploy`
 7. `/canary` (if deploy risk)
-8. `/wiki-update` + session log
+8. `/wiki-update` (if vault) + session log
 
 **Heavy:**
 
@@ -429,7 +469,7 @@ Add after the Bugfix section:
 5. `/ark-code-review --thorough` + `/codex` → `/simplify`
 6. `/ship` → `/land-and-deploy`
 7. `/canary` (if deploy risk)
-8. `/wiki-update` + session log
+8. `/wiki-update` (if vault) + session log
 9. `/claude-history-ingest`
 ```
 
@@ -506,15 +546,15 @@ For medium and heavy tasks with a design phase:
 
 ## When Things Go Wrong
 
-If a step fails mid-workflow, refer to the failure handling guide in the design spec at `docs/superpowers/specs/2026-04-08-optimal-workflow-design.md` under "When Things Go Wrong". Key principles:
+If a step fails mid-workflow:
 
-- **Failed QA:** fix bugs, re-run `/qa`, re-run review if fixes are substantial
-- **Failed deploy:** check CI logs, fix and re-run `/ship`, never force-merge
-- **Review disagreement:** read both opinions, use your judgment, document resolution
-- **Flaky tests:** investigate the flake, don't skip blindly
-- **Spec invalidated:** stop implementing, update spec, re-run `/codex` review
-- **Canary failure:** investigate, rollback or hotfix if your change, document if pre-existing
-- **Vault failure:** not blocking — note it, fix in next Knowledge Capture cycle
+- **Failed QA:** fix bugs in the current session, re-run `/qa` to verify, re-run `/ark-code-review` if fixes are substantial
+- **Failed deploy:** check CI logs for the failure. If test failure: fix and re-run `/ship`. If infra issue: investigate before retrying. Never force-merge past failing CI.
+- **Review disagreement (`/ark-code-review` vs `/codex`):** read both opinions — they see different things. If both flag the same area, it's almost certainly real. If they disagree, use your judgment. Document the resolution in the session log.
+- **Flaky tests:** do not skip or retry blindly — `/investigate` the flake. If known and unrelated to your changes, note it and proceed. If new, treat as a bug.
+- **Spec invalidated during implementation:** stop implementing, update the spec, re-run `/codex` review on the updated spec, resume from the updated spec (this is a re-triage moment)
+- **Canary failure:** investigate the specific failure signal. If it's your change: rollback or hotfix (new light-class bug cycle). If pre-existing: document and proceed.
+- **Vault tooling failure:** not blocking — don't let a `/wiki-update` failure hold up a ship. Note the failure, fix it in the next Knowledge Capture cycle.
 
 ## Re-triage
 
@@ -532,7 +572,7 @@ If the task changes class mid-flight (a "light" bug that turns out to involve au
 grep -c "^## " skills/ark-workflow/SKILL.md
 ```
 
-Expected: `9` (Project Discovery, Scenario Detection, Triage, Skill Chains, Condition Resolution, Session Handoff, When Things Go Wrong, Re-triage, Routing Rules Template — added in Task 9)
+Expected: `8` (Project Discovery, Scenario Detection, Triage, Skill Chains, Condition Resolution, Session Handoff, When Things Go Wrong, Re-triage). Routing Rules Template is added in Task 9.
 
 - [ ] **Step 3: Commit**
 
@@ -649,7 +689,7 @@ Change `"version": "1.1.2"` to `"version": "1.2.0"` in `.claude-plugin/marketpla
 
 - [ ] **Step 5: Prepend changelog entry**
 
-Add at the top of CHANGELOG.md, after the `# Changelog` header:
+Add at the top of CHANGELOG.md, after the `# Changelog` header and the intro line (`All notable changes...`):
 
 ```markdown
 ## [1.2.0] - 2026-04-08
@@ -660,7 +700,6 @@ Add at the top of CHANGELOG.md, after the `# Changelog` header:
   classifies weight (light/medium/heavy) with risk as primary signal, and outputs the
   optimal ordered skill chain with project-specific conditions resolved.
 - Routing rules template for project CLAUDE.md auto-triggering
-- Workflow design spec at `docs/superpowers/specs/2026-04-08-optimal-workflow-design.md`
 ```
 
 - [ ] **Step 6: Verify all version files match**
@@ -699,7 +738,7 @@ Expected: `SKILL.md` present.
 grep "^## " skills/ark-workflow/SKILL.md
 ```
 
-Expected sections: Project Discovery, Scenario Detection, Triage, Skill Chains, Condition Resolution, Session Handoff, When Things Go Wrong, Re-triage, Routing Rules Template.
+Expected sections: Project Discovery, Scenario Detection, Triage, Workflow, Skill Chains, Condition Resolution, Session Handoff, When Things Go Wrong, Re-triage, Routing Rules Template.
 
 - [ ] **Step 3: Verify all five scenario chains are present**
 
@@ -729,7 +768,7 @@ Expected: all show `1.2.0`.
 
 ```bash
 git status
-git log --oneline -8
+git log --oneline -12
 ```
 
-Expected: clean working tree, commits for tasks 1-10.
+Expected: clean working tree, commits for tasks 1-10 visible in log.
