@@ -48,6 +48,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 
 | Skill | Category | Description | Source |
 |-------|----------|-------------|--------|
+| `/ark-workflow` | Workflow Orchestration | Task triage and skill chain orchestration | New |
 | `/ark-code-review` | Core | Multi-agent code review with fan-out architecture | Generalized |
 | `/codebase-maintenance` | Core | Repo cleanup, vault sync, skill health | Generalized |
 | `/notebooklm-vault` | Core | NotebookLM vault context and sync | Generalized |
@@ -64,6 +65,10 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 | `/data-ingest` | Vault Maintenance | Process logs, transcripts, exports into vault pages | Adapted from obsidian-wiki |
 
 ## Skill Documentation
+
+### Workflow Orchestration
+
+**`/ark-workflow`** — Task triage and skill chain orchestration. Detects scenario (greenfield, bugfix, ship, knowledge capture, hygiene), classifies weight (light/medium/heavy) with risk as the primary signal, and outputs an ordered skill chain with project-specific conditions resolved. Entry point for all non-trivial work.
 
 ### Core Skills
 
