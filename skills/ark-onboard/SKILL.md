@@ -253,6 +253,8 @@ If not a git repo, offer `git init`. If working tree is dirty, warn user and ask
 
 ### Greenfield Step 1: Gather project info
 
+> **You are at Step 1 of 18 — Gathering project info.**
+
 Ask the user for the 4 required fields:
 
 1. **Project name** — e.g., `my-new-project`
@@ -266,6 +268,8 @@ Validate:
 - Project name should be lowercase-kebab-case (warn if not, but allow)
 
 ### Greenfield Step 2: Verify Python 3.10+
+
+> **You are at Step 2 of 18 — Python version check.**
 
 ```bash
 PYTHON_VERSION=$(python3 --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
@@ -287,6 +291,8 @@ If Python is missing or too old, PAUSE and tell the user to install before conti
 
 ### Greenfield Step 3: Create vault directory structure
 
+> **You are at Step 3 of 18 — Creating directories.**
+
 ```bash
 mkdir -p {vault_path}/{_Templates,_Attachments,_meta,.obsidian/plugins/{tasknotes,obsidian-git},TaskNotes/{Tasks/{Epic,Story,Bug,Task},Archive/{Epic,Story,Bug,Enhancement},Templates,Views,meta}}
 ```
@@ -297,6 +303,8 @@ mkdir -p {vault_path}/{project_docs_path}/Session-Logs
 ```
 
 ### Greenfield Step 4: Create 00-Home.md
+
+> **You are at Step 4 of 18 — Creating home page.**
 
 Write `{vault_path}/00-Home.md` (standalone layout) or `{vault_path}/{project_docs_path}/00-Home.md` (monorepo layout):
 
@@ -332,6 +340,8 @@ last-updated: {today}
 Replace `{Project Name}` with the user's project name and `{today}` with today's date in `YYYY-MM-DD` format.
 
 ### Greenfield Step 5: Create metadata files
+
+> **You are at Step 5 of 18 — Creating metadata (vault-schema, taxonomy, generate-index.py).**
 
 **`{vault_path}/_meta/vault-schema.md`:**
 
@@ -554,6 +564,8 @@ chmod +x {vault_path}/_meta/generate-index.py
 
 ### Greenfield Step 6: Create templates
 
+> **You are at Step 6 of 18 — Creating page templates.**
+
 Create these files in `{vault_path}/_Templates/`:
 
 **Session-Template.md:**
@@ -727,6 +739,8 @@ last-updated: {{date}}
 
 ### Greenfield Step 7: Create task counter
 
+> **You are at Step 7 of 18 — Task counter setup.**
+
 ```bash
 echo "1" > {vault_path}/TaskNotes/meta/{task_prefix}counter
 ```
@@ -734,6 +748,8 @@ echo "1" > {vault_path}/TaskNotes/meta/{task_prefix}counter
 Note: `{task_prefix}` includes the trailing dash. Counter filename is `{task_prefix}counter` (e.g., `ArkNew-counter`). No double dash.
 
 ### Greenfield Step 8: Create project management guide
+
+> **You are at Step 8 of 18 — Project management guide.**
 
 Write `{vault_path}/TaskNotes/00-Project-Management-Guide.md`:
 
@@ -787,6 +803,8 @@ Use `/ark-tasknotes` to create tasks via the TaskNotes MCP, or create markdown f
 
 ### Greenfield Step 9: Set up Obsidian configuration
 
+> **You are at Step 9 of 18 — Obsidian configuration files.**
+
 **`{vault_path}/.gitignore`:**
 ```
 # Obsidian — ignore transient state, track plugins and core config
@@ -824,6 +842,8 @@ Use `/ark-tasknotes` to create tasks via the TaskNotes MCP, or create markdown f
 
 ### Greenfield Step 10: Create/update CLAUDE.md
 
+> **You are at Step 10 of 18 — CLAUDE.md configuration.**
+
 If CLAUDE.md does not exist, create it. If it exists but is missing fields, update it.
 
 **Template for new CLAUDE.md:**
@@ -846,7 +866,7 @@ For monorepo layout, adjust the Obsidian Vault row to point at the project docs 
 
 ### Greenfield Step 11: Obsidian plugins (Standard+ tier only)
 
-> **You are at Step 11 of 18 — Obsidian plugin setup (Standard+ only). Skip to Step 15 if Quick tier.**
+> **You are at Step 11 of 18 — Obsidian plugin setup (Standard+ only). Skip to Step 16 if Quick tier.**
 
 Ask the user if they have a reference vault to copy plugin binaries from.
 
@@ -881,7 +901,7 @@ PAUSE — manual handoff. Continue when plugins are installed, or type "skip" to
 
 ### Greenfield Step 12: Configure TaskNotes MCP (Standard+ tier only)
 
-> **You are at Step 12 of 18 — TaskNotes MCP configuration (Standard+ only). Skip to Step 15 if Quick tier.**
+> **You are at Step 12 of 18 — TaskNotes MCP configuration (Standard+ only). Skip to Step 16 if Quick tier.**
 
 Generate TaskNotes `data.json`:
 
@@ -1070,7 +1090,7 @@ git config user.email 2>/dev/null || echo "WARNING: git user.email not set. Run:
 
 Commit:
 ```bash
-git add {vault_path}/ CLAUDE.md .claude/settings.json 2>/dev/null
+git add {vault_path}/ CLAUDE.md .claude/settings.json .notebooklm/ 2>/dev/null
 git commit -m "feat: initialize {project_name} vault with Ark structure"
 ```
 
@@ -1103,28 +1123,28 @@ Key principle: **additive only.** Never delete or overwrite existing content. Fr
 
 ### Migration Step 1: Scan existing vault
 
-> **You are at Step 1 of 15 — Scanning existing vault.**
+> **You are at Step 1 of 14 — Scanning existing vault.**
 
 ```bash
 # Count existing pages
-find {vault_dir} -name "*.md" | wc -l
+find {vault_path} -name "*.md" | wc -l
 
 # Check for existing folder structure
-ls -d {vault_dir}*/ 2>/dev/null
+ls -d {vault_path}*/ 2>/dev/null
 
 # Check for existing frontmatter patterns
-head -20 {vault_dir}/*.md 2>/dev/null | head -60
+head -20 {vault_path}/*.md 2>/dev/null | head -60
 
 # Check for existing tags
-grep -rh "^tags:" {vault_dir} --include="*.md" 2>/dev/null | head -10
-grep -roh "#[a-zA-Z][a-zA-Z0-9_-]*" {vault_dir} --include="*.md" 2>/dev/null | sort | uniq -c | sort -rn | head -20
+grep -rh "^tags:" {vault_path} --include="*.md" 2>/dev/null | head -10
+grep -roh "#[a-zA-Z][a-zA-Z0-9_-]*" {vault_path} --include="*.md" 2>/dev/null | sort | uniq -c | sort -rn | head -20
 ```
 
 Report to user: "Found N pages, M existing tags, the following folder structure..."
 
 ### Migration Step 2: Gather project info
 
-> **You are at Step 2 of 15 — Gathering project info.**
+> **You are at Step 2 of 14 — Gathering project info.**
 
 Ask the user for:
 1. **Project name** — e.g., `my-project`
@@ -1134,7 +1154,7 @@ The vault path is already known (detected vault directory). Ask user to confirm 
 
 ### Migration Step 3: Pre-commit existing state
 
-> **You are at Step 3 of 15 — Checkpointing existing state.**
+> **You are at Step 3 of 14 — Checkpointing existing state.**
 
 **Git safety checks:**
 ```bash
@@ -1163,42 +1183,42 @@ This gives the user a clean rollback point. If git add/commit fails (nothing to 
 
 ### Migration Step 4: Add Ark scaffolding
 
-> **You are at Step 4 of 15 — Adding Ark scaffolding (non-destructive).**
+> **You are at Step 4 of 14 — Adding Ark scaffolding (non-destructive).**
 
 Create only the directories and files that don't already exist:
 
 ```bash
 # Create missing directories only
-[ -d "{vault_dir}_meta" ] || mkdir -p "{vault_dir}_meta"
-[ -d "{vault_dir}_Templates" ] || mkdir -p "{vault_dir}_Templates"
-[ -d "{vault_dir}_Attachments" ] || mkdir -p "{vault_dir}_Attachments"
-[ -d "{vault_dir}.obsidian" ] || mkdir -p "{vault_dir}.obsidian"
-[ -d "{vault_dir}TaskNotes/Tasks/{Epic,Story,Bug,Task}" ] || mkdir -p "{vault_dir}TaskNotes/Tasks/"{Epic,Story,Bug,Task}
-[ -d "{vault_dir}TaskNotes/Archive/{Epic,Story,Bug,Enhancement}" ] || mkdir -p "{vault_dir}TaskNotes/Archive/"{Epic,Story,Bug,Enhancement}
-[ -d "{vault_dir}TaskNotes/{Templates,Views,meta}" ] || mkdir -p "{vault_dir}TaskNotes/"{Templates,Views,meta}
+[ -d "{vault_path}_meta" ] || mkdir -p "{vault_path}_meta"
+[ -d "{vault_path}_Templates" ] || mkdir -p "{vault_path}_Templates"
+[ -d "{vault_path}_Attachments" ] || mkdir -p "{vault_path}_Attachments"
+[ -d "{vault_path}.obsidian" ] || mkdir -p "{vault_path}.obsidian"
+[ -d "{vault_path}TaskNotes/Tasks/{Epic,Story,Bug,Task}" ] || mkdir -p "{vault_path}TaskNotes/Tasks/"{Epic,Story,Bug,Task}
+[ -d "{vault_path}TaskNotes/Archive/{Epic,Story,Bug,Enhancement}" ] || mkdir -p "{vault_path}TaskNotes/Archive/"{Epic,Story,Bug,Enhancement}
+[ -d "{vault_path}TaskNotes/{Templates,Views,meta}" ] || mkdir -p "{vault_path}TaskNotes/"{Templates,Views,meta}
 ```
 
 Do NOT overwrite existing files. Check before writing:
 ```bash
-[ -f "{vault_dir}00-Home.md" ] && echo "00-Home.md exists — skipping" || echo "Creating 00-Home.md"
+[ -f "{vault_path}00-Home.md" ] && echo "00-Home.md exists — skipping" || echo "Creating 00-Home.md"
 ```
 
 Create missing files using the same templates from Greenfield Steps 4-9, but only if they don't already exist.
 
 ### Migration Step 5: Generate vault-schema.md
 
-> **You are at Step 5 of 15 — Creating vault schema.**
+> **You are at Step 5 of 14 — Creating vault schema.**
 
-Write `{vault_dir}/_meta/vault-schema.md` using the template from Greenfield Step 5. If the file already exists, ask user before overwriting.
+Write `{vault_path}/_meta/vault-schema.md` using the template from Greenfield Step 5. If the file already exists, ask user before overwriting.
 
 ### Migration Step 6: Scan tags and propose taxonomy
 
-> **You are at Step 6 of 15 — Building tag taxonomy.**
+> **You are at Step 6 of 14 — Building tag taxonomy.**
 
 ```bash
 # Collect all tags from existing vault
-grep -roh "^  - [a-zA-Z][a-zA-Z0-9_-]*" {vault_dir} --include="*.md" 2>/dev/null | sed 's/^  - //' | sort | uniq -c | sort -rn
-grep -roh "#[a-zA-Z][a-zA-Z0-9_-]*" {vault_dir} --include="*.md" 2>/dev/null | sed 's/^#//' | sort | uniq -c | sort -rn
+grep -roh "^  - [a-zA-Z][a-zA-Z0-9_-]*" {vault_path} --include="*.md" 2>/dev/null | sed 's/^  - //' | sort | uniq -c | sort -rn
+grep -roh "#[a-zA-Z][a-zA-Z0-9_-]*" {vault_path} --include="*.md" 2>/dev/null | sed 's/^#//' | sort | uniq -c | sort -rn
 ```
 
 Map existing tags to Ark structural tags. Show the mapping:
@@ -1222,11 +1242,11 @@ New Ark structural tags (added):
 Accept this taxonomy? [y/n/edit]
 ```
 
-Write `{vault_dir}/_meta/taxonomy.md` with the accepted taxonomy.
+Write `{vault_path}/_meta/taxonomy.md` with the accepted taxonomy.
 
 ### Migration Step 7: Offer frontmatter backfill
 
-> **You are at Step 7 of 15 — Frontmatter backfill (optional).**
+> **You are at Step 7 of 14 — Frontmatter backfill (optional).**
 
 Show 3 sample pages with their current frontmatter and proposed Ark frontmatter:
 
@@ -1274,20 +1294,20 @@ If user declines, skip. Frontmatter can be added later with `/wiki-lint --fix`.
 
 ### Migration Step 8: Create task counter and management guide
 
-> **You are at Step 8 of 15 — Task management setup.**
+> **You are at Step 8 of 14 — Task management setup.**
 
 Same as Greenfield Steps 7-8. Create counter file and project management guide.
 
 ### Migration Step 9: Set up Obsidian configuration
 
-> **You are at Step 9 of 15 — Obsidian configuration.**
+> **You are at Step 9 of 14 — Obsidian configuration.**
 
 Same as Greenfield Step 9, but check for existing `.obsidian/` config files first:
 
 ```bash
 # Only create config files that don't exist
-[ -f "{vault_dir}.obsidian/app.json" ] || echo '{ "alwaysUpdateLinks": true }' > "{vault_dir}.obsidian/app.json"
-[ -f "{vault_dir}.obsidian/appearance.json" ] || echo '{}' > "{vault_dir}.obsidian/appearance.json"
+[ -f "{vault_path}.obsidian/app.json" ] || echo '{ "alwaysUpdateLinks": true }' > "{vault_path}.obsidian/app.json"
+[ -f "{vault_path}.obsidian/appearance.json" ] || echo '{}' > "{vault_path}.obsidian/appearance.json"
 ```
 
 For `community-plugins.json`: merge existing plugin list with Ark plugins (don't remove what's already there):
@@ -1300,35 +1320,35 @@ For `.gitignore`: append Ark patterns if not already present, don't overwrite ex
 
 ### Migration Step 10: Create/update CLAUDE.md
 
-> **You are at Step 10 of 15 — CLAUDE.md configuration.**
+> **You are at Step 10 of 14 — CLAUDE.md configuration.**
 
 Same as Greenfield Step 10. If CLAUDE.md exists, update it with vault-related fields. If it doesn't exist, create it.
 
-### Migration Steps 11-12: Standard/Full tier steps
+### Migration Step 11: Standard/Full tier steps
 
-> **You are at Step 11 of 15 — Tier-specific setup.**
+> **You are at Step 11 of 14 — Tier-specific setup.**
 
 **Standard tier:** Same as Greenfield Steps 11-12 (Obsidian plugins + TaskNotes MCP).
 
 **Full tier:** Same as Greenfield Steps 13-15 (MemPalace + history hook + NotebookLM).
 
-### Migration Step 13: Generate index
+### Migration Step 12: Generate index
 
-> **You are at Step 13 of 15 — Index generation.**
+> **You are at Step 12 of 14 — Index generation.**
 
 ```bash
-cd {vault_dir} && python3 _meta/generate-index.py
+cd {vault_path} && python3 _meta/generate-index.py
 ```
 
-### Migration Step 14: Run diagnostic
+### Migration Step 13: Run diagnostic
 
-> **You are at Step 14 of 15 — Diagnostic check.**
+> **You are at Step 13 of 14 — Diagnostic check.**
 
 Run the full 19-check diagnostic. Show scorecard.
 
-### Migration Step 15: Final commit + reminders
+### Migration Step 14: Final commit + reminders
 
-> **You are at Step 15 of 15 — Final commit.**
+> **You are at Step 14 of 14 — Final commit.**
 
 ```bash
 git add -A && git commit -m "feat: add Ark scaffolding to {project_name} vault"
@@ -1511,7 +1531,7 @@ Use this exact format for all scorecard output:
 **Scorecard rules:**
 
 - Symbols: `OK` = pass, `!!` = fail (has fix), `~~` = warning, `--` = available upgrade
-- Always show all rows, never omit a check
+- Always show all logical groups, never omit a group. Related checks are collapsed: checks 4+5+6 → "CLAUDE.md", checks 7+8 → "Vault structure", checks 14+15 → "MemPalace", checks 17+18+19 → "NotebookLM"
 - For `!!` rows: use a short failure description (e.g., `missing`, `malformed`, `not found`)
 - For `--` rows: use `not installed` or `not configured`
 - For `~~` rows: use a short warning (e.g., `stale (5 pages changed)`)
@@ -1528,6 +1548,8 @@ Use this exact format for all scorecard output:
 | Standard | Checks 1-13 all pass |
 | Full | Checks 1-19 all pass |
 | Below Quick | Any critical check (1, 4-9) failing |
+
+Note: `/ark-health` defines a "Minimal" tier (checks 1-9 pass, 10-11 skip). The wizard does not use Minimal because it always creates the vault — after `/ark-onboard` runs, the result is always Quick or higher.
 
 If below Quick tier, show `Tier: --` instead of a tier name.
 
