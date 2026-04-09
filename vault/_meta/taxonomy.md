@@ -46,6 +46,7 @@ Project-specific tags — extend as needed:
 | `vault` | Vault management and tooling |
 | `infrastructure` | Deployment, CI/CD, hosting |
 | `context-discovery` | Context-discovery pattern |
+| `retrieval` | Vault retrieval backends and tier routing |
 
 ## Conventions
 

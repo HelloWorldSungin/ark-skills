@@ -293,10 +293,12 @@ TaskNotes MCP lets skills create task tickets directly from Claude Code.
 
 ### In Obsidian
 
-1. Install the tasknotes plugin
-2. Enable `enableAPI: true` in tasknotes plugin settings
-3. Enable `enableMCP: true`
-4. Set `apiPort` (default 8080; use a unique port if running multiple vaults)
+If you used `/wiki-setup`, the generated `data.json` already has API and MCP enabled. Just verify in Settings > TaskNotes:
+
+1. **Enable HTTP API** — should be ON (set during vault setup)
+2. **Enable MCP Server** — should be ON (set during vault setup)
+3. **API port** — default 8080; use a unique port per vault if running multiple Obsidian instances (e.g., 8080, 8081, 8082)
+4. If the "Available API Endpoints" section shows "API server not accessible", toggle Enable HTTP API off and back on, or restart Obsidian
 
 ### In your project's `.claude/settings.json`
 
