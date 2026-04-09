@@ -21,34 +21,43 @@ A situational workflow system that adapts ceremony to task size. Every task is t
 
 ## Triage System
 
-Every task starts with a 10-second classification. The highest column in any factor wins.
+Every task starts with a 10-second classification. **Risk is the primary signal** — a one-file auth change is heavy regardless of file count or duration. Use the other factors as tiebreakers when risk is ambiguous.
 
 | Factor | Light | Medium | Heavy |
 |--------|-------|--------|-------|
-| **Files touched** | 1-3 | 4-10 | 10+ |
-| **Risk** | Low (internal, non-breaking) | Moderate (API changes, schema) | High (infra, auth, data migration) |
-| **Has UI?** | No | Maybe | Yes, user-facing |
-| **Duration** | < 30 min | 30 min - few hours | Half day+ |
+| **Risk** | Low (internal, non-breaking) | Moderate (API changes, schema) | High (infra, auth, data migration, secrets, permissions) |
 | **Decision density** | Obvious fix | Some trade-offs | Architecture choices |
+| **Files touched** | 1-3 | 4-10 | 10+ |
+| **Duration** | < 30 min | 30 min - few hours | Half day+ |
+| **Has UI?** | No | Maybe | Yes, user-facing changes |
+
+**Re-triage rule:** If a task reveals more complexity mid-flight (e.g., a "light" bug turns out to involve auth), escalate to the appropriate class and pick up the remaining phases from there. Don't restart — just add the phases you would have run.
 
 ### Phase Matrix
+
+This matrix is a **summary**. The scenario workflows below are authoritative when they diverge.
 
 | Phase | Light | Medium | Heavy |
 |-------|-------|--------|-------|
 | **Design** | skip | `/brainstorming` → `/codex` review spec | `/brainstorming` → `/writing-plans` → `/codex` review spec + plan |
 | **Session Handoff** | skip | Commit spec → fresh session | Commit spec + plan → fresh session |
-| **Implement** | direct code | `/TDD` | `/TDD` + `/subagent-driven-development` |
+| **Implement** | direct code | `/executing-plans` with `/TDD` per step | `/executing-plans` with `/TDD` per step + `/subagent-driven-development` for independent modules |
 | **Checkpoint** | skip | skip | `/checkpoint` (optional, if pausing mid-implementation) |
 | **Review** | self-review | `/ark-code-review --quick` → `/simplify` | `/ark-code-review --thorough` + `/codex` → `/simplify` |
 | **Browser QA** | skip | `/qa` (if UI) | `/qa` + `/design-review` (if UI) |
-| **Ship** | `/ship` → `/land-and-deploy` | `/ship` → `/land-and-deploy` | `/ship` → `/land-and-deploy` → `/canary` |
+| **Ship** | `/ship` → `/land-and-deploy` | `/ship` → `/land-and-deploy` | `/ship` → `/land-and-deploy` |
+| **Post-deploy** | skip | `/canary` (if deploy risk†) | `/canary` (if deploy risk†) |
 | **Document** | `/wiki-update` | `/wiki-update` + session log | `/wiki-update` + session log + `/claude-history-ingest` |
 | **New Concepts** | skip | `/wiki-ingest` if new page needed | `/wiki-ingest` if new page needed |
 | **Vault Links** | skip | `/cross-linker` | `/cross-linker` |
 | **Project Docs** | `/document-release`* | `/document-release`* | `/document-release`* |
-| **Security** | skip | skip | `/cso` (if infra/auth) |
+| **Security** | `/cso` (if security-relevant‡) | `/cso` (if security-relevant‡) | `/cso` (if security-relevant‡) |
 
 *Only if project has standard docs (README, ARCHITECTURE, CONTRIBUTING, CHANGELOG) outside `docs/superpowers/`.
+
+†**Deploy risk triggers for `/canary`:** config changes affecting production, infra changes, auth/permissions changes, data migrations, dependency upgrades with breaking changes. Not gated on weight class — a light config change can be high deploy risk.
+
+‡**Security-relevant triggers for `/cso`:** auth/permissions changes, secrets handling, dependency upgrades, data exposure risks, infrastructure changes, new external API integrations. Any weight class can trigger this.
 
 ---
 
@@ -70,25 +79,24 @@ Every task starts with a 10-second classification. The highest column in any fac
 **Implementation (Session 2 — fresh context):**
 
 7. Read spec + plan from disk
-8. `/executing-plans` — execute with review checkpoints
-9. `/TDD` — write tests first, implement against them
-10. `/subagent-driven-development` (heavy only) — parallelize independent modules
-11. `/checkpoint` (heavy, optional) — if pausing mid-implementation, save state and resume in fresh Session 3
-12. `/ark-code-review` — review the diff (`--quick` for medium, `--thorough` for heavy)
-13. `/codex` (heavy only) — independent code review
-14. `/simplify` — clean up reviewed code
-15. `/qa` (if UI) — browser-based QA testing
-16. `/design-review` (heavy + UI) — visual polish and consistency
-17. `/ship` → `/land-and-deploy` → `/canary` (heavy only)
+8. `/executing-plans` — execute the plan with review checkpoints; within each plan step, use `/TDD` (write tests first, then implement against them)
+9. `/subagent-driven-development` (heavy only) — parallelize independent modules that don't share state
+10. `/checkpoint` (heavy, optional) — if pausing mid-implementation, save state and resume in fresh Session 3
+11. `/ark-code-review` — review the diff (`--quick` for medium, `--thorough` for heavy)
+12. `/codex` (heavy only) — independent code review
+13. `/simplify` — clean up reviewed code
+14. `/qa` (if UI) — browser-based QA testing
+15. `/design-review` (heavy + UI) — visual polish and consistency
+16. `/ship` → `/land-and-deploy` → `/canary` (if deploy risk)
 
 **Document (end of implementation session):**
 
-18. `/wiki-update` — sync changes to vault
-19. `/wiki-ingest` — if new component/concept needs its own vault page
-20. `/cross-linker` — connect new/updated pages
-21. `/document-release` — if standard project docs exist outside `docs/superpowers/`
-22. Session log — capture decisions and rationale
-23. `/claude-history-ingest` (heavy only) — mine session for compiled insights
+17. `/wiki-update` — sync changes to vault
+18. `/wiki-ingest` — if new component/concept needs its own vault page
+19. `/cross-linker` — connect new/updated pages
+20. `/document-release` — if standard project docs exist outside `docs/superpowers/`
+21. Session log — capture decisions and rationale
+22. `/claude-history-ingest` (heavy only) — mine session for compiled insights
 
 ---
 
@@ -98,14 +106,15 @@ Every task starts with a 10-second classification. The highest column in any fac
 
 1. **Triage** — most bugs start light, re-triage if deeper than expected
 2. `/investigate` — systematic root cause analysis (no fixes without understanding)
-3. **Re-triage** if the bug is deeper than expected
-4. `/TDD` (medium+) — write a failing test that reproduces the bug
+3. **Re-triage** if the bug is deeper than expected — pick up additional phases from the new weight class
+4. `/TDD` (medium+) — write a failing test that reproduces the bug; if not reproducible (race condition, prod-only data), document why and proceed with fix + monitoring
 5. Fix — direct code for light, structured for medium+
 6. `/ark-code-review --quick` (medium+) → `/simplify`
 7. `/qa` (medium+, if UI) — verify the fix in browser
-8. `/ship` → `/land-and-deploy`
-9. `/wiki-update` — document what broke and why
-10. Session log — if surprising root cause (always for medium+)
+8. `/cso` (if fix touches security-relevant code) — verify no new exposure
+9. `/ship` → `/land-and-deploy` → `/canary` (if deploy risk)
+10. `/wiki-update` — document what broke and why
+11. Session log — if surprising root cause (always for medium+)
 
 ---
 
@@ -114,9 +123,10 @@ Every task starts with a 10-second classification. The highest column in any fac
 *Standalone ship — cherry-pick, config change, dependency bump.*
 
 1. `/review` — pre-landing PR diff review
-2. `/ship` → `/land-and-deploy`
-3. `/canary` (if risky change) — post-deploy monitoring
-4. `/wiki-update`
+2. `/cso` (if security-relevant) — check the diff for exposure
+3. `/ship` → `/land-and-deploy`
+4. `/canary` (if deploy risk) — post-deploy monitoring
+5. `/wiki-update`
 
 ---
 
@@ -141,11 +151,11 @@ Every task starts with a 10-second classification. The highest column in any fac
 
 1. **Triage** — size the cleanup
 2. `/codebase-maintenance` — audit dead code, drifted skills, vault sync
-3. `/cso` (if security-relevant) — infrastructure and dependency audit
+3. `/cso` (if security-relevant) — infrastructure, dependency, and secrets audit
 4. `/TDD` (medium+ refactoring) — tests before restructuring
 5. Implement cleanup
 6. `/ark-code-review` → `/simplify` — review the cleanup diff
-7. `/ship` → `/land-and-deploy`
+7. `/ship` → `/land-and-deploy` → `/canary` (if deploy risk)
 8. `/wiki-update` + session log
 
 ---
@@ -168,10 +178,11 @@ Vault drift is managed through two layers:
 ## Session Management
 
 **Design → Implementation handoff (medium+):**
-- Spec and plan are committed to `docs/superpowers/specs/` during Session 1
-- Session 1 ends after spec/plan are reviewed and committed
+- Spec and plan are committed to `docs/superpowers/specs/` on the feature branch (or `master` if working directly)
+- Session 1 ends after spec/plan are reviewed by `/codex` and committed
 - Session 2 starts fresh, reads spec + plan from disk
 - No `/checkpoint` needed — committed files are the handoff artifact
+- **Cleanup:** Spec files are permanent project history — they stay committed. If a task is abandoned, note "Status: Abandoned" in the spec frontmatter rather than deleting it
 
 **Mid-implementation pause (heavy, optional):**
 - When a heavy task spans multiple sessions or context gets large
@@ -180,41 +191,105 @@ Vault drift is managed through two layers:
 
 ---
 
+## Session Log vs. Auto-Capture Clarification
+
+Three layers of knowledge capture work together — they are complementary, not redundant:
+
+| Layer | Mechanism | When | Signal |
+|-------|-----------|------|--------|
+| **Raw history** | `ark-history-hook.sh` (Stop hook) | Automatic, every session end | Lossless but noisy — indexes full conversations into MemPalace ChromaDB |
+| **Session log** | Manual retrospective in `vault/Session-Logs/` | End of medium+ tasks (or light if surprising) | High-signal summary — decisions, rationale, what was built and why |
+| **Compiled insights** | `/claude-history-ingest compile` | End of heavy tasks or periodic | Distilled patterns — mines raw history into thematic vault pages |
+
+The Stop hook ensures **no raw context is ever lost**, even if you forget to write a session log. The session log is your **editorial layer** — the curated "what mattered" summary. Compiled insights emerge later by mining across multiple sessions for patterns.
+
+This means Codex's concern about retrospective memory loss is mitigated: the raw history is always preserved automatically, and the session log captures the high-level framing while it's still fresh at the end of the work session.
+
+---
+
+## When Things Go Wrong
+
+Workflows don't always follow the happy path. Here's how to handle common failure modes:
+
+**Failed QA (`/qa` finds bugs):**
+- Fix the bugs in the current session
+- Re-run `/qa` to verify
+- If fixes are substantial, re-run `/ark-code-review` on the new changes
+
+**Failed deploy (`/land-and-deploy` fails):**
+- Check CI logs for the failure
+- If it's a test failure: fix and re-run `/ship`
+- If it's an infra issue: investigate before retrying
+- Do not force-merge past failing CI
+
+**Review disagreement (`/ark-code-review` vs `/codex` conflict):**
+- Read both opinions. They see different things.
+- If both flag the same area, it's almost certainly a real issue
+- If they disagree, use your judgment — you have the context they don't
+- Document the resolution in the session log
+
+**Flaky tests:**
+- Do not skip or retry blindly — `/investigate` the flake
+- If it's a known flake unrelated to your changes, note it and proceed
+- If it's new, treat it as a bug in the current cycle
+
+**Spec invalidated during implementation:**
+- If the spec's assumptions turn out to be wrong mid-build, stop implementing
+- Update the spec, re-run `/codex` review on the updated spec
+- Resume implementation from the updated spec (this is a re-triage moment)
+
+**Partial canary failure (`/canary` detects issues):**
+- Investigate the specific failure signal
+- If it's your change: rollback or hotfix (new light-class bug cycle)
+- If it's pre-existing: document it and proceed
+
+**Vault tooling failure (wiki skills error):**
+- Vault documentation is important but not blocking — don't let a `/wiki-update` failure hold up a ship
+- Note the failure, fix it in the next Knowledge Capture cycle
+
+---
+
 ## Skill Inventory Reference
 
 ### Superpowers (process/meta)
+
+Skills explicitly placed in scenario workflows:
+
 | Skill | Role in Workflow |
 |-------|-----------------|
 | `/brainstorming` | Design phase — explore intent, write spec |
 | `/writing-plans` | Design phase (heavy) — phased implementation plan |
-| `/executing-plans` | Implementation — execute plan with checkpoints |
-| `/TDD` | Implementation — tests before code |
-| `/subagent-driven-development` | Implementation (heavy) — parallelize modules |
-| `/simplify` | Review — clean up post-review |
-| `/verification-before-completion` | Implicit — verify before claiming done |
-| `/dispatching-parallel-agents` | Implementation (heavy) — parallel independent tasks |
-| `/systematic-debugging` | Bug investigation — root cause analysis |
-| `/requesting-code-review` | Review phase — trigger review |
-| `/receiving-code-review` | Review phase — process feedback |
-| `/finishing-a-development-branch` | Ship phase — integration decisions |
-| `/using-git-worktrees` | Implementation — isolated feature work |
-| `/checkpoint` | Mid-implementation pause (heavy) |
+| `/executing-plans` | Implementation — execute plan with checkpoints; `/TDD` runs within each plan step |
+| `/TDD` | Implementation — tests before code, runs inside `/executing-plans` |
+| `/subagent-driven-development` | Implementation (heavy) — parallelize independent modules |
+| `/simplify` | Review — clean up post-review, pre-ship |
+| `/systematic-debugging` | Bug investigation — root cause analysis (used by `/investigate`) |
+
+Skills that operate implicitly (always active, not explicitly invoked):
+
+| Skill | Role in Workflow |
+|-------|-----------------|
+| `/verification-before-completion` | Runs type-check/lint before claiming any task is done |
+| `/dispatching-parallel-agents` | Used internally by `/subagent-driven-development` |
+| `/requesting-code-review` | Triggered when `/ark-code-review` is invoked |
+| `/receiving-code-review` | Triggered when processing review feedback |
+| `/finishing-a-development-branch` | Triggered during `/ship` — guides merge/PR decisions |
+| `/using-git-worktrees` | Optional — use when you want to isolate feature work from current branch |
 
 ### gstack (external tooling)
 | Skill | Role in Workflow |
 |-------|-----------------|
 | `/codex` | Design — review spec/plan; Review — independent code review |
-| `/investigate` | Bug investigation — root cause analysis |
+| `/investigate` | Bug investigation — systematic root cause analysis |
 | `/qa` | Browser QA — test UI in browser |
 | `/design-review` | Browser QA (heavy + UI) — visual consistency |
 | `/review` | Ship — pre-landing PR diff review |
 | `/ship` | Ship — create PR, bump version, push |
 | `/land-and-deploy` | Ship — merge, wait for CI, verify production |
-| `/canary` | Ship (heavy) — post-deploy monitoring |
-| `/cso` | Security — infrastructure and dependency audit |
-| `/document-release` | Document — update standard project docs |
-| `/codebase-maintenance` (via ArkSkill) | Hygiene — audit dead code, drifted skills |
-| `/checkpoint` | Mid-implementation pause |
+| `/canary` | Post-deploy — monitoring when deploy risk is present (any weight class) |
+| `/cso` | Security — infra, dependency, secrets audit (any weight class, when security-relevant) |
+| `/document-release` | Document — update standard project docs (outside `docs/superpowers/`) |
+| `/checkpoint` | Mid-implementation pause (heavy) — save and resume working state |
 | `/retro` | Periodic — weekly engineering retrospective |
 | `/benchmark` | QA (if performance-sensitive) — regression detection |
 
