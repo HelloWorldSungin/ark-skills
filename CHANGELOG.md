@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.2.0] - 2026-04-08
+## [1.3.0] - 2026-04-08
 
 ### Added
 - `/ark-workflow` skill — task triage and skill chain orchestration. Entry point for all
@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
   classifies weight (light/medium/heavy) with risk as primary signal, and outputs the
   optimal ordered skill chain with project-specific conditions resolved.
 - Routing rules template for project CLAUDE.md auto-triggering
+
+## [1.2.0] - 2026-04-08
+
+### Added
 - Multi-backend vault retrieval tiers for `/wiki-query`: T1 (NotebookLM), T2 (MemPalace),
   T3 (Obsidian-CLI), T4 (index.md scan). Routes queries by type with automatic fallback.
 - `skills/shared/mine-vault.sh` — one-time helper to index vault .md files into MemPalace.
