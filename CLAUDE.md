@@ -68,6 +68,9 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 
 ## Available Skills
 
+### Workflow Orchestration
+- `/ark-workflow` — Task triage and skill chain orchestration (entry point for all non-trivial work)
+
 ### Core (generalized from existing)
 - `/ark-code-review` — Multi-agent code review with fan-out architecture
 - `/codebase-maintenance` — Repo cleanup, vault sync, skill health
