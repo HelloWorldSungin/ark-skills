@@ -42,6 +42,8 @@ vault/                          # {vault_root}
 
 4. If a required field is missing, tell the user: "CLAUDE.md is missing [field]. Add it before running this skill."
 
+**Exemption:** `/ark-onboard` and `/ark-health` are exempt from context-discovery — they must work when CLAUDE.md is missing, broken, or incomplete.
+
 ### Vault Artifacts (Post-Restructuring)
 
 All Ark vaults have these standard artifacts from the vault restructuring:
@@ -75,6 +77,10 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 
 ### Task Automation
 - `/ark-tasknotes` — Agent-driven task creation via tasknotes MCP
+
+### Onboarding
+- `/ark-onboard` — Interactive setup wizard (greenfield, migration, repair). Absorbs `/wiki-setup`.
+- `/ark-health` — Diagnostic check for Ark ecosystem health (19 checks, scored scorecard)
 
 ### Vault Maintenance (adapted from obsidian-wiki)
 - `/wiki-query` — Query vault knowledge with tiered retrieval
