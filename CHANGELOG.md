@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-04-08
+
+### Added
+- `/ark-workflow` skill — task triage and skill chain orchestration. Entry point for all
+  non-trivial work. Detects scenario (greenfield, bugfix, ship, knowledge capture, hygiene),
+  classifies weight (light/medium/heavy) with risk as primary signal, and outputs the
+  optimal ordered skill chain with project-specific conditions resolved.
+- Routing rules template for project CLAUDE.md auto-triggering
+
 ## [1.2.0] - 2026-04-08
 
 ### Added
