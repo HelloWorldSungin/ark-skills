@@ -1,7 +1,7 @@
 {
   "name": "ark-skills",
-  "version": "1.3.0",
-  "description": "Shared skills for ArkNode projects: Obsidian vault management (wiki-lint, cross-linker, tag-taxonomy), NotebookLM integration, TaskNotes with Linear sync, code review, codebase maintenance, and Claude history ingest via MemPalace.",
+  "version": "1.4.0",
+  "description": "Shared skills for ArkNode projects: Obsidian vault management (wiki-lint, cross-linker, tag-taxonomy), NotebookLM integration, TaskNotes with Linear sync, code review, codebase maintenance, and Claude history ingest via MemPalace, onboarding wizard, health diagnostics.",
   "author": {
     "name": "HelloWorldSungin",
     "url": "https://github.com/HelloWorldSungin"
@@ -18,6 +18,8 @@
     "code-review",
     "mempalace",
     "history-ingest",
-    "workflow"
+    "workflow",
+    "onboarding",
+    "health"
   ]
 }

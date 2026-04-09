@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-04-08
+
+### Added
+- `/ark-onboard` — interactive setup wizard for new Ark projects. Handles greenfield,
+  non-Ark vault migration, partial repair, and health reporting. Absorbs `/wiki-setup`
+  as the recommended entry point. Supports Quick, Standard, and Full setup tiers.
+- `/ark-health` — diagnostic check for Ark ecosystem health. Runs 19 checks across
+  plugins, CLAUDE.md fields, vault structure, and integrations. Produces a scored
+  scorecard with actionable fix instructions.
+
 ## [1.3.0] - 2026-04-08
 
 ### Added

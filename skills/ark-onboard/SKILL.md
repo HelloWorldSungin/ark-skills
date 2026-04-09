@@ -1,0 +1,1581 @@
+---
+name: ark-onboard
+description: Interactive setup wizard — greenfield, vault migration, partial repair. Absorbs /wiki-setup.
+---
+
+# Ark Onboard
+
+Interactive setup wizard for new Ark projects. Detects project state (greenfield, migration, repair, healthy) and walks through setup at 3 tiers (Quick, Standard, Full). This skill absorbs all `/wiki-setup` functionality and is the single entry point for new project onboarding.
+
+## Context-Discovery Exemption
+
+This skill is exempt from normal context-discovery. It must work when CLAUDE.md is missing, broken, or incomplete. When CLAUDE.md is absent, the wizard detects project state from the filesystem and enters the appropriate path (greenfield if no vault exists, partial/migration if a vault directory is found).
+
+Never abort because CLAUDE.md is missing. That is one of the states this skill is designed to handle.
+
+## Vault Path Terminology
+
+| Term | Meaning | Example |
+|------|---------|---------|
+| **Vault root** | Top-level directory containing all vault content | `vault/` |
+| **Project docs path** | Subdirectory for project-specific knowledge (may equal vault root for standalone) | `vault/Trading-Signal-AI/` |
+| **TaskNotes path** | Sibling of project docs under vault root, never nested under project docs | `vault/TaskNotes/` |
+
+Path layout:
+```
+vault/                        # {vault_root}
+├── Trading-Signal-AI/        # {project_docs_path}
+│   ├── Session-Logs/
+│   └── ...
+└── TaskNotes/                # {tasknotes_path} — sibling, NOT nested
+    ├── Tasks/
+    ├── Archive/
+    └── meta/ArkSignal-counter
+```
+
+## Required CLAUDE.md Fields (Normalized)
+
+Only 4 user-provided fields (everything else is derived):
+
+| Field | Format | Example |
+|-------|--------|---------|
+| Project name | Any string | `trading-signal-ai` |
+| Vault root | Path ending with `/` | `vault/` |
+| Task prefix | Ends with `-` | `ArkSignal-` |
+| TaskNotes path | Path ending with `/` | `vault/TaskNotes/` |
+
+Derived values:
+- **Counter file:** `{tasknotes_path}/meta/{task_prefix}counter` (e.g., `vault/TaskNotes/meta/ArkSignal-counter`)
+- **Project docs path:** From "Obsidian Vault" row in CLAUDE.md, or `{vault_root}` for standalone layouts
+
+## Shared Diagnostic Checklist
+
+> **Sync note:** `/ark-health` is the authoritative source for all 19 check definitions. If this copy drifts from `/ark-health`, that skill is correct. This copy exists so `/ark-onboard` can run diagnostics without invoking a separate skill.
+
+### Plugins (Checks 1-3)
+
+| # | Check | Tier | Pass Condition |
+|---|-------|------|----------------|
+| 1 | superpowers plugin | Critical | At least one `superpowers:*` skill in session |
+| 2 | gstack plugin | Standard | At least one gstack skill (`browse`, `qa`, `ship`, `review`) in session |
+| 3 | obsidian plugin | Standard | `obsidian:obsidian-cli` skill in session |
+
+### Project Configuration (Checks 4-6)
+
+| # | Check | Tier | Pass Condition |
+|---|-------|------|----------------|
+| 4 | CLAUDE.md exists | Critical | `CLAUDE.md` exists in project root |
+| 5 | CLAUDE.md required fields | Critical | All 4 fields present and non-empty |
+| 6 | Task prefix format | Critical | Prefix ends with `-`, counter file exists |
+
+### Vault Structure (Checks 7-11)
+
+| # | Check | Tier | Pass Condition |
+|---|-------|------|----------------|
+| 7 | Vault directory exists | Critical | Vault root path resolves to a real directory |
+| 8 | Vault structure | Critical | `_meta/`, `_Templates/`, `TaskNotes/` exist; plus `00-Home.md` (standalone) or project docs subdir (monorepo) |
+| 9 | Python 3.10+ | Critical | `python3 --version` returns >= 3.10 |
+| 10 | Index status | Standard | `index.md` exists (staleness is warning, not fail) |
+| 11 | Task counter | Standard | Counter file exists and contains valid integer |
+
+### Integrations (Checks 12-19)
+
+| # | Check | Tier | Pass Condition |
+|---|-------|------|----------------|
+| 12 | Obsidian vault plugins | Standard | `tasknotes/main.js` and `obsidian-git/main.js` in `.obsidian/plugins/` |
+| 13 | TaskNotes MCP | Standard | `mcpServers.tasknotes` in `.claude/settings.json` (config only, not connectivity; Obsidian must be running for endpoint to respond) |
+| 14 | MemPalace installed | Full | `mempalace` CLI on PATH |
+| 15 | MemPalace wing indexed | Full | `mempalace status` shows wing for project (vault content wing; conversation history wing is separate) |
+| 16 | History auto-index hook | Full | `~/.claude/hooks/ark-history-hook.sh` exists AND registered in `.claude/settings.json` |
+| 17 | NotebookLM CLI installed | Full | `notebooklm` CLI on PATH |
+| 18 | NotebookLM config | Full | `.notebooklm/config.json` exists (project root or vault root) with non-empty notebook ID |
+| 19 | NotebookLM authenticated | Full | `notebooklm auth check --test` exits 0 |
+
+### Running Diagnostics
+
+Run all 19 checks in sequence. Never abort on failure. Track results:
+
+```
+results = { 1..19: pass | fail | warn | skip | upgrade }
+```
+
+- Checks 7-19 with CLAUDE.md missing (check 4 = fail): record `skip` — "cannot check — CLAUDE.md missing"
+- Check 10 staleness: record `warn` (not fail)
+- Checks 15, 16: if check 14 failed, record `skip` — "requires MemPalace (check 14)"
+- Checks 18, 19: if check 17 failed, record `skip` — "requires NotebookLM CLI (check 17)"
+- Full-tier checks (14-19) when user is below Full tier: record `upgrade`
+
+## Project State Detection
+
+Detection logic: check for vault directory FIRST, then check CLAUDE.md.
+
+### Step 1: Scan for vault directory
+
+```bash
+# Look for vault indicators in common locations
+for DIR in vault/ docs/vault/ .vault/; do
+  if [ -d "$DIR" ]; then
+    echo "VAULT_DIR=$DIR"
+    # Check for .obsidian/ or .md files as confirmation
+    ls "$DIR"/.obsidian/ 2>/dev/null && echo "has .obsidian"
+    find "$DIR" -maxdepth 2 -name "*.md" 2>/dev/null | head -5
+  fi
+done
+```
+
+### Step 2: Check CLAUDE.md
+
+```bash
+ls CLAUDE.md 2>/dev/null && echo "CLAUDE_MD=found" || echo "CLAUDE_MD=missing"
+```
+
+If CLAUDE.md exists, extract vault root from it:
+```bash
+grep -i "vault" CLAUDE.md 2>/dev/null | grep -oE '`[^`]+/`' | tr -d '`' | head -1
+```
+
+### Step 3: Classify project state
+
+| State | Condition | Wizard Path |
+|-------|-----------|-------------|
+| **No Vault** | CLAUDE.md missing AND no vault directory found, OR CLAUDE.md present but vault root field missing/path doesn't exist | Greenfield (full setup) |
+| **Non-Ark Vault** | Vault directory exists but missing 3+ of: `_meta/vault-schema.md`, `_meta/taxonomy.md`, `index.md`, `TaskNotes/meta/` | Migration (add Ark scaffolding) |
+| **Partial Ark** | Has Ark structure (3+ artifacts present) but some diagnostic checks fail. Also: vault exists but CLAUDE.md missing. | Repair (fix what's broken) |
+| **Healthy** | All Critical + Standard checks pass | Report (show status, surface upgrades) |
+
+```bash
+# Count Ark artifacts to distinguish Non-Ark from Partial
+ARK_ARTIFACTS=0
+[ -f "${VAULT_DIR}_meta/vault-schema.md" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
+[ -f "${VAULT_DIR}_meta/taxonomy.md" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
+[ -f "${VAULT_DIR}index.md" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
+[ -d "${VAULT_DIR}TaskNotes/meta" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
+echo "Ark artifacts found: $ARK_ARTIFACTS / 4"
+
+# Classification
+# Key rule: vault exists + no CLAUDE.md = Partial (never greenfield)
+if [ -z "$VAULT_DIR" ] && [ "$CLAUDE_MD" = "missing" ]; then
+  echo "STATE=no_vault"
+elif [ -z "$VAULT_DIR" ] && [ "$CLAUDE_MD" = "found" ]; then
+  # CLAUDE.md exists but vault root missing or doesn't exist
+  echo "STATE=no_vault"
+elif [ -n "$VAULT_DIR" ] && [ "$CLAUDE_MD" = "missing" ]; then
+  # Vault exists but no CLAUDE.md — always Partial, regardless of artifact count
+  echo "STATE=partial_ark"
+elif [ $ARK_ARTIFACTS -ge 3 ]; then
+  echo "STATE=partial_ark"
+elif [ -n "$VAULT_DIR" ]; then
+  echo "STATE=non_ark_vault"
+else
+  echo "STATE=no_vault"
+fi
+```
+
+## Tier Selection
+
+| Tier | What Gets Set Up | Time |
+|------|-----------------|------|
+| **Quick** | CLAUDE.md + vault structure + Python check + index generation | ~5 min |
+| **Standard** | Quick + TaskNotes MCP + Obsidian plugins | ~10 min |
+| **Full** | Standard + MemPalace + history hook + NotebookLM CLI + vault mining | ~25 min |
+
+Present tier choices after state detection. Recommend Standard for most users. Note which tiers are available based on current state:
+
+```
+Which setup tier would you like?
+
+  [Q] Quick    — CLAUDE.md, vault structure, index (~5 min)
+  [S] Standard — Quick + TaskNotes MCP, Obsidian plugins (~10 min)  [recommended]
+  [F] Full     — Standard + MemPalace, history hook, NotebookLM (~25 min)
+
+Choose [Q/S/F]:
+```
+
+For **Partial Ark (Repair)** and **Healthy** states, also offer tier upgrade:
+- If currently at Quick tier: "Upgrade to Standard or Full?"
+- If currently at Standard tier: "Upgrade to Full?"
+- If already at Full tier: "All tiers complete."
+
+## Entry Flow
+
+```
+User runs /ark-onboard
+    |
+    v
+[1] Check plugins (superpowers, gstack, obsidian)
+    |
+    v
+[2] Missing critical plugin? --> Show install commands, PAUSE for user to install
+    Missing standard plugin?  --> Note for later, continue
+    |
+    v
+[3] Run state detection (vault scan + CLAUDE.md check + artifact count)
+    |
+    v
+[4] State = No Vault?       --> Ask tier --> Execute Greenfield path
+    State = Non-Ark Vault?   --> Ask tier --> Execute Migration path
+    State = Partial Ark?     --> Show failures, offer repair + tier upgrade --> Execute Repair path
+    State = Healthy?          --> Show scorecard, surface Full tier upgrades --> Execute Healthy path
+    |
+    v
+[5] Run full 19-check diagnostic
+    |
+    v
+[6] Show before/after scorecard
+    |
+    v
+[7] List follow-up reminders
+```
+
+---
+
+## Path: No Vault (Greenfield)
+
+This path absorbs all functionality from `/wiki-setup`. It creates a complete Ark project from scratch.
+
+### Prerequisites
+
+Before starting, run these pre-checks:
+
+**Git safety checks:**
+```bash
+# Is this a git repo?
+git rev-parse --git-dir 2>/dev/null && echo "GIT_REPO=yes" || echo "GIT_REPO=no"
+
+# If git repo: is working tree clean?
+git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null && echo "CLEAN=yes" || echo "CLEAN=no — warn user to stash"
+
+# Git user configured?
+git config user.name 2>/dev/null && echo "GIT_USER=configured" || echo "GIT_USER=missing — warn user"
+```
+
+If not a git repo, offer `git init`. If working tree is dirty, warn user and ask them to stash or commit first.
+
+### Greenfield Step 1: Gather project info
+
+> **You are at Step 1 of 18 — Gathering project info.**
+
+Ask the user for the 4 required fields:
+
+1. **Project name** — e.g., `my-new-project`
+2. **Task prefix** — e.g., `ArkNew-` (must end with `-`)
+3. **Vault path** — where to create the vault (default: `./vault/`)
+4. **Vault layout** — `standalone` (flat, docs at vault root) or `monorepo` (project subdirectory under vault root)
+
+Validate:
+- Task prefix must end with exactly one `-`
+- Vault path must not already exist (if it does, redirect to Migration or Repair path)
+- Project name should be lowercase-kebab-case (warn if not, but allow)
+
+### Greenfield Step 2: Verify Python 3.10+
+
+> **You are at Step 2 of 18 — Python version check.**
+
+```bash
+PYTHON_VERSION=$(python3 --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
+MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
+if [ -z "$PYTHON_VERSION" ]; then
+  echo "FAIL: python3 not found — install Python 3.10+ before continuing"
+  echo "macOS: brew install python@3.12"
+  echo "PAUSE — cannot continue without Python"
+elif [ "$MAJOR" -gt 3 ] || ([ "$MAJOR" -eq 3 ] && [ "$MINOR" -ge 10 ]); then
+  echo "OK: Python $PYTHON_VERSION"
+else
+  echo "FAIL: Python $PYTHON_VERSION too old — need >= 3.10"
+  echo "PAUSE — cannot continue without Python 3.10+"
+fi
+```
+
+If Python is missing or too old, PAUSE and tell the user to install before continuing. Do not proceed.
+
+### Greenfield Step 3: Create vault directory structure
+
+> **You are at Step 3 of 18 — Creating directories.**
+
+```bash
+mkdir -p {vault_path}/{_Templates,_Attachments,_meta,.obsidian/plugins/{tasknotes,obsidian-git},TaskNotes/{Tasks/{Epic,Story,Bug,Task},Archive/{Epic,Story,Bug,Enhancement},Templates,Views,meta}}
+```
+
+For monorepo layout, also create the project docs subdirectory:
+```bash
+mkdir -p {vault_path}/{project_docs_path}/Session-Logs
+```
+
+### Greenfield Step 4: Create 00-Home.md
+
+> **You are at Step 4 of 18 — Creating home page.**
+
+Write `{vault_path}/00-Home.md` (standalone layout) or `{vault_path}/{project_docs_path}/00-Home.md` (monorepo layout):
+
+```markdown
+---
+title: "{Project Name} Knowledge Base"
+type: moc
+tags:
+  - home
+  - dashboard
+summary: "Navigation hub for {Project Name}: links to project areas and key resources."
+created: {today}
+last-updated: {today}
+---
+
+# {Project Name} Knowledge Base
+
+## Quick Links
+
+- [[TaskNotes/00-Project-Management-Guide|Project Management Guide]]
+- [[_meta/vault-schema|Vault Schema]]
+- [[_meta/taxonomy|Tag Taxonomy]]
+
+## Project Areas
+
+> Add links to key project areas as the vault grows.
+
+## Recent Activity
+
+> Recent session logs and task updates will be linked here.
+```
+
+Replace `{Project Name}` with the user's project name and `{today}` with today's date in `YYYY-MM-DD` format.
+
+### Greenfield Step 5: Create metadata files
+
+> **You are at Step 5 of 18 — Creating metadata (vault-schema, taxonomy, generate-index.py).**
+
+**`{vault_path}/_meta/vault-schema.md`:**
+
+```markdown
+---
+title: "Vault Schema"
+type: meta
+tags:
+  - meta
+  - schema
+summary: "Self-documenting vault structure, folder conventions, and frontmatter spec."
+created: {today}
+last-updated: {today}
+---
+
+# Vault Schema
+
+## Folder Structure
+
+| Folder | Purpose |
+|--------|---------|
+| `_meta/` | Vault metadata — schema, taxonomy, index generator |
+| `_Templates/` | Page templates for session logs, tasks, research |
+| `_Attachments/` | Images and binary files |
+| `TaskNotes/` | Task management — tasks, archive, counter |
+| `TaskNotes/Tasks/` | Active tasks by type (Epic, Story, Bug, Task) |
+| `TaskNotes/Archive/` | Completed tasks by type |
+| `TaskNotes/meta/` | Task counter and management metadata |
+
+## Frontmatter Conventions
+
+All pages use YAML frontmatter with these standard fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `title` | Yes | Page title (quoted string) |
+| `type` | Yes | Page type: `session-log`, `compiled-insight`, `task`, `research`, `service`, `moc`, `meta` |
+| `tags` | Yes | List of tags from taxonomy |
+| `summary` | Yes | <= 200 character description |
+| `created` | Yes | ISO date (YYYY-MM-DD) |
+| `last-updated` | Yes | ISO date (YYYY-MM-DD) |
+
+### Type-Specific Fields
+
+**Session logs:** `prev:`, `epic:`, `session:` (session ID)
+**Compiled insights:** `source-sessions:`, `source-tasks:` (lists)
+**Tasks:** `task-id:`, `status:`, `priority:`, `component:`
+
+## Notes
+
+- Use `type:` (not `category:`)
+- Use `source-sessions:` and `source-tasks:` (not `sources:`)
+- Do NOT use `provenance:` markers
+```
+
+**`{vault_path}/_meta/taxonomy.md`:**
+
+```markdown
+---
+title: "Tag Taxonomy"
+type: meta
+tags:
+  - meta
+  - taxonomy
+summary: "Canonical tag vocabulary for the vault. All tags should come from this list."
+created: {today}
+last-updated: {today}
+---
+
+# Tag Taxonomy
+
+## Structural Tags
+
+| Tag | Used On |
+|-----|---------|
+| `home` | Home/dashboard page |
+| `moc` | Map of Content pages |
+| `meta` | Vault metadata pages |
+| `session-log` | Session logs |
+| `compiled-insight` | Synthesized knowledge from sessions |
+| `task` | Task pages |
+| `research` | Research findings |
+| `service` | Service/infrastructure docs |
+| `template` | Template files |
+
+## Status Tags
+
+| Tag | Meaning |
+|-----|---------|
+| `active` | Currently in progress |
+| `archived` | Completed or deprecated |
+| `draft` | Work in progress |
+
+## Domain Tags
+
+> Add project-specific domain tags here as the vault grows.
+> Keep this list curated — prefer existing tags over creating new ones.
+```
+
+**`{vault_path}/_meta/generate-index.py`:**
+
+Write the full index generator script:
+
+```python
+#!/usr/bin/env python3
+"""Generate index.md — a flat catalog of all vault pages with summaries.
+
+Usage:
+    cd vault/
+    python3 _meta/generate-index.py
+
+Scans all .md files (excluding index.md, templates, and _meta/),
+extracts frontmatter title and summary, and writes index.md.
+"""
+
+import os
+import re
+import sys
+from pathlib import Path
+
+VAULT_ROOT = Path(__file__).resolve().parent.parent
+INDEX_PATH = VAULT_ROOT / "index.md"
+
+EXCLUDE_DIRS = {"_Templates", "_Attachments", "_meta", ".obsidian"}
+EXCLUDE_FILES = {"index.md"}
+
+
+def parse_frontmatter(filepath: Path) -> dict:
+    """Extract YAML frontmatter fields from a markdown file."""
+    text = filepath.read_text(encoding="utf-8")
+    match = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
+    if not match:
+        return {}
+
+    fm = {}
+    for line in match.group(1).splitlines():
+        m = re.match(r'^(\w[\w-]*):\s*"?(.*?)"?\s*$', line)
+        if m:
+            fm[m.group(1)] = m.group(2).strip('"').strip("'")
+    return fm
+
+
+def collect_pages() -> list[dict]:
+    """Walk the vault and collect page metadata."""
+    pages = []
+    for root, dirs, files in os.walk(VAULT_ROOT):
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+
+        rel_root = Path(root).relative_to(VAULT_ROOT)
+        for fname in sorted(files):
+            if not fname.endswith(".md") or fname in EXCLUDE_FILES:
+                continue
+
+            filepath = Path(root) / fname
+            rel_path = rel_root / fname
+
+            fm = parse_frontmatter(filepath)
+            title = fm.get("title", fname.removesuffix(".md"))
+            summary = fm.get("summary", "")
+            page_type = fm.get("type", "")
+
+            pages.append(
+                {
+                    "path": str(rel_path),
+                    "title": title,
+                    "summary": summary,
+                    "type": page_type,
+                }
+            )
+
+    return sorted(pages, key=lambda p: p["path"])
+
+
+def generate_index(pages: list[dict]) -> str:
+    """Render index.md content."""
+    lines = [
+        "---",
+        'title: "Index"',
+        "type: meta",
+        "tags:",
+        "  - meta",
+        'summary: "Machine-generated flat catalog of all vault pages."',
+        f"last-updated: {__import__('datetime').date.today().isoformat()}",
+        "---",
+        "",
+        "# Index",
+        "",
+        "<!-- AUTO-GENERATED — do not edit manually. Run: python3 _meta/generate-index.py -->",
+        "",
+        "| Page | Type | Summary |",
+        "|------|------|---------|",
+    ]
+
+    for p in pages:
+        title = p["title"].replace("|", "\\|")
+        summary = p["summary"].replace("|", "\\|")
+        page_type = p["type"]
+        link = f'[[{p["path"]}|{title}]]'
+        lines.append(f"| {link} | {page_type} | {summary} |")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main():
+    pages = collect_pages()
+    content = generate_index(pages)
+    INDEX_PATH.write_text(content, encoding="utf-8")
+    print(f"index.md generated with {len(pages)} entries.")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Make the script executable:
+```bash
+chmod +x {vault_path}/_meta/generate-index.py
+```
+
+### Greenfield Step 6: Create templates
+
+> **You are at Step 6 of 18 — Creating page templates.**
+
+Create these files in `{vault_path}/_Templates/`:
+
+**Session-Template.md:**
+```markdown
+---
+title: ""
+type: session-log
+tags:
+  - session-log
+summary: ""
+prev: ""
+epic: ""
+session: ""
+created: {{date}}
+last-updated: {{date}}
+---
+
+# Session: {{title}}
+
+## Goals
+
+-
+
+## Work Done
+
+-
+
+## Decisions
+
+-
+
+## Open Questions
+
+-
+
+## Next Steps
+
+-
+```
+
+**Compiled-Insight-Template.md:**
+```markdown
+---
+title: ""
+type: compiled-insight
+tags:
+  - compiled-insight
+summary: ""
+source-sessions: []
+source-tasks: []
+created: {{date}}
+last-updated: {{date}}
+---
+
+# {{title}}
+
+## Key Insight
+
+## Evidence
+
+## Implications
+
+## Related
+```
+
+**Bug-Template.md:**
+```markdown
+---
+title: ""
+type: task
+tags:
+  - task
+  - bug
+summary: ""
+task-id: ""
+status: backlog
+priority: ""
+component: ""
+created: {{date}}
+last-updated: {{date}}
+---
+
+# {{title}}
+
+## Description
+
+## Steps to Reproduce
+
+1.
+
+## Expected Behavior
+
+## Actual Behavior
+
+## Fix
+```
+
+**Task-Template.md:**
+```markdown
+---
+title: ""
+type: task
+tags:
+  - task
+summary: ""
+task-id: ""
+status: backlog
+priority: ""
+created: {{date}}
+last-updated: {{date}}
+---
+
+# {{title}}
+
+## Description
+
+## Acceptance Criteria
+
+-
+
+## Notes
+```
+
+**Research-Template.md:**
+```markdown
+---
+title: ""
+type: research
+tags:
+  - research
+summary: ""
+created: {{date}}
+last-updated: {{date}}
+---
+
+# {{title}}
+
+## Question
+
+## Findings
+
+## Sources
+
+## Conclusions
+```
+
+**Service-Template.md:**
+```markdown
+---
+title: ""
+type: service
+tags:
+  - service
+summary: ""
+created: {{date}}
+last-updated: {{date}}
+---
+
+# {{title}}
+
+## Overview
+
+## Configuration
+
+## Endpoints
+
+## Monitoring
+
+## Runbook
+```
+
+### Greenfield Step 7: Create task counter
+
+> **You are at Step 7 of 18 — Task counter setup.**
+
+```bash
+echo "1" > {vault_path}/TaskNotes/meta/{task_prefix}counter
+```
+
+Note: `{task_prefix}` includes the trailing dash. Counter filename is `{task_prefix}counter` (e.g., `ArkNew-counter`). No double dash.
+
+### Greenfield Step 8: Create project management guide
+
+> **You are at Step 8 of 18 — Project management guide.**
+
+Write `{vault_path}/TaskNotes/00-Project-Management-Guide.md`:
+
+```markdown
+---
+title: "Project Management Guide"
+type: meta
+tags:
+  - meta
+  - task
+summary: "How tasks are created, tracked, and archived in this vault."
+created: {today}
+last-updated: {today}
+---
+
+# Project Management Guide
+
+## Task ID Format
+
+All tasks use the prefix `{task_prefix}` followed by a sequential number:
+- `{task_prefix}1`, `{task_prefix}2`, `{task_prefix}3`, ...
+
+The counter file at `TaskNotes/meta/{task_prefix}counter` tracks the next available number.
+
+## Task Types
+
+| Type | Folder | Description |
+|------|--------|-------------|
+| Epic | `Tasks/Epic/` | Large multi-session efforts |
+| Story | `Tasks/Story/` | User-facing features |
+| Bug | `Tasks/Bug/` | Defects and fixes |
+| Task | `Tasks/Task/` | Generic work items |
+
+## Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `backlog` | Not yet started |
+| `todo` | Planned for upcoming work |
+| `in-progress` | Currently being worked on |
+| `done` | Completed |
+
+## Archive
+
+Completed tasks are moved from `Tasks/{Type}/` to `Archive/{Type}/`.
+
+## Creating Tasks
+
+Use `/ark-tasknotes` to create tasks via the TaskNotes MCP, or create markdown files manually following the templates in `_Templates/`.
+```
+
+### Greenfield Step 9: Set up Obsidian configuration
+
+> **You are at Step 9 of 18 — Obsidian configuration files.**
+
+**`{vault_path}/.gitignore`:**
+```
+# Obsidian — ignore transient state, track plugins and core config
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/graph.json
+.obsidian/themes/
+
+# Plugin data.json files may contain credentials — gitignore them
+.obsidian/plugins/*/data.json
+
+# NotebookLM sync state is runtime-generated
+.notebooklm/sync-state.json
+```
+
+**`{vault_path}/.obsidian/app.json`:**
+```json
+{ "alwaysUpdateLinks": true }
+```
+
+**`{vault_path}/.obsidian/appearance.json`:**
+```json
+{}
+```
+
+**`{vault_path}/.obsidian/community-plugins.json`:**
+```json
+["tasknotes", "obsidian-git"]
+```
+
+**`{vault_path}/.obsidian/core-plugins.json`:**
+```json
+["file-explorer","global-search","switcher","graph","markdown-importer","page-preview","note-composer","command-palette","editor-status","outline","word-count","file-recovery","properties"]
+```
+
+### Greenfield Step 10: Create/update CLAUDE.md
+
+> **You are at Step 10 of 18 — CLAUDE.md configuration.**
+
+If CLAUDE.md does not exist, create it. If it exists but is missing fields, update it.
+
+**Template for new CLAUDE.md:**
+
+```markdown
+# {Project Name}
+
+{Brief description — ask user or leave placeholder}
+
+## Project Configuration
+
+| Topic | Location |
+|-------|----------|
+| **Obsidian Vault** | `{vault_root}` |
+| **Session Logs** | `{vault_root}Session-Logs/` |
+| **Task Management** | `{tasknotes_path}` — prefix: `{task_prefix}`, project: `{project_name}` |
+```
+
+For monorepo layout, adjust the Obsidian Vault row to point at the project docs subdirectory and add the vault root separately.
+
+### Greenfield Step 11: Obsidian plugins (Standard+ tier only)
+
+> **You are at Step 11 of 18 — Obsidian plugin setup (Standard+ only). Skip to Step 16 if Quick tier.**
+
+Ask the user if they have a reference vault to copy plugin binaries from.
+
+**If reference vault available:**
+```bash
+# TaskNotes plugin (do NOT copy data.json — it's gitignored and project-specific)
+cp {reference_vault}/.obsidian/plugins/tasknotes/main.js {vault_path}/.obsidian/plugins/tasknotes/
+cp {reference_vault}/.obsidian/plugins/tasknotes/manifest.json {vault_path}/.obsidian/plugins/tasknotes/
+cp {reference_vault}/.obsidian/plugins/tasknotes/styles.css {vault_path}/.obsidian/plugins/tasknotes/
+
+# Obsidian Git plugin
+cp {reference_vault}/.obsidian/plugins/obsidian-git/main.js {vault_path}/.obsidian/plugins/obsidian-git/
+cp {reference_vault}/.obsidian/plugins/obsidian-git/manifest.json {vault_path}/.obsidian/plugins/obsidian-git/
+cp {reference_vault}/.obsidian/plugins/obsidian-git/styles.css {vault_path}/.obsidian/plugins/obsidian-git/
+cp {reference_vault}/.obsidian/plugins/obsidian-git/obsidian_askpass.sh {vault_path}/.obsidian/plugins/obsidian-git/ 2>/dev/null
+```
+
+**If no reference vault:**
+
+Tell the user:
+```
+No reference vault available. You will need to install plugins manually:
+  1. Open the vault in Obsidian
+  2. Settings > Community Plugins > Browse
+  3. Install "TaskNotes" and "Obsidian Git"
+  4. Enable both plugins
+
+PAUSE — manual handoff. Continue when plugins are installed, or type "skip" to proceed without plugins.
+```
+
+**PAUSE for manual handoff.** Wait for user confirmation before continuing.
+
+### Greenfield Step 12: Configure TaskNotes MCP (Standard+ tier only)
+
+> **You are at Step 12 of 18 — TaskNotes MCP configuration (Standard+ only). Skip to Step 16 if Quick tier.**
+
+Generate TaskNotes `data.json`:
+
+Write `{vault_path}/.obsidian/plugins/tasknotes/data.json`:
+```json
+{
+  "tasksFolder": "TaskNotes/Tasks",
+  "archiveFolder": "TaskNotes/Archive",
+  "taskTag": "task",
+  "enableAPI": true,
+  "apiPort": 8080,
+  "enableMCP": true,
+  "commandFileMapping": {
+    "all-tasks": "TaskNotes/Views/all-tasks.md",
+    "active-tasks": "TaskNotes/Views/active-tasks.md"
+  }
+}
+```
+
+Note: `data.json` is gitignored. Adjust `apiPort` if user has multiple Obsidian instances (suggest unique ports: 8080, 8081, 8082).
+
+Configure MCP in `.claude/settings.json`:
+
+```bash
+# Pre-validation: check if .claude/settings.json exists and is valid JSON
+mkdir -p .claude
+if [ -f .claude/settings.json ]; then
+  python3 -c "import json; json.load(open('.claude/settings.json'))" 2>/dev/null
+  if [ $? -ne 0 ]; then
+    echo "WARNING: .claude/settings.json is malformed JSON. Back up and recreate."
+    cp .claude/settings.json .claude/settings.json.bak
+  fi
+fi
+```
+
+Add or merge `mcpServers.tasknotes` into `.claude/settings.json`:
+```json
+{
+  "mcpServers": {
+    "tasknotes": {
+      "command": "npx",
+      "args": ["-y", "tasknotes-mcp"],
+      "env": { "OBSIDIAN_PORT": "8080" }
+    }
+  }
+}
+```
+
+### Greenfield Step 13: Install MemPalace (Full tier only)
+
+> **You are at Step 13 of 18 — MemPalace setup (Full only). Skip to Step 15 if Quick or Standard tier.**
+
+```bash
+# Check if already installed
+command -v mempalace 2>/dev/null && echo "MemPalace already installed: $(mempalace --version 2>/dev/null)" && MEMPALACE_OK=true
+
+# If not installed, try to install
+if [ -z "$MEMPALACE_OK" ]; then
+  if command -v pipx 2>/dev/null; then
+    echo "Installing via pipx..."
+    pipx install "mempalace>=3.0.0,<4.0.0"
+  elif command -v pip 2>/dev/null; then
+    echo "Installing via pip..."
+    pip install "mempalace>=3.0.0,<4.0.0"
+  else
+    echo "WARNING: Neither pipx nor pip available. Cannot install MemPalace."
+    echo "Install manually: pip install 'mempalace>=3.0.0,<4.0.0'"
+    echo "Skipping MemPalace setup — continuing without it."
+    MEMPALACE_OK=false
+  fi
+fi
+```
+
+If install fails, warn and skip. Do not block the rest of the wizard.
+
+### Greenfield Step 14: Run vault mining and install history hook (Full tier only)
+
+> **You are at Step 14 of 18 — Vault mining + history hook (Full only). Skip to Step 15 if Quick or Standard tier.**
+
+**Mine the vault (creates vault content wing):**
+```bash
+bash skills/shared/mine-vault.sh
+```
+
+If `mine-vault.sh` is not found (skill repo not in expected location), warn and skip.
+
+**Install history hook (creates conversation history wing separately):**
+
+Pre-validation before running install script:
+```bash
+# Verify .claude/settings.json is valid JSON (install-hook.sh uses Python and will fail on malformed JSON)
+if [ -f .claude/settings.json ]; then
+  python3 -c "import json; json.load(open('.claude/settings.json'))" 2>/dev/null
+  if [ $? -ne 0 ]; then
+    echo "ERROR: .claude/settings.json is malformed JSON. Fix before installing hook."
+    echo "Skipping history hook installation."
+    SKIP_HOOK=true
+  fi
+fi
+
+if [ -z "$SKIP_HOOK" ]; then
+  bash skills/claude-history-ingest/hooks/install-hook.sh
+fi
+```
+
+If either step fails, warn and continue. These are non-blocking.
+
+### Greenfield Step 15: Set up NotebookLM (Full tier only)
+
+> **You are at Step 15 of 18 — NotebookLM setup (Full only). Skip to Step 16 if Quick or Standard tier.**
+
+```bash
+# Check NotebookLM CLI
+command -v notebooklm 2>/dev/null && echo "NotebookLM CLI found" || echo "NotebookLM CLI not found"
+```
+
+If not installed:
+```
+NotebookLM CLI not installed. To install:
+  pipx install notebooklm-cli
+
+Then authenticate:
+  notebooklm auth login
+
+Skipping NotebookLM setup — you can configure later with /notebooklm-vault.
+```
+
+If installed, walk through authentication:
+```bash
+notebooklm auth check --test 2>/dev/null
+if [ $? -ne 0 ]; then
+  echo "NotebookLM not authenticated. Run: notebooklm auth login"
+  echo "PAUSE — authenticate, then continue."
+fi
+```
+
+**Create NotebookLM config:**
+
+```bash
+mkdir -p {vault_path}/.notebooklm
+```
+
+Write `{vault_path}/.notebooklm/config.json`:
+```json
+{
+  "notebooks": {
+    "main": { "id": "", "title": "{Project Name}" }
+  },
+  "persona": "You are a senior engineer reviewing the {project_name} project. Answer questions with specific references. Be thorough and precise.",
+  "mode": "detailed",
+  "response_length": "longer",
+  "vault_root": "."
+}
+```
+
+Tell user: "Fill in `notebooks.main.id` after creating a notebook in NotebookLM. Then run `/notebooklm-vault setup` to bootstrap."
+
+If NotebookLM CLI is not installed or auth fails, warn and continue. Non-blocking.
+
+### Greenfield Step 16: Generate index
+
+> **You are at Step 16 of 18 — Index generation.**
+
+```bash
+cd {vault_path} && python3 _meta/generate-index.py
+```
+
+Verify output: "index.md generated with N entries."
+
+### Greenfield Step 17: Git init + initial commit
+
+> **You are at Step 17 of 18 — Git commit.**
+
+**Git safety pre-checks (re-check, may have changed since start):**
+```bash
+# Is this a git repo?
+if ! git rev-parse --git-dir 2>/dev/null; then
+  echo "Initializing git repo..."
+  git init
+fi
+
+# Check git user
+git config user.name 2>/dev/null || echo "WARNING: git user.name not set. Run: git config user.name 'Your Name'"
+git config user.email 2>/dev/null || echo "WARNING: git user.email not set. Run: git config user.email 'you@example.com'"
+```
+
+Commit:
+```bash
+git add {vault_path}/ CLAUDE.md .claude/settings.json .notebooklm/ 2>/dev/null
+git commit -m "feat: initialize {project_name} vault with Ark structure"
+```
+
+If `.claude/settings.json` was modified (Standard+ tier), include it in the commit.
+
+### Greenfield Step 18: Final diagnostic + reminders
+
+> **You are at Step 18 of 18 — Final verification.**
+
+Run the full 19-check diagnostic (see Shared Diagnostic Checklist above). Show the scorecard (see Scorecard Output Format below).
+
+Then show follow-up reminders:
+
+```
+Setup complete! Follow-up reminders:
+
+1. Open the vault in Obsidian and enable TaskNotes + Obsidian Git plugins
+2. Fill in NotebookLM notebook ID in .notebooklm/config.json (if Full tier)
+3. Run /ark-health anytime to check ecosystem health
+4. Run /ark-onboard again to upgrade tiers
+```
+
+Adjust reminders based on what was actually set up (omit plugin reminder if plugins were copied from reference vault, omit NotebookLM if not Full tier, etc.).
+
+---
+
+## Path: Non-Ark Vault (Migration)
+
+Key principle: **additive only.** Never delete or overwrite existing content. Frontmatter changes are explicit and reversible (separate commits).
+
+### Migration Step 1: Scan existing vault
+
+> **You are at Step 1 of 14 — Scanning existing vault.**
+
+```bash
+# Count existing pages
+find {vault_path} -name "*.md" | wc -l
+
+# Check for existing folder structure
+ls -d {vault_path}*/ 2>/dev/null
+
+# Check for existing frontmatter patterns
+head -20 {vault_path}/*.md 2>/dev/null | head -60
+
+# Check for existing tags
+grep -rh "^tags:" {vault_path} --include="*.md" 2>/dev/null | head -10
+grep -roh "#[a-zA-Z][a-zA-Z0-9_-]*" {vault_path} --include="*.md" 2>/dev/null | sort | uniq -c | sort -rn | head -20
+```
+
+Report to user: "Found N pages, M existing tags, the following folder structure..."
+
+### Migration Step 2: Gather project info
+
+> **You are at Step 2 of 14 — Gathering project info.**
+
+Ask the user for:
+1. **Project name** — e.g., `my-project`
+2. **Task prefix** — e.g., `ArkMy-` (must end with `-`)
+
+The vault path is already known (detected vault directory). Ask user to confirm it as the vault root.
+
+### Migration Step 3: Pre-commit existing state
+
+> **You are at Step 3 of 14 — Checkpointing existing state.**
+
+**Git safety checks:**
+```bash
+# Is this a git repo?
+git rev-parse --git-dir 2>/dev/null && echo "GIT_REPO=yes" || echo "GIT_REPO=no"
+
+# If not a git repo, offer to init
+if ! git rev-parse --git-dir 2>/dev/null; then
+  echo "Not a git repo. Initializing..."
+  git init
+fi
+
+# Check working tree
+git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null && echo "CLEAN=yes" || echo "CLEAN=no"
+
+# Check git user
+git config user.name 2>/dev/null || echo "WARNING: git user.name not set"
+```
+
+Commit the pre-migration state:
+```bash
+git add -A && git commit -m "checkpoint: pre-Ark migration"
+```
+
+This gives the user a clean rollback point. If git add/commit fails (nothing to commit), that's fine — continue.
+
+### Migration Step 4: Add Ark scaffolding
+
+> **You are at Step 4 of 14 — Adding Ark scaffolding (non-destructive).**
+
+Create only the directories and files that don't already exist:
+
+```bash
+# Create missing directories only
+[ -d "{vault_path}_meta" ] || mkdir -p "{vault_path}_meta"
+[ -d "{vault_path}_Templates" ] || mkdir -p "{vault_path}_Templates"
+[ -d "{vault_path}_Attachments" ] || mkdir -p "{vault_path}_Attachments"
+[ -d "{vault_path}.obsidian" ] || mkdir -p "{vault_path}.obsidian"
+[ -d "{vault_path}TaskNotes/Tasks/{Epic,Story,Bug,Task}" ] || mkdir -p "{vault_path}TaskNotes/Tasks/"{Epic,Story,Bug,Task}
+[ -d "{vault_path}TaskNotes/Archive/{Epic,Story,Bug,Enhancement}" ] || mkdir -p "{vault_path}TaskNotes/Archive/"{Epic,Story,Bug,Enhancement}
+[ -d "{vault_path}TaskNotes/{Templates,Views,meta}" ] || mkdir -p "{vault_path}TaskNotes/"{Templates,Views,meta}
+```
+
+Do NOT overwrite existing files. Check before writing:
+```bash
+[ -f "{vault_path}00-Home.md" ] && echo "00-Home.md exists — skipping" || echo "Creating 00-Home.md"
+```
+
+Create missing files using the same templates from Greenfield Steps 4-9, but only if they don't already exist.
+
+### Migration Step 5: Generate vault-schema.md
+
+> **You are at Step 5 of 14 — Creating vault schema.**
+
+Write `{vault_path}/_meta/vault-schema.md` using the template from Greenfield Step 5. If the file already exists, ask user before overwriting.
+
+### Migration Step 6: Scan tags and propose taxonomy
+
+> **You are at Step 6 of 14 — Building tag taxonomy.**
+
+```bash
+# Collect all tags from existing vault
+grep -roh "^  - [a-zA-Z][a-zA-Z0-9_-]*" {vault_path} --include="*.md" 2>/dev/null | sed 's/^  - //' | sort | uniq -c | sort -rn
+grep -roh "#[a-zA-Z][a-zA-Z0-9_-]*" {vault_path} --include="*.md" 2>/dev/null | sed 's/^#//' | sort | uniq -c | sort -rn
+```
+
+Map existing tags to Ark structural tags. Show the mapping:
+
+```
+Proposed tag taxonomy:
+
+Existing tags kept as-is:
+  - {tag1} (N pages)
+  - {tag2} (N pages)
+
+Mapped to Ark structural tags:
+  - {old_tag} -> session-log
+  - {old_tag} -> task
+
+New Ark structural tags (added):
+  - compiled-insight
+  - moc
+  - meta
+
+Accept this taxonomy? [y/n/edit]
+```
+
+Write `{vault_path}/_meta/taxonomy.md` with the accepted taxonomy.
+
+### Migration Step 7: Offer frontmatter backfill
+
+> **You are at Step 7 of 14 — Frontmatter backfill (optional).**
+
+Show 3 sample pages with their current frontmatter and proposed Ark frontmatter:
+
+```
+Sample backfill preview:
+
+--- Page: existing-page.md ---
+Current:
+  category: note
+  tags: [some-tag]
+
+Proposed:
+  type: research
+  tags:
+    - research
+    - some-tag
+  summary: ""
+  created: 2025-01-15
+  last-updated: 2025-01-15
+
+--- Page: another-page.md ---
+...
+
+Apply frontmatter backfill to all N pages? [y/n/select]
+```
+
+**Skip non-standard pages** during bulk backfill. Do NOT touch pages that:
+- Have no YAML frontmatter (first line is not `---`)
+- Have fenced code blocks (`` ``` ``) at the top of the file
+- Fail UTF-8 decoding
+- Are binary files masquerading as `.md`
+
+Log skipped pages in the output: `Skipped: {filename} — {reason}`
+
+If user accepts:
+```bash
+# Apply backfill (done by Claude reading and editing each file, skipping non-standard)
+# Then commit separately
+git add -A && git commit -m "chore: backfill Ark frontmatter on N pages (M skipped)"
+```
+
+This is a **separate commit** from the scaffolding — makes it individually revertable.
+
+If user declines, skip. Frontmatter can be added later with `/wiki-lint --fix`.
+
+### Migration Step 8: Create task counter and management guide
+
+> **You are at Step 8 of 14 — Task management setup.**
+
+Same as Greenfield Steps 7-8. Create counter file and project management guide.
+
+### Migration Step 9: Set up Obsidian configuration
+
+> **You are at Step 9 of 14 — Obsidian configuration.**
+
+Same as Greenfield Step 9, but check for existing `.obsidian/` config files first:
+
+```bash
+# Only create config files that don't exist
+[ -f "{vault_path}.obsidian/app.json" ] || echo '{ "alwaysUpdateLinks": true }' > "{vault_path}.obsidian/app.json"
+[ -f "{vault_path}.obsidian/appearance.json" ] || echo '{}' > "{vault_path}.obsidian/appearance.json"
+```
+
+For `community-plugins.json`: merge existing plugin list with Ark plugins (don't remove what's already there):
+```bash
+# If community-plugins.json exists, merge lists
+# If not, create with Ark defaults
+```
+
+For `.gitignore`: append Ark patterns if not already present, don't overwrite existing patterns.
+
+### Migration Step 10: Create/update CLAUDE.md
+
+> **You are at Step 10 of 14 — CLAUDE.md configuration.**
+
+Same as Greenfield Step 10. If CLAUDE.md exists, update it with vault-related fields. If it doesn't exist, create it.
+
+### Migration Step 11: Standard/Full tier steps
+
+> **You are at Step 11 of 14 — Tier-specific setup.**
+
+**Standard tier:** Same as Greenfield Steps 11-12 (Obsidian plugins + TaskNotes MCP).
+
+**Full tier:** Same as Greenfield Steps 13-15 (MemPalace + history hook + NotebookLM).
+
+### Migration Step 12: Generate index
+
+> **You are at Step 12 of 14 — Index generation.**
+
+```bash
+cd {vault_path} && python3 _meta/generate-index.py
+```
+
+### Migration Step 13: Run diagnostic
+
+> **You are at Step 13 of 14 — Diagnostic check.**
+
+Run the full 19-check diagnostic. Show scorecard.
+
+### Migration Step 14: Final commit + reminders
+
+> **You are at Step 14 of 14 — Final commit.**
+
+```bash
+git add -A && git commit -m "feat: add Ark scaffolding to {project_name} vault"
+```
+
+Show follow-up reminders (same as Greenfield Step 18, adjusted for migration context).
+
+---
+
+## Path: Partial Ark (Repair)
+
+For vaults that have Ark structure but some checks are failing.
+
+### Repair Step 1: Run full diagnostic
+
+> **You are at Step 1 — Diagnostic scan.**
+
+Run all 19 checks. Record which checks fail.
+
+### Repair Step 2: Show failures
+
+> **You are at Step 2 — Showing failures.**
+
+Display the scorecard with all failures highlighted. Group by severity:
+
+```
+Ark Health — Repair Mode
+
+Critical failures (must fix):
+  !! Check 5: CLAUDE.md missing task prefix
+  !! Check 8: Vault structure missing _Templates/
+
+Standard failures (recommended):
+  !! Check 11: Task counter file not found
+  !! Check 13: TaskNotes MCP not configured
+
+Available upgrades:
+  -- Check 14: MemPalace not installed
+  -- Check 17: NotebookLM not installed
+
+Fix critical issues now? [y/n]
+```
+
+### Repair Step 3: Fix each failing check
+
+> **You are at Step 3 — Applying fixes.**
+
+Fix checks in order (Critical first, then Standard). For each fix:
+
+1. State what is being fixed: "Fixing Check N: {description}"
+2. Apply the fix instruction from the diagnostic checklist
+3. Verify the fix: re-run the specific check
+4. Report result: "Check N: FIXED" or "Check N: STILL FAILING — {reason}"
+
+**Critical fixes (checks 4-9):**
+- Check 4 (CLAUDE.md missing): Create CLAUDE.md using template from Greenfield Step 10
+- Check 5 (missing fields): Add missing fields interactively (ask user for values)
+- Check 6 (task prefix): Fix prefix format or create counter file
+- Check 7 (vault dir): Create vault directory or fix path in CLAUDE.md
+- Check 8 (vault structure): Create missing subdirectories
+- Check 9 (Python): Cannot auto-fix — tell user to install, PAUSE
+
+**Standard fixes (checks 10-13):**
+- Check 10 (index): Regenerate with `python3 _meta/generate-index.py`
+- Check 11 (counter): Create counter file: `echo "1" > {path}`
+- Check 12 (plugins): Prompt user to install in Obsidian, PAUSE for manual handoff
+- Check 13 (MCP): Add `mcpServers.tasknotes` to `.claude/settings.json`
+
+### Repair Step 4: Offer tier upgrade
+
+> **You are at Step 4 — Tier upgrade offer.**
+
+After fixes, determine current tier and offer upgrade:
+
+```
+All Critical + Standard checks now pass. Current tier: Standard.
+
+Upgrade to Full tier? This adds:
+  - MemPalace (deep vault search + synthesis)
+  - History auto-index hook (zero-token session capture)
+  - NotebookLM CLI (fastest vault queries)
+
+Estimated time: ~15 min. Upgrade? [y/n]
+```
+
+If user accepts, execute Greenfield Steps 13-15 (MemPalace + hook + NotebookLM).
+
+### Repair Step 5: Final diagnostic + scorecard
+
+> **You are at Step 5 — Before/after comparison.**
+
+Run all 19 checks again. Show before/after scorecard:
+
+```
+Ark Health — Repair Complete
+
+Before: 5 pass, 6 fail, 8 skip
+After:  14 pass, 0 fail, 5 upgrade
+
+{full scorecard here}
+```
+
+---
+
+## Path: Healthy
+
+For projects where all Critical + Standard checks pass.
+
+### Healthy Step 1: Run full diagnostic
+
+> **You are at Step 1 — Diagnostic scan.**
+
+Run all 19 checks. All Critical and Standard checks should pass.
+
+### Healthy Step 2: Show scorecard
+
+> **You are at Step 2 — Status report.**
+
+Display the full scorecard. Highlight the current tier.
+
+### Healthy Step 3: Surface upgrade opportunities
+
+> **You are at Step 3 — Upgrade opportunities.**
+
+If not at Full tier, show what's available:
+
+```
+Current tier: Standard. Available upgrades:
+
+  MemPalace — deep vault search + experiential synthesis
+    Install: pipx install "mempalace>=3.0.0,<4.0.0"
+    Then run: bash skills/shared/mine-vault.sh
+
+  History hook — auto-index Claude sessions on exit
+    Install: bash skills/claude-history-ingest/hooks/install-hook.sh
+
+  NotebookLM — fastest pre-synthesized vault queries
+    Install: pipx install notebooklm-cli
+    Then configure: /notebooklm-vault setup
+
+Upgrade to Full tier now? [y/n]
+```
+
+If user accepts, execute Greenfield Steps 13-15. Then re-run diagnostic and show updated scorecard.
+
+If already at Full tier:
+```
+All 19 checks pass. Full tier active.
+No upgrades available. Run /ark-health anytime to verify.
+```
+
+---
+
+## Scorecard Output Format
+
+Use this exact format for all scorecard output:
+
+```
++--------------------------------------+
+|        Ark Setup -- Scorecard        |
++--------------------------------------+
+| CLAUDE.md          OK  configured    |
+| Vault structure    OK  healthy       |
+| Python             OK  3.12          |
+| Index              OK  fresh         |
+| Task counter       OK  ready         |
+| Superpowers plugin OK  v5.0.7        |
+| Obsidian plugin    OK  v1.0.1        |
+| Gstack plugin      OK  detected      |
+| TaskNotes MCP      OK  connected     |
+| MemPalace          --  not installed |
+| NotebookLM         --  not installed |
++--------------------------------------+
+| Tier: Standard                       |
+| 0 fixes, 0 warnings, 2 upgrades     |
+| Run /ark-health anytime to check     |
++--------------------------------------+
+```
+
+**Scorecard rules:**
+
+- Symbols: `OK` = pass, `!!` = fail (has fix), `~~` = warning, `--` = available upgrade
+- Always show all logical groups, never omit a group. Related checks are collapsed: checks 4+5+6 → "CLAUDE.md", checks 7+8 → "Vault structure", checks 14+15 → "MemPalace", checks 17+18+19 → "NotebookLM"
+- For `!!` rows: use a short failure description (e.g., `missing`, `malformed`, `not found`)
+- For `--` rows: use `not installed` or `not configured`
+- For `~~` rows: use a short warning (e.g., `stale (5 pages changed)`)
+- Summary line format: `{N} fixes, {N} warnings, {N} upgrades`
+  - Use singular when count is 1: `1 fix, 0 warnings, 2 upgrades`
+- Tier line: `Tier: {Quick|Standard|Full}`
+- Always end with: `Run /ark-health anytime to check`
+
+**Tier assignment for scorecard:**
+
+| Tier | Condition |
+|------|-----------|
+| Quick | Checks 1-11 all pass |
+| Standard | Checks 1-13 all pass |
+| Full | Checks 1-19 all pass |
+| Below Quick | Any critical check (1, 4-9) failing |
+
+Note: `/ark-health` defines a "Minimal" tier (checks 1-9 pass, 10-11 skip). The wizard does not use Minimal because it always creates the vault — after `/ark-onboard` runs, the result is always Quick or higher.
+
+If below Quick tier, show `Tier: --` instead of a tier name.
+
+**Before/after scorecard (for Repair path):**
+
+When showing a before/after comparison, display two scorecards side by side or sequentially with labels:
+
+```
+--- BEFORE ---
+{scorecard}
+
+--- AFTER ---
+{scorecard}
+
+Changes: {N} fixes applied, {N} upgrades added
+```
+
+## Design Decisions
+
+- **Absorbs /wiki-setup completely.** All directory creation, template generation, metadata setup, and Obsidian configuration from `/wiki-setup` is replicated in the Greenfield path. Users should run `/ark-onboard` instead of `/wiki-setup` for new projects.
+- **Additive migration.** The Migration path never deletes or overwrites existing content. Ark scaffolding is layered on top. Frontmatter changes require explicit user confirmation and get their own commit.
+- **Git safety everywhere.** Every path that touches git checks repo state first (is it a repo? clean tree? user configured?). Migration path commits a checkpoint before any changes.
+- **Graceful degradation.** Every Full-tier step (MemPalace, NotebookLM, history hook) includes a "warn and skip" fallback. Installation failures never block the wizard.
+- **Hook pre-validation.** Before running `install-hook.sh`, verify `.claude/settings.json` is valid JSON. The install script uses Python and will fail on malformed JSON.
+- **MemPalace wing distinction.** Check 15 covers the vault content wing (indexed by `mine-vault.sh`). The conversation history wing is managed separately by `ark-history-hook.sh` (check 16). They are independent.
+- **MCP check is config-only.** Check 13 verifies `mcpServers.tasknotes` presence in `.claude/settings.json`, not endpoint reachability. Obsidian must be running for the endpoint to respond.
+- **Clear step markers.** Each step includes "You are at Step X of Y" markers so Claude can track progress and the user knows where they are in the wizard.
+- **No hardcoded references.** No project names, vault paths, or task prefixes are hardcoded anywhere in this skill. All values come from user input or runtime detection.
+- **`/ark-health` is authoritative.** The diagnostic checklist in this file is a convenience copy. If it drifts from `/ark-health`'s definitions, `/ark-health` is the source of truth.
