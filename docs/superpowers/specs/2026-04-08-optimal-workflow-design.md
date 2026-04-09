@@ -16,6 +16,7 @@ A situational workflow system that adapts ceremony to task size. Every task is t
 - **`/notebooklm-vault` sync excluded** — runs on a separate server, not part of local workflows
 - **`/document-release` conditional** — only when project has standard docs outside `docs/superpowers/`
 - **Session logs are retrospective** — written at the end, capturing decisions and rationale
+- **Distributed as skill + routing rules** — single source of truth in `/ark-workflow` skill, routing rules trigger it automatically
 
 ---
 
@@ -310,3 +311,54 @@ Skills that operate implicitly (always active, not explicitly invoked):
 | `/claude-history-ingest` | Document (heavy) — mine sessions for insights |
 | `/data-ingest` | Knowledge capture — process logs/transcripts |
 | `/notebooklm-vault` | Server-side — excluded from local workflow |
+| `/ark-workflow` | **Entry point** — triage, scenario detection, skill chain orchestration |
+
+---
+
+## Distribution Strategy
+
+### The Skill: `/ark-workflow`
+
+A new skill at `skills/ark-workflow/SKILL.md` that serves as the entry point for any task. Since ark-skills is a Claude Code plugin, this skill is automatically available in every project.
+
+**What it does:**
+
+1. **Project Discovery** — reads the current project's CLAUDE.md (per context-discovery pattern) to determine vault path, task prefix, whether standard docs exist, whether the project has UI, etc.
+2. **Scenario Detection** — identifies which scenario applies (greenfield, bugfix, ship, knowledge capture, hygiene) based on user input or context
+3. **Triage** — classifies the task as light/medium/heavy using the triage factors, with risk as primary signal
+4. **Skill Chain Output** — presents the specific ordered list of skills to run for this task, with conditions resolved (e.g., "this project has no UI, skipping /qa" or "standard docs found at README.md, including /document-release")
+5. **Phase Guidance** — for medium+, indicates the session handoff point ("commit spec + plan here, then start a fresh session")
+
+**What it does NOT do:**
+- Does not invoke the downstream skills itself — it outputs the chain for the user/Claude to follow
+- Does not replace `/brainstorming` — if the chain starts with `/brainstorming`, that skill runs next
+- Does not store state — the workflow is stateless; the spec and plan files are the state
+
+### CLAUDE.md Routing Rules
+
+A routing rules template that projects can add to their CLAUDE.md. This enables automatic detection — when Claude sees task patterns, it suggests invoking `/ark-workflow` instead of jumping straight into code.
+
+```markdown
+## Skill routing — Ark Workflow
+
+When starting any non-trivial task, invoke `/ark-workflow` first to triage and get the
+skill chain. Pattern triggers:
+
+- "build", "create", "add feature", "new component" → /ark-workflow (greenfield)
+- "fix", "bug", "broken", "error", "investigate" → /ark-workflow (bugfix)
+- "ship", "deploy", "push", "PR", "merge" → /ark-workflow (ship)
+- "document", "vault", "catch up", "knowledge" → /ark-workflow (knowledge capture)
+- "cleanup", "refactor", "audit", "hygiene", "dead code" → /ark-workflow (hygiene)
+
+For trivial tasks (single obvious change, no ambiguity), skip triage and work directly.
+```
+
+### Adding to a New Project
+
+When setting up a new project in the Ark ecosystem:
+
+1. The `/ark-workflow` skill is already available (ark-skills plugin is global)
+2. Add the routing rules block to the project's CLAUDE.md
+3. Run `/wiki-setup` if the project needs a vault (the workflow's Document phase depends on it)
+
+No per-project configuration needed beyond the routing rules — context-discovery handles the rest at runtime.
