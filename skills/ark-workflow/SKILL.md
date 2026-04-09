@@ -302,4 +302,68 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 6. `/ship` → `/land-and-deploy`
 7. `/canary` (if deploy risk)
 8. `/wiki-update` (if vault) + session log
-9. `/claude-history-ingest`
+
+---
+
+## Condition Resolution
+
+When presenting a skill chain, resolve all conditions using Project Discovery values. Present the chain with conditions already evaluated:
+
+**Security-relevant triggers (for `/cso`):**
+auth/permissions changes, secrets handling, dependency upgrades, data exposure risks, infrastructure changes, new external API integrations.
+
+**Deploy risk triggers (for `/canary`):**
+config changes affecting production, infra changes, auth/permissions changes, data migrations, dependency upgrades with breaking changes.
+
+**UI triggers (for `/qa`, `/design-review`):**
+Project has frontend dependencies (react, vue, svelte, next, angular) AND the current task touches UI-facing code.
+
+**Standard docs trigger (for `/document-release`):**
+Project has README.md, ARCHITECTURE.md, CONTRIBUTING.md, or CHANGELOG.md outside of `docs/superpowers/`.
+
+**Example resolved output:**
+
+> **Your skill chain (Greenfield, Medium):**
+> 1. `/brainstorming` — explore intent, write spec
+> 2. `/codex` — review spec
+> 3. Commit spec → **start fresh session**
+> 4. `/executing-plans` with `/TDD` per step
+> 5. `/ark-code-review --quick` → `/simplify`
+> 6. Skipping `/qa` — no UI detected
+> 7. Skipping `/cso` — no security-relevant changes
+> 8. `/ship` → `/land-and-deploy`
+> 9. Skipping `/canary` — no deploy risk
+> 10. `/wiki-update`
+> 11. `/wiki-ingest` — if new component needs a vault page
+> 12. `/cross-linker`
+> 13. Skipping `/document-release` — no standard docs found
+> 14. Session log
+
+## Session Handoff
+
+For medium and heavy tasks with a design phase:
+
+- Spec and plan are committed to `docs/superpowers/specs/` on the current branch
+- Tell the user: **"Design phase complete. Start a fresh Claude Code session and reference the spec at `docs/superpowers/specs/<filename>.md` to begin implementation."**
+- If heavy and pausing mid-implementation: suggest `/checkpoint` to save working state
+
+## When Things Go Wrong
+
+If a step fails mid-workflow:
+
+- **Failed QA:** fix bugs in the current session, re-run `/qa` to verify, re-run `/ark-code-review` if fixes are substantial
+- **Failed deploy:** check CI logs for the failure. If test failure: fix and re-run `/ship`. If infra issue: investigate before retrying. Never force-merge past failing CI.
+- **Review disagreement (`/ark-code-review` vs `/codex`):** read both opinions — they see different things. If both flag the same area, it's almost certainly real. If they disagree, use your judgment. Document the resolution in the session log.
+- **Flaky tests:** do not skip or retry blindly — `/investigate` the flake. If known and unrelated to your changes, note it and proceed. If new, treat as a bug.
+- **Spec invalidated during implementation:** stop implementing, update the spec, re-run `/codex` review on the updated spec, resume from the updated spec (this is a re-triage moment)
+- **Canary failure:** investigate the specific failure signal. If it's your change: rollback or hotfix (new light-class bug cycle). If pre-existing: document and proceed.
+- **Vault tooling failure:** not blocking — don't let a `/wiki-update` failure hold up a ship. Note the failure, fix it in the next Knowledge Capture cycle.
+
+## Re-triage
+
+If the task changes class mid-flight (a "light" bug that turns out to involve auth, a "medium" feature that needs architecture decisions):
+
+1. Stop at the current step
+2. Re-classify using the triage table
+3. Pick up the remaining phases from the new weight class
+4. Don't restart — just add the phases you would have run
