@@ -87,3 +87,39 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 - `/cross-linker` — Discover and add missing wikilinks
 - `/claude-history-ingest` — Mine Claude conversations into compiled vault insights via MemPalace (requires `pip install mempalace`)
 - `/data-ingest` — Process logs, transcripts, exports into vault pages
+
+## Vault Retrieval Defaults
+
+Four retrieval backends, ordered by richness. Check availability in order.
+Use the first available backend appropriate for the query type.
+
+| Tier | Backend | Best For | Token Cost |
+|------|---------|----------|------------|
+| T1 | NotebookLM | Factual lookups, pre-synthesized answers | ~500 |
+| T2 | MemPalace | Deep context, synthesis, experiential recall | ~2,500 |
+| T3 | Obsidian-CLI (via `obsidian:obsidian-cli` skill) | Full-text search, inline mentions | ~119 + reads |
+| T4 | index.md scan | Structured browse, page discovery, zero-dep fallback | ~2,100 |
+
+### Availability Checks
+
+- **T1:** `notebooklm` CLI authenticated + config exists at `{vault_path}/.notebooklm/config.json` OR `.notebooklm/config.json` in project root
+- **T2:** `mempalace` installed + project-specific wing exists in `mempalace status`
+- **T3:** Obsidian app running. Always invoke via `obsidian:obsidian-cli` skill.
+- **T4:** `{vault_path}/index.md` exists. Always available.
+
+### Failure Messaging
+
+When a preferred tier is unavailable, log before falling back:
+- "T1 not available — NotebookLM config not found at {vault_path}/.notebooklm/config.json or .notebooklm/config.json. Falling back to T4."
+- "T2 not available — MemPalace wing '{wing}' not found. Run `bash skills/shared/mine-vault.sh` to index. Falling back to T4."
+- "T3 not available — Obsidian not responsive. Falling back to T4."
+
+### Query Routing
+
+- "What is X?" / "What did we decide?" → T1 → T4
+- "Why did we decide X?" / "Show the reasoning" → T2 → T4
+- "What did we try when debugging X?" → T2
+- "How does X relate to Y?" → T2 → T4
+- "What don't we know about X?" → T2 → T1 → T4
+- "Find all mentions of X" → T3 → T4
+- "What pages exist about X?" → T4
