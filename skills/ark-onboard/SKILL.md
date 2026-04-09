@@ -153,7 +153,16 @@ ARK_ARTIFACTS=0
 echo "Ark artifacts found: $ARK_ARTIFACTS / 4"
 
 # Classification
-if [ $ARK_ARTIFACTS -ge 3 ]; then
+# Key rule: vault exists + no CLAUDE.md = Partial (never greenfield)
+if [ -z "$VAULT_DIR" ] && [ "$CLAUDE_MD" = "missing" ]; then
+  echo "STATE=no_vault"
+elif [ -z "$VAULT_DIR" ] && [ "$CLAUDE_MD" = "found" ]; then
+  # CLAUDE.md exists but vault root missing or doesn't exist
+  echo "STATE=no_vault"
+elif [ -n "$VAULT_DIR" ] && [ "$CLAUDE_MD" = "missing" ]; then
+  # Vault exists but no CLAUDE.md — always Partial, regardless of artifact count
+  echo "STATE=partial_ark"
+elif [ $ARK_ARTIFACTS -ge 3 ]; then
   echo "STATE=partial_ark"
 elif [ -n "$VAULT_DIR" ]; then
   echo "STATE=non_ark_vault"
@@ -1244,11 +1253,19 @@ Proposed:
 Apply frontmatter backfill to all N pages? [y/n/select]
 ```
 
+**Skip non-standard pages** during bulk backfill. Do NOT touch pages that:
+- Have no YAML frontmatter (first line is not `---`)
+- Have fenced code blocks (`` ``` ``) at the top of the file
+- Fail UTF-8 decoding
+- Are binary files masquerading as `.md`
+
+Log skipped pages in the output: `Skipped: {filename} — {reason}`
+
 If user accepts:
 ```bash
-# Apply backfill (done by Claude reading and editing each file)
+# Apply backfill (done by Claude reading and editing each file, skipping non-standard)
 # Then commit separately
-git add -A && git commit -m "chore: backfill Ark frontmatter on existing pages"
+git add -A && git commit -m "chore: backfill Ark frontmatter on N pages (M skipped)"
 ```
 
 This is a **separate commit** from the scaffolding — makes it individually revertable.
