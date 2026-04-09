@@ -273,26 +273,28 @@ main() {
         echo "Syncing single file: $single_file"
         sync_file "$vault_root" "$single_file" || ERRORS=$((ERRORS + 1))
     else
-        # Determine which directories to scan
+        # Determine which directories to scan.
+        # Standalone vaults (vault_root: ".") have .md files at the root
+        # with no project wrapper subdirectory. Wrapped vaults (vault_root:
+        # "vault" etc.) have a single project dir like ArkNode-Poly/.
         local dirs=()
-        case "$mode" in
-            sessions-only)
-                # Discover project docs path from config vault_root
-                local project_dir
-                project_dir=$(ls -d "$vault_root"/*/ 2>/dev/null | grep -v TaskNotes | grep -v _Templates | grep -v _Attachments | grep -v _meta | grep -v .obsidian | head -1)
-                project_dir="${project_dir#$vault_root/}"
-                project_dir="${project_dir%/}"
-                dirs=("${project_dir}/Session-Logs")
-                ;;
-            *)
-                # Scan all non-system directories
-                local project_dir
-                project_dir=$(ls -d "$vault_root"/*/ 2>/dev/null | grep -v TaskNotes | grep -v _Templates | grep -v _Attachments | grep -v _meta | grep -v .obsidian | head -1)
-                project_dir="${project_dir#$vault_root/}"
-                project_dir="${project_dir%/}"
-                dirs=("${project_dir}")
-                ;;
-        esac
+        if [[ "$VAULT_ROOT" == "." ]]; then
+            # Standalone: scan the vault root directly
+            case "$mode" in
+                sessions-only) dirs=("Session-Logs") ;;
+                *)             dirs=(".") ;;
+            esac
+        else
+            # Wrapped: discover the project subdirectory
+            local project_dir
+            project_dir=$(ls -d "$vault_root"/*/ 2>/dev/null | grep -v TaskNotes | grep -v _Templates | grep -v _Attachments | grep -v _meta | grep -v .obsidian | head -1)
+            project_dir="${project_dir#$vault_root/}"
+            project_dir="${project_dir%/}"
+            case "$mode" in
+                sessions-only) dirs=("${project_dir}/Session-Logs") ;;
+                *)             dirs=("${project_dir}") ;;
+            esac
+        fi
 
         # Full mode: nuke all sources from the notebook FIRST,
         # then reset sync state. This prevents orphaned duplicates

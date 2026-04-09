@@ -77,7 +77,7 @@ cleanup() { [ -n "${MINE_TMPDIR:-}" ] && [ -d "$(dirname "$MINE_TMPDIR")" ] && r
 trap cleanup EXIT
 echo "Filtering .md files (excluding .obsidian/, node_modules/, _Templates/)..."
 
-find "$VAULT_PATH" -name "*.md" \
+find -L "$VAULT_PATH" -name "*.md" \
     -not -path "*/.obsidian/*" \
     -not -path "*/node_modules/*" \
     -not -path "*/_Templates/*" \
@@ -88,7 +88,7 @@ find "$VAULT_PATH" -name "*.md" \
         ln -s "$f" "$DIR/$(basename "$f")"
     done
 
-FILE_COUNT=$(find "$MINE_TMPDIR" -name "*.md" | wc -l | tr -d ' ')
+FILE_COUNT=$(find -L "$MINE_TMPDIR" -name "*.md" | wc -l | tr -d ' ')
 echo "Found $FILE_COUNT .md files"
 
 if [ "$FILE_COUNT" -eq 0 ]; then
