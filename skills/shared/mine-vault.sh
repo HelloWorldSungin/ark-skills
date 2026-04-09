@@ -38,8 +38,10 @@ else
     fi
 fi
 
-# Normalize: strip trailing slash
+# Normalize: strip trailing slash, then make absolute so symlinks in
+# the temp dir (STEP 4) resolve correctly regardless of CWD.
 VAULT_PATH="${VAULT_PATH%/}"
+[[ "$VAULT_PATH" = /* ]] || VAULT_PATH="$PWD/$VAULT_PATH"
 
 if [ ! -e "$VAULT_PATH" ]; then
     echo "ERROR: Vault not found at '$VAULT_PATH'."
