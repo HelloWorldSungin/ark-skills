@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.2] - 2026-04-09
+
+### Fixed
+- `/ark-onboard` and `/ark-health`: TaskNotes MCP config now uses built-in HTTP transport
+  (`type: http`, `url: http://localhost:{apiPort}/mcp`) instead of nonexistent `tasknotes-mcp`
+  npm package. Removed `enableAPI` from TaskNotes `data.json` template (not a real setting).
+
 ## [1.4.1] - 2026-04-09
 
 ### Changed
