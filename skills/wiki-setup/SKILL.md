@@ -140,9 +140,14 @@ Then generate the TaskNotes `data.json` with project-specific paths. The key fie
 - `tasksFolder`: `"TaskNotes/Tasks"`
 - `archiveFolder`: `"TaskNotes/Archive"`
 - `taskTag`: `"task"`
+- `enableAPI`: `true` — starts the HTTP API server for external integrations
+- `apiPort`: `8080` — use a unique port per vault if running multiple Obsidian instances (e.g., 8080, 8081, 8082)
+- `enableMCP`: `true` — exposes TaskNotes tools via MCP at `/mcp` endpoint (requires `enableAPI`)
 - `commandFileMapping`: point all views to `TaskNotes/Views/`
 
 Copy the full `data.json` structure from an existing vault and adjust folder paths. The `data.json` is gitignored so it stays local to each developer's machine.
+
+**Reference vault for copying:** `~/.superset/vaults/ArkNode-AI` has a known-good config with API + MCP enabled on port 8088.
 
 ### Step 10: Create NotebookLM Config
 
