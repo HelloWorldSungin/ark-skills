@@ -133,7 +133,7 @@ Bumped VERSION, plugin.json, marketplace.json from 1.5.0 → **1.6.0** (not 1.5.
 
 ## Open Items / Follow-ups
 
-- **File size:** `SKILL.md` is now 858 lines. Proposed a split into main + `chains/` + `references/` directories (~55% context reduction on the common triage path). **Deferred** as a Hygiene Medium follow-up — see [[TODO]]. Rationale: let 1.6.0 run in practice first to surface any latent v2 bugs before restructuring on top.
+- **File size:** `SKILL.md` is now 858 lines. Proposed a split into main + `chains/` + `references/` directories (~55% context reduction on the common triage path). **Deferred** as a Hygiene Medium follow-up — see `TODO.md` at the repo root. Rationale: let 1.6.0 run in practice first to surface any latent v2 bugs before restructuring on top.
 
 - **Pre-existing S002 collision:** `vault/Session-Logs/` has two S002 files (`S002-Ark-Workflow-Skill.md` and `S002-Vault-Retrieval-Tiers-Phase1.md`). This session uses **S003** to avoid extending the collision. Renumbering S002 is out of scope here.
 

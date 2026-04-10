@@ -5,7 +5,7 @@ tags:
   - compiled-insight
   - skill
   - workflow
-summary: "Established workflow: brainstorm → spec → codex review → plan → implement. Audit-first for restructuring. NotebookLM for vault queries. Risk-primary triage with density escalation. Hybrid TodoWrite + file continuity for cross-session chains."
+summary: "Workflow patterns: brainstorm→spec→codex→plan→implement, audit-first, NotebookLM queries, risk-primary triage with density escalation, hybrid TodoWrite+file continuity."
 source-sessions:
   - "[[S003-Ark-Workflow-v2-Rewrite]]"
 source-tasks: []
