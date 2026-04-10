@@ -714,45 +714,64 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 
 ## Condition Resolution
 
-When presenting a skill chain, resolve all conditions using Project Discovery values. Present the chain with conditions already evaluated:
+When presenting a skill chain, resolve all conditions using Project Discovery values. Present the chain with conditions already evaluated.
 
 **Security-relevant triggers (for `/cso`):**
-auth/permissions changes, secrets handling, dependency upgrades, data exposure risks, infrastructure changes, new external API integrations.
+- Auth/permissions changes (both read AND write paths)
+- Secrets handling (creation, rotation, storage, access patterns)
+- Dependency upgrades: major/breaking version bumps, packages with known CVEs, packages adding native modules
+- Data exposure: new PII access, new data flows, storage changes, new data processing
+- Infrastructure changes: networking, DNS, tunnels, systemd units, container configs
+- External API integrations: adding OR removing
+- New internal APIs that other services will call
 
 **Deploy risk triggers (for `/canary`):**
-config changes affecting production, infra changes, auth/permissions changes, data migrations, dependency upgrades with breaking changes.
+- All security-relevant triggers above
+- Database schema changes (even non-breaking — adding nullable columns, indices)
+- Cache invalidation changes
+- Feature flag rollouts
+- Config changes affecting production
+- Changes to request handling or middleware ordering
+
+**Investigation triggers (for `/investigate` in Hygiene):**
+- Broken functionality, silent failures, unexpected errors, crashes, or data loss — even when framed as "tech debt" or "cleanup"
+- If the root cause isn't obvious from reading the code, investigate before fixing
 
 **UI triggers (for `/qa`, `/design-review`):**
-Project has frontend dependencies (react, vue, svelte, next, angular) AND the current task touches UI-facing code.
+- Project has frontend dependencies (react, vue, svelte, next, angular, @remix, solid-js) AND the current task touches UI-facing code
 
 **Standard docs trigger (for `/document-release`):**
-Project has README.md, ARCHITECTURE.md, CONTRIBUTING.md, or CHANGELOG.md outside of `docs/superpowers/`.
+- Project has README.md, ARCHITECTURE.md, CONTRIBUTING.md, or CHANGELOG.md outside of `docs/superpowers/`
 
 **Example resolved output:**
 
-> **Your skill chain (Greenfield, Medium):**
-> 1. `/brainstorming` — explore intent, write spec
-> 2. `/codex` — review spec
-> 3. Commit spec → **start fresh session**
-> 4. `/executing-plans` with `/TDD` per step
+> **Your skill chain (Bugfix, Medium):**
+> 1. `/investigate` — root cause analysis
+> 2. Re-triage if deeper than expected
+> 3. `/test-driven-development` — failing test
+> 4. Fix
 > 5. `/ark-code-review --quick` → `/simplify`
 > 6. Skipping `/qa` — no UI detected
 > 7. Skipping `/cso` — no security-relevant changes
 > 8. `/ship` → `/land-and-deploy`
 > 9. Skipping `/canary` — no deploy risk
 > 10. `/wiki-update`
-> 11. `/wiki-ingest` — if new component needs a vault page
-> 12. `/cross-linker`
-> 13. Skipping `/document-release` — no standard docs found
-> 14. Session log
+> 11. Session log
 
 ## Session Handoff
 
 For medium and heavy tasks with a design phase:
 
 - Spec and plan are committed to `docs/superpowers/specs/` on the current branch
+- `handoff_marker` is set in `.ark-workflow/current-chain.md` frontmatter
 - Tell the user: **"Design phase complete. Start a fresh Claude Code session and reference the spec at `docs/superpowers/specs/<filename>.md` to begin implementation."**
-- If heavy and pausing mid-implementation: suggest `/checkpoint` to save working state
+
+**Additional handoff points:**
+- **Heavy Bugfix, step 2:** If investigation reveals architectural redesign is needed → `/checkpoint` findings, recommend fresh session with design phase
+- **Heavy Hygiene, step 3:** If audit + investigation reveals systemic issues requiring rewrite → escalate to Heavy Greenfield, `/checkpoint`, fresh session
+- **Heavy Migration, step 4:** After migration plan is committed → session break before implementation
+- **Heavy Performance, step 5:** After optimization plan is committed → session break before implementation
+- **Any scenario, mid-implementation:** If the user explicitly asks to pause, or if output quality has degraded (repeated errors, hallucinated file paths, forgotten context) → suggest `/checkpoint`. Do NOT rely on tool-call counts as a trigger — that's an unreliable proxy.
 
 ## When Things Go Wrong
 
@@ -765,33 +784,75 @@ If a step fails mid-workflow:
 - **Spec invalidated during implementation:** stop implementing, update the spec, re-run `/codex` review on the updated spec, resume from the updated spec (this is a re-triage moment)
 - **Canary failure:** investigate the specific failure signal. If it's your change: rollback or hotfix (new light-class bug cycle). If pre-existing: document and proceed.
 - **Vault tooling failure:** not blocking — don't let a `/wiki-update` failure hold up a ship. Note the failure, fix it in the next Knowledge Capture cycle.
+- **Hygiene reveals bugs:** If `/codebase-maintenance` audit or `/investigate` uncovers bugs during a Hygiene workflow, re-triage the broken items as Bugfix (see Re-triage: Scenario shift). Fix bugs before continuing cleanup.
+- **Migration breaks tests:** If a migration causes test failures, do NOT force the migration through. `/investigate` the failures — they may reveal undocumented dependencies. Fix or document before proceeding.
+- **Batch item blocks other items:** If one item in a batch blocks others due to an unexpected dependency, re-order the execution plan. Flag the dependency to the user.
 
 ## Re-triage
 
-If the task changes class mid-flight (a "light" bug that turns out to involve auth, a "medium" feature that needs architecture decisions):
+If the task changes class mid-flight:
 
+**Weight escalation:**
 1. Stop at the current step
 2. Re-classify using the triage table
 3. Pick up the remaining phases from the new weight class
 4. Don't restart — just add the phases you would have run
 
+**Scenario shift:**
+If investigation or implementation reveals the task is fundamentally a different scenario:
+1. Stop at the current step
+2. Document findings so far (session log or `/checkpoint`)
+3. Re-classify into the correct scenario
+4. If shifting to a scenario with a design phase (e.g., Bugfix → Greenfield), recommend a session break before starting the design phase
+5. Pick up the new scenario's chain from the appropriate step
+
+Examples:
+- "Fix the login bug" → investigation reveals broken auth architecture → **pivot to Heavy Greenfield** (redesign)
+- "Optimize the dashboard" → profiling reveals the data layer is fundamentally wrong → **pivot to Heavy Migration** (data layer rewrite)
+- "Clean up dead code" → audit reveals half the module is broken → **pivot to Medium Bugfix** per broken item
+
 ## Routing Rules Template
 
-Projects can add this block to their CLAUDE.md to auto-trigger `/ark-workflow`:
+Projects can add this block to their CLAUDE.md to auto-trigger `/ark-workflow` and enable cross-session chain resume:
 
 `````markdown
 ## Skill routing — Ark Workflow
 
-When starting any non-trivial task, invoke `/ark-workflow` first to triage and get the
-skill chain. Pattern triggers:
+**Session start — check for in-progress chain:**
+At the start of every session in this project, check for `.ark-workflow/current-chain.md`.
+If it exists with unchecked steps, read it and announce to the user:
+
+  "Found an in-progress ark-workflow chain:
+  - Scenario: [scenario]/[weight]
+  - Progress: step X of Y complete
+  - Next: [next skill]
+  Continue from here, or archive as stale?"
+
+If the user continues, rehydrate TodoWrite tasks from the unchecked items and resume
+from the next pending step. If the chain has a `handoff_marker` set and it's checked,
+announce the session transition and run the handoff instructions.
+
+**New task triage:**
+When starting any non-trivial task (and no in-progress chain exists), invoke
+`/ark-workflow` first to triage and get the skill chain. Pattern triggers:
 
 - "build", "create", "add feature", "new component" → /ark-workflow (greenfield)
 - "fix", "bug", "broken", "error", "investigate" → /ark-workflow (bugfix)
 - "ship", "deploy", "push", "PR", "merge" → /ark-workflow (ship)
 - "document", "vault", "catch up", "knowledge" → /ark-workflow (knowledge capture)
 - "cleanup", "refactor", "audit", "hygiene", "dead code" → /ark-workflow (hygiene)
+- "upgrade", "migrate", "bump", "version" → /ark-workflow (migration)
+- "slow", "optimize", "latency", "benchmark" → /ark-workflow (performance)
 
 For trivial tasks (single obvious change, no ambiguity), skip triage and work directly.
+
+**After each step in a running chain:**
+1. Check off the step in `.ark-workflow/current-chain.md` (change `[ ]` to `[x]`)
+2. Append any notes to the Notes section of the chain file
+3. Update the corresponding TodoWrite task to `completed`
+4. Announce: `Next: [next skill] — [purpose]`
+5. Mark the next task as `in_progress`
+6. If the chain is complete, move the file to `.ark-workflow/archive/YYYY-MM-DD-[scenario].md`
 `````
 
 To add routing to a new project, copy the block above into the project's CLAUDE.md. The `/ark-workflow` skill is already available globally via the ark-skills plugin.

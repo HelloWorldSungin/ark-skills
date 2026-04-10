@@ -1,1 +1,4 @@
 .worktrees/
+
+# Ark workflow chain state (per-project ongoing work)
+.ark-workflow/
