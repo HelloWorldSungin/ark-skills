@@ -14,7 +14,7 @@ last-updated: 2026-04-09
 | Page | Type | Summary |
 |------|------|---------|
 | [[00-Home.md|Ark Skills Knowledge Base]] | moc | Navigation hub for ark-skills: links to project areas and key resources. |
-| [[Compiled-Insights/Development-Workflow-Patterns.md|Development Workflow Patterns]] | compiled-insight | Established workflow: brainstorm → spec → codex review → plan → implement. Audit-first for restructuring. NotebookLM for vault queries. Risk-primary triage with density escalation. Hybrid TodoWrite + file continuity for cross-session chains. |
+| [[Compiled-Insights/Development-Workflow-Patterns.md|Development Workflow Patterns]] | compiled-insight | Workflow patterns: brainstorm→spec→codex→plan→implement, audit-first, NotebookLM queries, risk-primary triage with density escalation, hybrid TodoWrite+file continuity. |
 | [[Compiled-Insights/Dogfooding-Driven-Skill-Development.md|Dogfooding-Driven Skill Development]] | compiled-insight | The most effective way to develop skills is to use them on the plugin's own repo — wiki-setup grew from 10 to 13 steps after dogfooding. |
 | [[Compiled-Insights/Ecosystem-Architecture-Map.md|Ecosystem Architecture Map]] | compiled-insight | The Ark ecosystem connects 7 repos via shared skills plugin, Obsidian vaults synced to NotebookLM, Linear via linear-updater, and Proxmox homelab infrastructure. |
 | [[Compiled-Insights/MemPalace-Integration-Architecture.md|MemPalace Integration Architecture]] | compiled-insight | claude-history-ingest wraps mempalace with custom hooks and three modes (index/compile/full) — NOT using mempalace's built-in hooks, which are too intrusive. |
