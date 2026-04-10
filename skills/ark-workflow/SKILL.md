@@ -375,33 +375,41 @@ This is the concrete algorithm. Follow these steps in order:
 
 ### Step 1: Run Project Discovery
 Execute the Project Discovery section above. Record: `HAS_UI`, `HAS_VAULT`, `HAS_STANDARD_DOCS`, `HAS_CI`.
+Check early exits — if the user's request is clearly Knowledge Capture AND `HAS_VAULT=false`, stop and tell the user to run `/wiki-setup` first.
 
 ### Step 2: Detect Scenario
-Match the user's request against the Scenario Detection table. If ambiguous, ask the multiple-choice question.
+Match the user's request against the Scenario Detection table. If the prompt describes multiple distinct tasks (see Batch Triage trigger), go to Batch Triage instead of steps 3-6. For security requests, use the two-path security routing (audit vs hardening). If ambiguous, ask the disambiguation question.
 
 ### Step 3: Classify Weight
-For scenarios that use weight classes (Greenfield, Bugfix, Hygiene), classify using the Triage table. Ship and Knowledge Capture skip this step.
+Classify using risk-primary triage with decision-density escalation. Ship skips this step. Knowledge Capture uses Light/Full split. Hygiene Audit-Only has no weight class.
 
 ### Step 4: Look Up Skill Chain
-Find the matching chain in the Skill Chains section below using scenario + weight class.
+Find the matching chain in the Skill Chains section below using scenario + weight class. If security hardening triggered mandatory early `/cso`, apply the dedup rule (remove the later conditional `/cso` from the chain).
 
 ### Step 5: Resolve Conditions
-Walk through the chain and resolve every conditional:
+Walk through the chain and resolve every conditional using Condition Resolution definitions:
 - `(if UI)` → check `HAS_UI`. If false, output "Skipping `/qa` — no UI detected"
-- `(if vault)` → check `HAS_VAULT`. If false, skip the step silently (vault skills are optional)
+- `(if vault)` → check `HAS_VAULT`. If false, skip the step silently
 - `(if standard docs exist)` → check `HAS_STANDARD_DOCS`. If false, output "Skipping `/document-release` — no standard docs found"
-- `(if security-relevant)` → evaluate against the security triggers listed in Condition Resolution
-- `(if deploy risk)` → evaluate against the deploy risk triggers listed in Condition Resolution
+- `(if security-relevant)` → evaluate against the security triggers in Condition Resolution
+- `(if deploy risk)` → evaluate against the deploy risk triggers in Condition Resolution
+- `(if any item involves broken/unexpected behavior)` → evaluate against the investigation triggers in Condition Resolution
 
 ### Step 6: Present the Resolved Chain
-Output the numbered skill chain with all conditions resolved. Include the session handoff marker if applicable (medium+ design phase).
+Output the numbered skill chain with all conditions resolved. Include the session handoff marker if applicable.
+
+### Step 6.5: Activate Continuity
+- Create TodoWrite tasks for each step in the chain (or each group in a batch)
+- Write `.ark-workflow/current-chain.md` with the full chain state and frontmatter
+- Add `.ark-workflow/` to `.gitignore` if not already present
+- Embed the "after each step" reminder instructions in the output
 
 ### Step 7: Hand Off
-The skill is done. The user or Claude follows the chain, invoking each skill in order. `/ark-workflow` does not invoke downstream skills itself.
+The skill is done. The user or Claude follows the chain, invoking each skill in order. `/ark-workflow` does not invoke downstream skills itself. After each step, the agent updates the chain file + task and announces the next step.
 
 ## Skill Chains
 
-Based on the scenario and weight class, present the resolved skill chain below. Replace conditions with project-specific values from Project Discovery (e.g., replace "(if UI)" with "skipping — no UI detected" or "including — UI detected").
+Based on the scenario and weight class, present the resolved skill chain below. Replace conditions with project-specific values from Project Discovery.
 
 ---
 
@@ -421,11 +429,11 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 *Session 1 — Design:*
 1. `/brainstorming` — explore intent, propose approaches, write spec
 2. `/codex` — review the spec
-3. Commit spec → **end session, start fresh for implementation**
+3. Commit spec → **end session, start fresh for implementation** (set `handoff_marker: after-step-3`)
 
 *Session 2 — Implementation:*
 4. Read spec from `docs/superpowers/specs/`
-5. `/TDD` — write tests first, implement against them
+5. `/test-driven-development` — write tests first, implement against them
 6. `/ark-code-review --quick` → `/simplify`
 7. `/qa` (if UI)
 8. `/cso` (if security-relevant)
@@ -446,11 +454,11 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 2. `/codex` — review the spec
 3. `/writing-plans` — break into phased implementation plan
 4. `/codex` — review the plan
-5. Commit spec + plan → **end session, start fresh for implementation**
+5. Commit spec + plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-5`)
 
 *Session 2 — Implementation:*
 6. Read spec + plan from `docs/superpowers/specs/`
-7. `/executing-plans` with `/TDD` per step
+7. `/executing-plans` with `/test-driven-development` per step
 8. `/subagent-driven-development` — parallelize independent modules
 9. `/checkpoint` (optional — if pausing mid-implementation)
 10. `/ark-code-review --thorough` + `/codex` → `/simplify`
@@ -486,7 +494,7 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 
 1. `/investigate` — root cause analysis
 2. Re-triage if deeper than expected
-3. `/TDD` — write a failing test that reproduces the bug (if not reproducible, document why and proceed)
+3. `/test-driven-development` — write a failing test that reproduces the bug (if not reproducible, document why and proceed)
 4. Fix
 5. `/ark-code-review --quick` → `/simplify`
 6. `/qa` (if UI)
@@ -499,8 +507,8 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 **Heavy:**
 
 1. `/investigate` — root cause analysis
-2. Re-triage if deeper than expected
-3. `/TDD` — write a failing test that reproduces the bug (if not reproducible, document why and proceed)
+2. Re-triage if deeper than expected. **If investigation reveals architectural redesign is needed: `/checkpoint` findings, end session, start fresh with a design phase (pivot to Heavy Greenfield from step 1).**
+3. `/test-driven-development` — write a failing test that reproduces the bug (if not reproducible, document why and proceed)
 4. Fix (structured, may require `/executing-plans`)
 5. `/ark-code-review --thorough` + `/codex` → `/simplify`
 6. `/qa` (if UI)
@@ -530,7 +538,14 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 
 ### Knowledge Capture
 
-*Catch up the vault with what's happened. No weight class needed. Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` first.*
+Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` first. (This should already be caught by the early exit in Project Discovery.)
+
+**Light** (syncing recent changes, updating a few pages):
+
+1. `/wiki-update` — sync recent changes
+2. `/cross-linker` (if vault)
+
+**Full** (catching up after extended period, rebuilding tags, ingesting external docs):
 
 1. `/wiki-status` — vault statistics
 2. `/wiki-lint` — broken links, missing frontmatter, tag violations
@@ -545,37 +560,155 @@ Based on the scenario and weight class, present the resolved skill chain below. 
 
 ### Codebase Hygiene
 
+**Audit-Only** (for "audit", "review", "assess" requests with no remediation expected):
+
+1. `/codebase-maintenance` — audit (or `/cso` if security audit)
+2. Present findings report to the user
+3. `/wiki-update` (if vault — to record findings)
+4. **STOP** — do not implement, do not ship. Ask user: "Findings above. Do you want to create tickets via `/ark-tasknotes`, or proceed with fixes (I'll re-triage as Hygiene Light/Medium/Heavy)?"
+
 **Light:**
 
 1. `/codebase-maintenance` — audit
-2. Implement cleanup
-3. `/cso` (if security-relevant)
-4. `/ship` → `/land-and-deploy`
-5. `/canary` (if deploy risk)
-6. `/wiki-update` (if vault)
+2. `/investigate` (if any item involves broken/unexpected behavior)
+3. Implement cleanup
+4. `/cso` (if security-relevant AND `/cso` not already run as mandatory step 1)
+5. `/ship` → `/land-and-deploy`
+6. `/canary` (if deploy risk)
+7. `/wiki-update` (if vault)
 
 **Medium:**
 
 1. `/codebase-maintenance` — audit
-2. `/cso` (if security-relevant)
-3. `/TDD` — tests before restructuring
-4. Implement cleanup
-5. `/ark-code-review --quick` → `/simplify`
-6. `/ship` → `/land-and-deploy`
-7. `/canary` (if deploy risk)
-8. `/wiki-update` (if vault) + session log
+2. `/investigate` (if any item involves broken/unexpected behavior)
+3. `/cso` (if security-relevant AND `/cso` not already run as mandatory step 1)
+4. `/test-driven-development` — tests before restructuring
+5. Implement cleanup
+6. `/ark-code-review --quick` → `/simplify`
+7. `/ship` → `/land-and-deploy`
+8. `/canary` (if deploy risk)
+9. `/wiki-update` (if vault) + session log
 
 **Heavy:**
 
 1. `/codebase-maintenance` — audit
-2. `/cso` — infrastructure, dependency, secrets audit
-3. `/TDD` — tests before restructuring
-4. Implement cleanup
-5. `/ark-code-review --thorough` + `/codex` → `/simplify`
-6. `/ship` → `/land-and-deploy`
-7. `/canary` (if deploy risk)
-8. `/wiki-update` (if vault) + session log
-9. `/claude-history-ingest`
+2. `/investigate` (if any item involves broken/unexpected behavior)
+3. **If audit + investigation reveals systemic issues requiring rewrite: escalate to Heavy Greenfield. `/checkpoint` findings, end session, start fresh with design phase.**
+4. `/cso` — infrastructure, dependency, secrets audit (this IS the mandatory `/cso` run — no duplicate later)
+5. `/test-driven-development` — tests before restructuring
+6. Implement cleanup
+7. `/ark-code-review --thorough` + `/codex` → `/simplify`
+8. `/ship` → `/land-and-deploy`
+9. `/canary` (if deploy risk)
+10. `/wiki-update` (if vault) + session log
+11. `/claude-history-ingest`
+
+**Dedup rule:** If security hardening triggers mandatory early `/cso` (before the chain starts), skip the conditional `/cso` inside the chain. `/cso` runs exactly once per chain execution.
+
+---
+
+### Migration
+
+**Light** (patch/minor version bumps, non-breaking dependency updates):
+
+1. Read migration/upgrade guide for the dependency
+2. Implement upgrade
+3. Run tests — verify nothing broke
+4. `/cso` (if security-relevant — major bumps, known CVEs)
+5. `/ship` → `/land-and-deploy`
+6. `/canary` (if deploy risk)
+7. `/wiki-update` (if vault)
+
+**Medium** (major version bumps, API changes required):
+
+1. `/investigate` — audit current usage of the thing being migrated
+2. Read migration guide, identify breaking changes
+3. `/test-driven-development` — write tests for new API surface before migrating
+4. Implement migration
+5. `/ark-code-review --quick` → `/simplify`
+6. `/cso` (if security-relevant)
+7. `/ship` → `/land-and-deploy`
+8. `/canary` (if deploy risk)
+9. `/wiki-update` (if vault)
+10. Session log
+
+**Heavy** (framework migrations, platform changes, database migrations):
+
+*Session 1 — Planning:*
+1. `/investigate` — audit all usage, map blast radius
+2. `/brainstorming` — migration strategy (big bang vs incremental, feature flags, rollback plan)
+3. `/codex` — review the migration plan
+4. Commit migration plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-4`)
+
+*Session 2 — Implementation:*
+5. Read migration plan
+6. `/test-driven-development` — tests for new platform/framework before migrating
+7. Implement migration in stages (per the plan)
+8. `/ark-code-review --thorough` + `/codex` → `/simplify`
+9. `/cso` (if security-relevant)
+10. `/ship` → `/land-and-deploy`
+11. `/canary` — **mandatory for Heavy migrations** (not conditional)
+
+*Document:*
+12. `/wiki-update` (if vault)
+13. `/wiki-ingest` (if vault + migration introduces new architecture concepts)
+14. `/cross-linker` (if vault)
+15. `/document-release` (if standard docs exist)
+16. Session log
+17. `/claude-history-ingest`
+
+---
+
+### Performance
+
+**Light** (single hotspot fix, obvious optimization):
+
+1. `/investigate` — profile and identify the bottleneck
+2. Fix the hotspot
+3. Verify improvement (before/after timing or metric)
+4. `/ship` → `/land-and-deploy`
+5. `/canary` (if deploy risk)
+6. `/wiki-update` (if vault)
+
+**Medium** (multiple hotspots, caching layer, query optimization):
+
+1. `/investigate` — profile and identify bottlenecks
+2. `/benchmark` — establish baseline metrics (if available)
+3. `/test-driven-development` — write performance regression tests
+4. Implement optimizations
+5. `/benchmark` — verify improvement against baseline
+6. `/ark-code-review --quick` → `/simplify`
+7. `/cso` (if security-relevant — e.g., caching introduces data exposure)
+8. `/ship` → `/land-and-deploy`
+9. `/canary` (if deploy risk)
+10. `/wiki-update` (if vault)
+11. Session log
+
+**Heavy** (architecture-level optimization, data layer redesign):
+
+*Session 1 — Analysis & Planning:*
+1. `/investigate` — deep profiling, identify systemic bottlenecks
+2. `/benchmark` — comprehensive baseline
+3. `/brainstorming` — optimization strategy (caching architecture, query redesign, etc.)
+4. `/codex` — review the optimization plan
+5. Commit plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-5`)
+
+*Session 2 — Implementation:*
+6. Read optimization plan
+7. `/test-driven-development` — performance regression tests
+8. Implement optimizations in stages
+9. `/benchmark` — verify improvement per stage
+10. `/ark-code-review --thorough` + `/codex` → `/simplify`
+11. `/cso` (if security-relevant)
+12. `/ship` → `/land-and-deploy`
+13. `/canary` — **mandatory for Heavy performance changes** (not conditional)
+
+*Document:*
+14. `/wiki-update` (if vault)
+15. `/wiki-ingest` (if vault + optimization introduces new architecture)
+16. `/cross-linker` (if vault)
+17. Session log
+18. `/claude-history-ingest`
 
 ---
 
