@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-04-09
+
+### Changed
+- **ark-workflow**: Major rewrite of the task triage skill addressing 22 gaps (12 initial + 10 from Codex review)
+  - Expanded from 5 to 7 scenarios: added Migration and Performance as first-class scenarios
+  - Replaced factor-matrix triage with risk-primary + decision-density escalation (Heavy risk stays Heavy; architecture decisions escalate Light → Heavy)
+  - Added Batch Triage for multi-item prompts with root cause consolidation, dependency heuristics, and per-group execution plans
+  - Added Continuity mechanism: TodoWrite tasks + `.ark-workflow/current-chain.md` state file for in-session and cross-session chain tracking, with handoff markers, stale-chain detection, and context recovery after compaction
+  - Added Hygiene Audit-Only variant for assessment-only requests (no implementation/ship forced)
+  - Split security routing into Audit and Hardening paths, with `/cso` dedup rule (`/cso` runs exactly once per chain)
+  - Added `/investigate` as conditional step in Hygiene chains for bug-like items
+  - Added session handoff guidance for Heavy Bugfix, Hygiene, Migration, and Performance
+  - Added scenario-shift re-triage handling with pivot examples
+  - Fixed `/TDD` naming to `/test-driven-development` across all chains
+  - Rewrote Routing Rules Template with session-resume block and new-task triggers for 7 scenarios
+
+### Fixed
+- ark-workflow: removed unreliable "10 tool calls since last file read" handoff trigger (output quality signals replace it)
+- ark-workflow: Knowledge Capture now has Light/Full split instead of one-size-fits-all chain
+
 ## [1.5.0] - 2026-04-09
 
 ### Added
