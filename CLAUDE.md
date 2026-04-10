@@ -79,7 +79,7 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 - `/notebooklm-vault` — NotebookLM vault context and sync
 
 ### Task Automation
-- `/ark-tasknotes` — Agent-driven task creation via tasknotes MCP
+- `/ark-tasknotes` — Agent-driven task creation and status via tasknotes MCP. Use `status` subcommand for task overview and triage recommendations.
 
 ### Onboarding
 - `/ark-onboard` — Interactive setup wizard (greenfield, migration, repair). Absorbs `/wiki-setup`.

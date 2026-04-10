@@ -9,7 +9,7 @@ summary: "TaskNotes MCP is an HTTP endpoint inside Obsidian (not standalone), wi
 source-sessions: []
 source-tasks: []
 created: 2026-04-08
-last-updated: 2026-04-08
+last-updated: 2026-04-09
 ---
 
 # TaskNotes MCP Integration — Architecture & Limitations
@@ -42,6 +42,18 @@ It does **NOT** accept: `task-id`, `task-type`, `work-type`, `component`, `urgen
 **Two workaround strategies:**
 1. Create via MCP, then edit the markdown file to add custom frontmatter
 2. Write the markdown file directly with full frontmatter, using MCP only for queries and status updates
+
+### Status Queries (v1.5.0)
+
+The `/ark-tasknotes status` subcommand uses MCP query tools for read-only task overview and triage:
+
+- `tasknotes_get_stats` — aggregate counts by status and priority
+- `tasknotes_query_tasks` with `status is_not done` — all open tasks sorted by priority
+- `tasknotes_query_tasks` with `status is done`, sorted by `updated desc` — recently completed
+
+The LLM computes derived signals (staleness, blocked chains, velocity) from raw data and generates opinionated triage recommendations. No algorithmic scoring — the LLM's natural reasoning handles prioritization using ordered heuristics: unblock first → priority×urgency → batch related work → quick wins.
+
+Fallback: when MCP is unavailable, reads frontmatter directly from `TaskNotes/Tasks/**/*.md` and `Archive/**/*.md`. See [[Compiled-Insights/TaskNotes-Status-Triage-Design|TaskNotes Status & Triage Design]] for full design rationale.
 
 ### Error Handling Patterns
 

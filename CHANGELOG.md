@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-04-09
+
+### Added
+- `/ark-tasknotes status` subcommand — task overview dashboard with opinionated triage
+  recommendations. Shows status counts, active work, stale/blocked items, velocity pulse,
+  recently completed tasks, and a prioritized "what to work on next" work plan.
+  Uses MCP tools when Obsidian is running, falls back to direct markdown reads.
+- Skill restructured with Modes section (Create and Status) for extensibility.
+
 ## [1.4.2] - 2026-04-09
 
 ### Fixed

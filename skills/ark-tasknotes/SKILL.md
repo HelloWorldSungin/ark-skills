@@ -14,7 +14,18 @@ Create and manage TaskNote tickets automatically during development workflows. T
 3. If MCP unavailable (Obsidian not running), fall back to direct markdown write
 4. Read `{vault_path}/TaskNotes/meta/{task_prefix}counter` for next available ID
 
-## When to Create Tasks
+## Modes
+
+| Mode | Trigger | Description |
+|------|---------|-------------|
+| Create | `/ark-tasknotes` or `/ark-tasknotes create` | Create and manage tasks (default) |
+| Status | `/ark-tasknotes status` | Task overview and triage recommendations |
+
+---
+
+## Create Mode
+
+### When to Create Tasks
 
 | Trigger | Task Type | Priority |
 |---------|-----------|----------|
@@ -24,9 +35,9 @@ Create and manage TaskNote tickets automatically during development workflows. T
 | Incident debugged, root cause found | Bug | Based on impact |
 | Research finding needs follow-up | Story | medium |
 
-## Workflow
+### Workflow
 
-### Step 1: Check for Duplicates
+#### Step 1: Check for Duplicates
 
 Before creating, search for existing tasks on the same topic:
 
@@ -53,7 +64,7 @@ Review results. If a matching task exists, update it instead of creating a dupli
 grep -rl "{keyword}" {vault_path}/TaskNotes/Tasks/ --include="*.md" | head -5
 ```
 
-### Step 2: Get Next Task ID
+#### Step 2: Get Next Task ID
 
 ```bash
 COUNTER=$(cat {vault_path}/TaskNotes/meta/{task_prefix}counter)
@@ -61,7 +72,7 @@ TASK_ID="{task_prefix}$(printf '%03d' $COUNTER)"
 echo "Next task ID: $TASK_ID"
 ```
 
-### Step 3: Create the Task
+#### Step 3: Create the Task
 
 **Option A: MCP + post-edit (preferred when Obsidian is running)**
 
@@ -125,13 +136,13 @@ summary: "<=200 char description"
 - [[related-task-or-page]]
 ```
 
-### Step 4: Increment Counter
+#### Step 4: Increment Counter
 
 ```bash
 echo $((COUNTER + 1)) > {vault_path}/TaskNotes/meta/{task_prefix}counter
 ```
 
-### Step 5: Announce and Commit
+#### Step 5: Announce and Commit
 
 Tell the user: "Created {task_type} {TASK_ID}: {title}"
 
@@ -142,12 +153,134 @@ git commit -m "task: create {TASK_ID} — {title}"
 git push
 ```
 
-## Guardrails
+### Guardrails
 
 - **Never auto-close tasks** — only create and update to in-progress
 - **Critical/blocking tasks:** Ask user for confirmation before creating
 - **Announce creation:** Always tell the user what was created (no silent side-effects)
 - **Verify vault identity:** Before creating, check that `TaskNotes/meta/{task_prefix}counter` exists. If missing, alert user that the vault may be misconfigured.
+
+---
+
+## Status Mode
+
+Display a task overview with opinionated triage recommendations. Read-only — never creates, updates, or closes tasks.
+
+### Step 1: Project Discovery
+
+Read the project's CLAUDE.md to find: task prefix, vault path, TaskNotes path (same as Create Mode).
+
+### Step 2: Gather Data
+
+**If MCP available** (preferred):
+
+1. Call `tasknotes_health_check` to verify MCP is running
+2. Call `tasknotes_get_stats` for aggregate counts by status and priority
+3. Query open tasks:
+```
+tasknotes_query_tasks({
+  conjunction: "and",
+  children: [{
+    type: "condition",
+    id: "1",
+    property: "status",
+    operator: "is_not",
+    value: "done"
+  }],
+  sortKey: "priority",
+  sortDirection: "desc"
+})
+```
+4. Query recently completed tasks:
+```
+tasknotes_query_tasks({
+  conjunction: "and",
+  children: [{
+    type: "condition",
+    id: "1",
+    property: "status",
+    operator: "is",
+    value: "done"
+  }],
+  sortKey: "updated",
+  sortDirection: "desc"
+})
+```
+Take only the 5 most recent from the results.
+
+**If MCP unavailable** (fallback):
+
+1. Read frontmatter from all `{vault_path}/TaskNotes/Tasks/**/*.md` files
+2. Read frontmatter from recent files in `{vault_path}/TaskNotes/Archive/**/*.md` (sort by mtime, limit 5)
+3. Count files by status manually
+
+### Step 3: Enrich
+
+For each open task, extract these fields from frontmatter:
+`task-id`, `title`, `status`, `priority`, `urgency`, `created`, `last-updated`, `blockedBy`, `depends-on`, `component`, `work-type`, `session`
+
+### Step 4: Compute Derived Signals
+
+From the raw data, compute:
+- **Staleness**: days since `last-updated` (or `created` if never updated) for in-progress tasks. Flag if > 3 days.
+- **Blocked chains**: tasks whose `blockedBy` references another open task
+- **Velocity**: tasks completed in last 7 days vs tasks created in last 7 days
+- **Quick wins**: tasks with type `task` or `bug` and priority `medium` or lower
+
+### Step 5: Output Report
+
+Print the report using this format:
+
+```
+TaskNotes Status: {project_name} ({task_prefix})
+
+Overview
+  backlog: N  |  todo: N  |  in-progress: N  |  done: N
+  Total open: N  |  Completed this week: N  |  Created this week: N
+
+Active Work (in-progress)
+  {task-id}  {title}  [{priority}] {N}d active
+  ...
+
+Needs Attention
+  {task-id}  Stale {N}d -- no update since {date}     [{priority}]
+  {task-id}  Blocked by {blocker-id}                    [{priority}]
+  ...
+
+Up Next (todo, by priority)
+  {task-id}  {title}  [{priority}, {urgency}]
+  ...
+
+Recently Completed (last 7d)
+  {task-id}  {title}  -- done {date}
+  ...
+
+Recommendation
+  1. {action} {task-id} ({reasoning})
+  2. {action} {task-id} ({reasoning})
+  3. Defer {task-id} ({reasoning})
+```
+
+**Section rules:**
+- Omit "Needs Attention" if nothing is stale or blocked
+- Omit "Recently Completed" if nothing was completed in the last 7 days
+- "Recommendation" always appears with 2-3 items
+
+### Triage Heuristics
+
+Generate the Recommendation section using these priorities in order:
+
+1. **Unblock first** — finish in-progress items that block other tasks
+2. **Highest priority x urgency** — critical/blocking before medium/normal
+3. **Batch related work** — group tasks by component or work-type when priorities are close
+4. **Quick wins between heavy items** — suggest small tasks to maintain momentum
+
+### Status Mode Guardrails
+
+- **Read-only** — never modify task files, counter, or vault state
+- **Graceful degradation** — if MCP fails and no vault files exist, print: "No TaskNotes found. Run `/ark-tasknotes` to create your first task, or `/ark-health` to check vault configuration."
+
+---
 
 ## MCP Tool Reference
 

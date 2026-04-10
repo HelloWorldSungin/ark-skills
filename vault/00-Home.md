@@ -33,8 +33,12 @@ Central navigation hub for the ark-skills plugin project.
 - [[Compiled-Insights/Ecosystem-Architecture-Map|Ecosystem Architecture Map]]
 - [[Compiled-Insights/Plugin-Versioning-and-Cache-Pitfalls|Plugin Versioning & Cache Pitfalls]]
 - [[Compiled-Insights/Vault-Hosting-Evolution|Vault Hosting Evolution]]
+- [[Compiled-Insights/Dogfooding-Driven-Skill-Development|Dogfooding-Driven Skill Development]]
+- [[Compiled-Insights/MemPalace-Integration-Architecture|MemPalace Integration Architecture]]
+- [[Compiled-Insights/TaskNotes-Status-Triage-Design|TaskNotes Status & Triage Design]]
 
 ### Session Logs
+- [[Session-Logs/S002-Ark-Workflow-Skill|S002 — Ark Workflow Skill]]
 - [[Session-Logs/S002-Vault-Retrieval-Tiers-Phase1|S002 — Vault Retrieval Tiers Phase 1]]
 - [[Session-Logs/S001-MemPalace-Integration|S001 — MemPalace Integration]]
 

@@ -98,3 +98,4 @@ The spec reviewer caught a stray `9. /claude-history-ingest` line pasted into th
 ## Related Pages
 
 - [[S001-MemPalace-Integration]] — previous session
+- [[Compiled-Insights/Development-Workflow-Patterns|Development Workflow Patterns]] — the brainstorm → spec → codex pipeline this session followed
