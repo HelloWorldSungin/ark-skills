@@ -160,6 +160,215 @@ If decision density is unclear:
 
 **Re-triage rule:** If a task reveals more complexity mid-flight (e.g., a "light" bug turns out to involve auth, or an investigation reveals architecture decisions are required), escalate to the appropriate class and pick up the remaining phases from there. Don't restart — just add the phases you would have run. If the scenario itself changes (e.g., Bugfix → Greenfield redesign), see the Re-triage section below for scenario shift handling.
 
+## Batch Triage
+
+**Trigger:** Activated when the user's prompt describes multiple distinct executable tasks. This includes:
+- Numbered lists ("1. Fix X, 2. Fix Y")
+- Bulleted lists
+- Prose with multiple distinct requests ("fix the auth bug and also clean up the dead code")
+- Tech debt/cleanup batches
+
+**Not a batch:** Requirement lists, acceptance criteria, or nested sub-steps within a single task. If the "items" describe one logical unit of work (e.g., "add dark mode: toggle component, theme provider, CSS vars"), treat as a single task, not a batch. When uncertain, ask:
+> Are these separate tasks to triage individually, or one task with multiple sub-steps?
+
+### Algorithm
+
+**Step 0 — Root cause consolidation:**
+Before per-item triage, scan the items for shared root causes. If multiple items appear to be symptoms of one underlying issue, tell the user:
+
+> Items #X, #Y, and #Z look like symptoms of a shared root cause. Would you like to consolidate them into a single investigation, or triage them separately?
+
+Only consolidate if the user confirms. Do not auto-consolidate — the user's framing matters.
+
+**Step 1 — Per-item scenario + weight classification:**
+
+For each remaining item:
+1. Determine scenario (from the 7-scenario table above)
+2. Classify weight:
+   - Ship items: **no weight class** (use standalone Ship chain)
+   - Knowledge Capture items: **Light or Full**
+   - Hygiene Audit-Only items: **no weight class**
+   - All other scenarios: **Light/Medium/Heavy** (per risk-primary triage)
+3. Present as a summary table
+
+**Step 2 — Dependency detection (heuristic):**
+
+Based on item descriptions and project knowledge, flag possible dependencies:
+- Items that describe the same component/file/module (possible shared code)
+- Items where one describes output/state that another consumes (logical dependency)
+- Items with different risk levels touching the same area (risk isolation — don't ship together)
+
+**Important:** This is heuristic based on item descriptions, not code analysis. Tell the user when flagging: "I think #X depends on #Y because they both touch the auth middleware — confirm before ordering." Ask for confirmation on uncertain dependencies before committing to an execution order.
+
+**Step 3 — Grouping:**
+
+Organize items into execution groups:
+- **Parallel groups:** Independent items with the same scenario + weight class
+- **Sequential chains:** Items with confirmed dependencies (A before B)
+- **Separate session recommended:** Heavy items when the rest of the batch is Light — suggest the user split into separate sessions
+
+**Step 4 — Per-group chains:**
+
+For each group, look up the skill chain:
+- Ship items → Ship chain
+- Knowledge Capture items → Knowledge Capture Light or Full
+- Hygiene Audit-Only items → Hygiene Audit-Only chain
+- Scenario-and-weight items → matching scenario chain
+
+Present the full execution plan.
+
+### Example Output
+
+```
+## Batch Triage
+
+| # | Item | Scenario | Weight | Notes |
+|---|------|----------|--------|-------|
+| 1 | Transaction isolation | Bugfix | Medium | Touches DB client |
+| 2 | Ghost pipeline runs | Bugfix | Light | Orchestrator startup |
+| 3 | Payload drop | Bugfix | Medium | Invoke endpoint |
+| 4 | Retry storms | Bugfix | Heavy | Process lifecycle |
+| 5 | MCP ClosedResourceError | Bugfix | Light | Graceful shutdown |
+| 6 | Update README | Knowledge Capture | Light | - |
+| 7 | Cherry-pick hotfix | Ship | - | Standalone ship |
+
+**Root cause scan:** No shared root causes detected.
+
+**Possible dependencies (please confirm):**
+- #4 may depend on #1 (both touch process/DB lifecycle)
+- #6 is independent
+
+**Execution plan:**
+- Group A (parallel): #2, #5 — Light Bugfix chain
+- Group B (sequential): #3 — Medium Bugfix chain
+- Group C (pending dep confirmation): #1 → #4 — Heavy Bugfix
+- Standalone: #7 — Ship chain
+- Standalone: #6 — Knowledge Capture Light
+
+**Session recommendation:** Groups A+B and standalones in this session. Group C in a fresh session if Heavy (architecture work may require design phase).
+```
+
+## Continuity — Task Tracking and Chain State
+
+**Problem:** `/ark-workflow` outputs a chain and exits. Subsequent skills run independently. Without tracking, the agent loses position across context compaction or session breaks, and the user has no in-session reminder of the next step.
+
+**Solution:** Hybrid continuity — TodoWrite tasks for interactive reminders + chain state file for durability.
+
+### What `/ark-workflow` does at the end of Step 6 (Present the Resolved Chain)
+
+1. **Create TodoWrite tasks** for each step in the chain (or each group in a batch). Each task has:
+   - `subject`: The skill name (e.g., `/investigate — root cause analysis`)
+   - `description`: The step's purpose + any inline conditions
+   - First task starts as `in_progress`
+
+2. **Write chain state file** to `.ark-workflow/current-chain.md` at the project root:
+
+~~~markdown
+---
+scenario: Bugfix
+weight: Heavy
+batch: false
+created: 2026-04-10T03:00:00Z
+handoff_marker: null
+handoff_instructions: null
+---
+
+# Current Chain: Bugfix-Heavy
+
+## Steps
+
+1. [ ] `/investigate` — root cause analysis
+2. [ ] Re-triage if deeper than expected
+3. [ ] `/test-driven-development` — failing test
+4. [ ] Fix
+...
+
+## Notes
+
+(Agent appends notes as steps complete — root cause findings, test names, PR URL, etc.)
+~~~
+
+3. **Add `.ark-workflow/` to `.gitignore`** if not already present. This directory holds ongoing work state, not code.
+
+4. **Append this reminder to the chain output presented to the user:**
+
+> **Continuity:**
+> - Tasks created in TodoWrite for each step
+> - Chain state saved to `.ark-workflow/current-chain.md`
+> - After completing each step, the agent will announce `Next: [skill]` and update the task + chain file
+> - If context is lost, read the chain file to resume
+
+### After Each Step — Agent Protocol
+
+1. Check off the step in `.ark-workflow/current-chain.md` (change `[ ]` to `[x]`) and append any notes
+2. Update the corresponding TodoWrite task to `completed`
+3. Announce to the user: `Next: [next skill name] — [one-line purpose]`
+4. Mark the next task as `in_progress`
+5. If the chain is complete, move the file to `.ark-workflow/archive/YYYY-MM-DD-[scenario].md` and tell the user the workflow is done
+
+### Batch Triage Mode
+
+For batch output, write one section per group in the chain file:
+
+~~~markdown
+---
+scenario: Batch
+weight: mixed
+batch: true
+---
+
+# Current Batch
+
+## Group A (Light Bugfix, parallel)
+### Item #2: Ghost pipeline runs
+1. [ ] `/investigate`
+...
+
+### Item #5: MCP ClosedResourceError
+1. [ ] `/investigate`
+...
+
+## Group B (Medium Bugfix, sequential)
+### Item #3: Payload drop
+1. [ ] `/investigate`
+...
+~~~
+
+TodoWrite tasks are grouped with a parent task per group and sub-tasks per item step.
+
+### Cross-Session Continuity
+
+TodoWrite tasks are session-scoped and do NOT persist across sessions. Only `.ark-workflow/current-chain.md` persists on disk.
+
+**1. Session start check (automatic):**
+Every time a session starts in a project, the agent should check for `.ark-workflow/current-chain.md`. This applies whether or not `/ark-workflow` was explicitly invoked. The Routing Rules Template (below) wires this up via CLAUDE.md so projects can enable it.
+
+**2. Rehydrate TodoWrite tasks:**
+When resuming a chain from the file, create new TodoWrite tasks for each unchecked step (`[ ]`). Mark the first unchecked step as `in_progress`. Completed steps (`[x]`) do not get recreated as tasks — they're history, not work.
+
+**3. Handle intentional session handoffs:**
+The chain file distinguishes between "chain paused mid-work" (user closed Claude) and "intentional handoff" (medium+ design phase end-of-session marker). The handoff marker is recorded in the chain file frontmatter:
+
+~~~yaml
+handoff_marker: after-step-5
+handoff_instructions: "Read spec at docs/superpowers/specs/2026-04-10-oauth-design.md"
+~~~
+
+On session start, if `handoff_marker` is set AND the marked step is `[x]` (completed), announce:
+> "You're in Session 2 of a Heavy Greenfield. Design phase complete. Next: `/executing-plans` with the spec at [handoff_instructions path]."
+
+**4. Stale chain detection:**
+If the chain file is older than 7 days, flag it as potentially stale:
+> "Found an ark-workflow chain from [age] ago. Is this still active, or should I archive it to `.ark-workflow/archive/`?"
+
+Never auto-delete — always ask. The user may have been on vacation.
+
+**5. Context recovery (in-session, after compaction):**
+If context compaction occurred mid-chain, the TodoWrite tasks survive but the rich chain context may be lost. The agent should re-read `.ark-workflow/current-chain.md` to refresh its understanding before continuing.
+
+**Context recovery (catch-all):** At the start of any session in this project, if `.ark-workflow/current-chain.md` exists, the agent should read it and announce:
+> "Found an in-progress `/ark-workflow` chain: [scenario]/[weight], step X of Y (`[next step]`). Continue from here?"
+
 ## Workflow
 
 This is the concrete algorithm. Follow these steps in order:
