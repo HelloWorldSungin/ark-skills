@@ -65,9 +65,26 @@ Identify which scenario applies based on the user's request. Ask if ambiguous.
 | **Bugfix** | "fix", "bug", "broken", "error", "investigate", "not working", "crash" | Something's broken, find and fix it |
 | **Ship** | "ship", "deploy", "push", "PR", "merge", "release", "cherry-pick" | Getting code reviewed, merged, deployed |
 | **Knowledge Capture** | "document", "vault", "catch up", "knowledge", "wiki", "update docs" | Catch up the vault with what's happened |
-| **Hygiene** | "cleanup", "refactor", "audit", "hygiene", "dead code", "maintenance", "security audit" | Cleanup, refactor, security audit |
+| **Hygiene** | "cleanup", "refactor", "audit", "hygiene", "dead code", "maintenance" | Cleanup, refactor, code quality |
+| **Migration** | "upgrade", "migrate", "bump major", "framework upgrade", "version bump" | Upgrading dependencies, frameworks, or platform versions |
+| **Performance** | "slow", "optimize", "latency", "benchmark", "profile", "performance" | Improving speed, reducing resource usage |
 
-If the user's request matches multiple scenarios (e.g., "fix this bug and ship it"), use the primary scenario (bugfix) — the ship phase is included in the bugfix workflow.
+**Security routing — two distinct paths:**
+
+1. **Security audit / review** (assessment only, no code changes expected): "security audit", "security review", "audit our X", "review the security of Y" → route to **Hygiene: Audit-Only** variant. Ends with findings report, no implementation or ship steps.
+
+2. **Security hardening** (remediation expected): "harden", "fix security", "improve auth security", "address vulnerabilities" → route to **Hygiene** (Light/Medium/Heavy) with `/cso` as **mandatory step 1**.
+
+   **How to wire the mandatory early `/cso` into the chain output (resolution rule):**
+   a. Look up the standard Hygiene chain for the triaged weight (Light/Medium/Heavy)
+   b. **Prepend** `/cso` as the new step 1. All original steps shift down by 1.
+   c. **Dedup**: remove any later `/cso` step from the chain (whether unconditional like Hygiene Heavy's "step 4" or conditional like Hygiene Light's "if security-relevant"). `/cso` runs exactly once per chain execution.
+   d. Present the resolved chain to the user with the `/cso` at step 1 and a note: "Security hardening detected — `/cso` promoted to step 1; later `/cso` deduped."
+
+If the user's intent is ambiguous between audit and hardening, ask:
+> Are you asking for an audit (findings only) or hardening (findings + fixes + ship)?
+
+**Multi-scenario resolution:** If the user's request matches multiple scenarios (e.g., "fix this bug and ship it"), use the primary scenario (bugfix) — the ship phase is included in the bugfix workflow. If the prompt describes multiple distinct tasks (numbered, bulleted, or in prose), use Batch Triage instead (see below).
 
 If no pattern matches clearly, ask:
 
@@ -77,27 +94,71 @@ If no pattern matches clearly, ask:
 > C) Ship — getting code out the door
 > D) Knowledge Capture — documenting what happened
 > E) Hygiene — cleanup, refactor, audit
+> F) Migration — upgrading dependencies or platforms
+> G) Performance — optimizing speed or resources
 
 ## Triage
 
-Classify the task as **light**, **medium**, or **heavy**. **Risk is the primary signal** — a one-file auth change is heavy regardless of file count.
+**Rule:** Risk sets the floor. Decision density can escalate but never downgrade. File count and duration are informational context only.
 
-| Factor | Light | Medium | Heavy |
-|--------|-------|--------|-------|
-| **Risk** | Low (internal, non-breaking) | Moderate (API changes, schema) | High (infra, auth, data migration, secrets, permissions) |
-| **Decision density** | Obvious fix | Some trade-offs | Architecture choices |
-| **Files touched** | 1-3 | 4-10 | 10+ |
-| **Duration** | < 30 min | 30 min - few hours | Half day+ |
-| **Has UI?** | No | Maybe | Yes, user-facing changes |
+**Step 1 — Classify by risk:**
 
-If unsure, ask:
+| Risk | Floor Class | Signals |
+|------|-------------|---------|
+| **Low** | Light | Internal changes, non-breaking, no auth/data/infra touch points |
+| **Moderate** | Medium | API surface changes, schema modifications, external integration changes |
+| **High** | Heavy | Auth/permissions, data migrations, infrastructure, secrets, breaking changes to shared interfaces |
 
-> How would you classify this task?
-> A) Light — quick fix, 1-3 files, low risk
-> B) Medium — some trade-offs, moderate scope
-> C) Heavy — architecture decisions, high risk, or large scope
+**Step 2 — Escalate by decision density:**
 
-**Re-triage rule:** If a task reveals more complexity mid-flight (e.g., a "light" bug turns out to involve auth), escalate to the appropriate class and pick up the remaining phases from there. Don't restart — just add the phases you would have run.
+| Decision density | Effect |
+|------------------|--------|
+| Obvious fix, clear path | No change — stay at risk floor |
+| Some trade-offs to consider | Escalate Light → Medium (if currently Light) |
+| Architecture decisions required | Escalate to Heavy (regardless of current floor) |
+
+**Rule:** Escalation only increases the class. A Heavy risk stays Heavy even if the fix is obvious. A Light risk with architecture decisions becomes Heavy.
+
+**Examples:**
+
+| Task | Risk | Decision Density | Result |
+|------|------|------------------|--------|
+| Rename 20 test utility functions | Low | Obvious | **Light** |
+| Fix one auth validation function | High | Obvious | **Heavy** (risk floor) |
+| Redesign internal caching layer (20 files) | Low | Architecture | **Heavy** (escalated) |
+| Add logging to 15 modules | Low | Obvious | **Light** |
+| Add feature flag infrastructure | High | Trade-offs | **Heavy** (risk floor) |
+| Refactor state management across modules | Low | Trade-offs | **Medium** (escalated) |
+
+**Context signals** (informational, not classification inputs — show to user for transparency):
+
+| Signal | Description |
+|--------|-------------|
+| File count | 1-3 (small), 4-10 (moderate), 10+ (large) |
+| Duration estimate | Quick (<30min), moderate (hours), extended (half-day+) |
+
+**Disambiguation prompts:**
+
+If risk is unclear:
+> How risky is this task?
+> A) Low risk — internal, non-breaking, no auth/data/infra
+> B) Moderate risk — API changes, schema changes, external integrations
+> C) High risk — auth, data migration, infra, secrets, permissions
+
+If decision density is unclear:
+> How many trade-offs or architecture decisions does this involve?
+> A) Obvious — clear path, no real choices
+> B) Some trade-offs — a few decisions to make
+> C) Architecture decisions — multiple significant choices, design work needed
+
+**Scenarios that skip the full triage:**
+- Ship — no weight class needed
+- Knowledge Capture — uses Light/Full split
+- Hygiene Audit-Only — no weight class (it's always findings-only)
+
+**Knowledge Capture classification:** Light if syncing recent changes or updating a few pages. Full if catching up after extended period, rebuilding tags, or ingesting external documents.
+
+**Re-triage rule:** If a task reveals more complexity mid-flight (e.g., a "light" bug turns out to involve auth, or an investigation reveals architecture decisions are required), escalate to the appropriate class and pick up the remaining phases from there. Don't restart — just add the phases you would have run. If the scenario itself changes (e.g., Bugfix → Greenfield redesign), see the Re-triage section below for scenario shift handling.
 
 ## Workflow
 
