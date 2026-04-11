@@ -1,6 +1,6 @@
 ---
 name: notebooklm-vault
-description: Persistent context and memory layer backed by the Obsidian vault synced to Google NotebookLM. Use this skill whenever starting a fresh session and needing project history, when asking "what happened in session X", "what's the current project state", "has this been tried before", or when generating audio/reports from vault content. Triggers on bootstrap, vault context, session history, conflict check, or any question about past decisions/experiments. Also triggers on warm-start phrases for session-continue: "continue", "resume", "pick up where I left off", "what's next". Do NOT use for general NotebookLM operations unrelated to the vault — use the global notebooklm skill for those. For end-of-session workflows (session log, TaskNote updates, knowledge capture), use /wiki-update instead.
+description: Persistent context and memory layer backed by the Obsidian vault synced to Google NotebookLM. Use this skill whenever starting a fresh session and needing project history, when asking "what happened in session X", "what's the current project state", "has this been tried before", or when generating audio/reports from vault content. Triggers on bootstrap, vault context, session history, conflict check, or any question about past decisions/experiments. Warm-start triggers for session-continue: "resume from last session", "continue where I left off", "warm start", "pick up where I left off". Do NOT trigger on phrases containing "session log", "wrap up", "hand off", or "end session" — those belong to /wiki-update. Do NOT use for general NotebookLM operations unrelated to the vault — use the global notebooklm skill for those.
 ---
 
 # NotebookLM Vault — Persistent Project Memory
@@ -126,15 +126,15 @@ Queries the notebook and returns answers with source citations.
 
 Targeted warm start that reads the most recent session log and its linked epic to pick up where the previous session left off.
 
-1. Find the most recent session log. Use Glob on `{project_docs_path}/Session-Logs/Session-*.md`, then sort results by the numeric session number (not by mtime). Read the highest-numbered session via `obsidian` CLI:
+1. Find the most recent session log. Use Glob on `{project_docs_path}/Session-Logs/S*.md` (Ark convention: files are named `S{NNN}-{slug}.md`, not `Session-{NNN}.md`), then sort results by the numeric session number (not by mtime). Read the highest-numbered session via `obsidian` CLI:
    ```bash
-   obsidian read file="Session-<NNN>"
+   obsidian read file="S<NNN>-<slug>"
    ```
 2. Extract the `epic` frontmatter field efficiently:
    ```bash
-   obsidian property:read name="epic" file="Session-<NNN>"
+   obsidian property:read name="epic" file="S<NNN>-<slug>"
    ```
-   Also extract **Next Steps**, **Issues & Discoveries**, and **Results** from the content returned by the read.
+   Also extract the following sections from the content returned by the read: **Next Steps**, **Open Questions**, **Decisions Made**, and **Work Done**. These are the sections written by `/wiki-update` 1.8.0+. For older logs (pre-1.8.0) that use **Results** / **Issues & Discoveries** section names, fall back to those.
 3. Identify the related epic:
    - If the session log has an `epic` frontmatter field, use that directly.
    - **Fallback for older session logs without `epic` field:** Infer the epic from the session's tags and content.

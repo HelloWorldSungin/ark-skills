@@ -65,7 +65,8 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 | Topic | Location |
 |-------|----------|
 | **Obsidian Vault** | `vault/` |
-| **Session Logs** | `vault/Session-Logs/` (when created) |
+| **Project docs path** | `vault/` (standalone layout — same as vault root) |
+| **Session Logs** | `vault/Session-Logs/` |
 | **Task Management** | `vault/TaskNotes/` — prefix: `Arkskill-`, project: `ark-skills` |
 
 ## Available Skills

@@ -17,6 +17,8 @@ Per the plugin's context-discovery pattern (see plugin `CLAUDE.md`):
    - **Project name**
    - **Vault root** (`{vault_path}`) — repo root, parent of both project docs and TaskNotes
    - **Project docs path** (`{project_docs_path}`) — where `Session-Logs/` lives. For standalone projects this equals `{vault_path}`; for shared vaults (e.g., Trading-Signal-AI monorepo) it's a subdirectory like `{vault_path}/Trading-Signal-AI/`. **Always use this path for session log operations in Step 2, not `{vault_path}`.**
+
+     **Default:** if `Project docs path` is not defined in CLAUDE.md, use `{project_docs_path} = {vault_path}`. This is the correct default for standalone single-project vaults (the most common layout). Only shared/monorepo vaults need an explicit override.
    - **TaskNotes path** (`{tasknotes_path}`) — sibling of project docs, not nested under it
    - **Task prefix** (includes trailing dash, e.g., `Arkskill-`)
 2. Read `{vault_path}/_meta/vault-schema.md` to understand folder structure.
@@ -46,13 +48,38 @@ Also check:
 
 #### Locate the most recent session log
 
-Glob `{project_docs_path}/Session-Logs/S*.md` and sort by numeric session number (not mtime — older continuations may have recent mtimes). Read the highest-numbered log and extract its `epic` and `session` frontmatter.
+Glob `{project_docs_path}/Session-Logs/S*.md`.
+
+**Parse rules** (deterministic ordering — the vault may contain duplicate session numbers from prior merge conflicts):
+1. For each file, determine its session number in this order:
+   a. Read the `session:` frontmatter. If it's a string like `"S004"`, strip the `S` prefix and coerce to int.
+   b. If `session:` is missing or unparseable, fall back to parsing `S(\d+)` from the filename.
+   c. If neither works, skip the file and log a warning.
+2. Sort files by `(session_number DESC, last-updated DESC, mtime DESC)` — highest session number first, then ties broken by most-recently-updated. Explicitly descending on every key.
+3. Read the top file (the highest-numbered session log) and extract its `epic`, `session`, and `date`/`created`/`last-updated` frontmatter.
+
+**Duplicate session number warning:** if the top two files share the same session number (e.g., the existing `S002` collision: `S002-Ark-Workflow-Skill.md` vs `S002-Vault-Retrieval-Tiers-Phase1.md`), tell the user: "Detected duplicate session number S{NNN}. Using most recently updated: {filename}. Consider running the session log backfill to renumber one of them." Continue with the tiebreak winner.
 
 #### Skip detection (ad-hoc docs sync)
 
-If there are no git commits since the last session log's date **and** the conversation has no substantive work to log (e.g., the user invoked `/wiki-update` just to add a single doc), ask:
+Skip the session log creation step ONLY if ALL of the following are true:
+1. No git commits since the last session log's reference date. Resolve the reference date in this order, using the first field that is present on the most recent log:
+   - `date:` frontmatter (new schema, 1.8.0+)
+   - `last-updated:` frontmatter (always present in Ark template)
+   - `created:` frontmatter
+   - filesystem mtime (last resort — older logs without any frontmatter date)
+
+   Then check: `git log <resolved-date>..HEAD --oneline` is empty.
+2. **Working tree is clean** (`git status --porcelain` is empty) — no uncommitted/unstaged edits that would be lost by skipping
+3. The conversation has no substantive work to log (user invoked `/wiki-update` for a narrow ad-hoc task)
+
+**Unmigrated vault note:** existing session logs written with the pre-1.8.0 schema do not have a `date:` field. The `last-updated:` fallback handles these correctly — no backfill required before the first `/wiki-update` run.
+
+If all three hold, ask:
 
 > "No meaningful changes since Session {NNN}. Skip session log creation and jump to knowledge extraction? [y/N]"
+
+**If the working tree is dirty, do NOT offer the skip option** — uncommitted work must be captured in the session log before it's lost. Proceed to the create-vs-continuation decision below.
 
 On `y`, skip to Step 4. Otherwise continue.
 
@@ -139,7 +166,7 @@ last-updated: YYYY-MM-DD
 [Revised action items, replacing/updating the previous Next Steps]
 ```
 
-**Tooling:** use `Write` as the primary path (no Obsidian dependency). When Obsidian is running and the `obsidian:obsidian-markdown` skill is available, prefer it for proper Obsidian-flavored markdown (wikilinks, callouts, frontmatter). Mirror the conditional pattern at `skills/notebooklm-vault/SKILL.md` (Vault Access section).
+**Tooling (writer rule, distinct from reader rule):** use `Write` (for new session logs) and `Edit` (for continuations) as the primary path. Do NOT default to the `obsidian` CLI for writes — its write commands silently no-op when Obsidian is not running. Only use `obsidian:obsidian-markdown` when (a) you have explicitly confirmed Obsidian is running via `obsidian status` or equivalent, AND (b) the file requires Obsidian-flavored markdown features that plain `Write` can't produce (e.g., Bases view embeds, canvas links). For session logs, plain `Write` is sufficient — all fields are portable YAML frontmatter and standard markdown.
 
 **Capture rule:** Ensure all experiment results, discoveries, and architectural decisions from the conversation are captured. Do not summarize away specifics — cite file paths, commit SHAs, flag values, measurements.
 
@@ -168,17 +195,19 @@ If the work warrants a new epic and none exists:
 
 #### Append session reference to the epic body
 
+**Placeholder convention:** `{epic-slug}` is the epic's filename slug (from `{epic-id}-{epic-slug}.md`). `{session-slug}` is the session log's filename slug (from `S{NNN}-{session-slug}.md`). These are almost always different — do not conflate them.
+
 ```bash
-obsidian property:set name="session" value="S{NNN}" file="{epic-id}-{slug}" silent
-obsidian append file="{epic-id}-{slug}" content="\n- [[S{NNN}-{slug}]] — YYYY-MM-DD: {one-line summary}" silent
+obsidian property:set name="session" value="S{NNN}" file="{epic-id}-{epic-slug}" silent
+obsidian append file="{epic-id}-{epic-slug}" content="\n- [[S{NNN}-{session-slug}]] — YYYY-MM-DD: {one-line summary}" silent
 ```
 
-Obsidian-unavailable fallback: `Read` the epic file, add the session reference to the body, and `Edit` the `session:` frontmatter field.
+Obsidian-unavailable fallback: `Read` the epic file at `{tasknotes_path}/Tasks/Epic/{epic-id}-{epic-slug}.md`, append the session reference (`- [[S{NNN}-{session-slug}]] — YYYY-MM-DD: {summary}`) to the body, and `Edit` the `session:` frontmatter field.
 
 #### Update related stories
 
 ```bash
-obsidian backlinks file="{epic-id}-{slug}"
+obsidian backlinks file="{epic-id}-{epic-slug}"
 ```
 
 For each story returned:
@@ -195,7 +224,11 @@ For each story returned:
    obsidian property:set name="session" value="S{NNN}" file="{story-id}" silent
    ```
 
-Obsidian-unavailable fallback: `Glob` `{tasknotes_path}/Tasks/Story/*.md`, `Grep` for the epic's wikilink to find backlinking stories, and `Edit` their frontmatter directly.
+Obsidian-unavailable fallback:
+1. `Glob` only `{tasknotes_path}/Tasks/Story/*.md` (not recursive into Epic/Bug/Task — those don't link to parents via wikilinks).
+2. `Grep` with an anchored wikilink pattern: `\[\[{epic-id}[-\]|]` (matches `[[epic-id-`, `[[epic-id]`, or `[[epic-id|`). Do NOT use bare string matching on the epic ID — that will false-positive on incidental mentions in compiled insights and session logs.
+3. For each matching story, `Edit` its `status:` and `session:` frontmatter directly.
+4. If a grep match exists OUTSIDE `Tasks/Story/*.md` (e.g., a session log mentions the epic), **ignore it** — those are not TaskNote backlinks.
 
 #### Compute and write epic status
 

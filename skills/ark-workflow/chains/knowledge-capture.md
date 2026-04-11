@@ -6,7 +6,7 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 
 *syncing recent changes, updating a few pages*
 
-1. `/wiki-update` — sync recent changes
+1. `/wiki-update` — end-of-session workflow (session log, TaskNote update, insight extraction, index regen)
 2. `/cross-linker` (if vault)
 
 ## Full
@@ -15,9 +15,8 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 
 1. `/wiki-status` — vault statistics
 2. `/wiki-lint` — broken links, missing frontmatter, tag violations
-3. `/wiki-update` — sync recent changes
+3. `/wiki-update` — end-of-session workflow (session log, TaskNote update, insight extraction, index regen)
 4. `/wiki-ingest` — distill external documents if needed
 5. `/cross-linker` — discover missing wikilinks
 6. `/tag-taxonomy` — normalize tags
 7. `/claude-history-ingest` — mine recent sessions
-8. Session log
