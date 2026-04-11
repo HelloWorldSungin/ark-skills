@@ -94,7 +94,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 
 Other vault skills continue to use the T4 (index.md scan) pattern. Multi-backend support for additional skills is planned for Phase 2.
 
-Key operations: `/wiki-lint` audits vault health (broken links, missing frontmatter, stale index, tag violations). `/wiki-update` syncs project knowledge and regenerates `index.md`. `/tag-taxonomy` enforces consistent tagging against `_meta/taxonomy.md`. `/cross-linker` discovers and adds missing wikilinks.
+Key operations: `/wiki-lint` audits vault health (broken links, missing frontmatter, stale index, tag violations). `/wiki-update` is the end-of-session workflow — creates/updates the session log, updates linked TaskNote epic/stories, extracts compiled insights, and regenerates `index.md`. `/tag-taxonomy` enforces consistent tagging against `_meta/taxonomy.md`. `/cross-linker` discovers and adds missing wikilinks.
 
 **`/claude-history-ingest`** — Mines Claude Code conversation history into compiled vault insights using MemPalace (ChromaDB). Two-layer pipeline: a Stop hook auto-indexes sessions (zero LLM tokens), and a compile pass synthesizes insights via semantic search (~10K tokens vs 100-200K previously). Three modes: `index`, `compile`, `full` (default). Requires `pip install mempalace`.
 
