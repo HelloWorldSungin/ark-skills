@@ -741,7 +741,8 @@ EOF
 **Exit gate:**
 - `references/batch-triage.md` parity script PASSes against baseline L163-249
 - `references/troubleshooting.md` parity script PASSes against baseline concat L761-774 + L776-789 + L791-812
-- `references/continuity.md` and `references/routing-template.md` pass content-presence grep checks (Phase 5 will run the full set; Phase 2 runs an interim check)
+- `references/routing-template.md` inner 5-backtick fenced block parity script PASSes against baseline L818-856
+- `references/continuity.md` passes content-presence grep checks (the only grep-only reference; Phase 5 will run the full set; Phase 2 runs an interim check)
 
 ### Step 1: Re-read current `SKILL.md` source ranges
 
@@ -983,11 +984,11 @@ grep -q "After each step in a running chain" skills/ark-workflow/references/rout
 grep -q "ark-skills plugin"               skills/ark-workflow/references/routing-template.md
 ```
 
-Then visually compare against current `SKILL.md` L818-856 (the original 5-backtick fenced block) and confirm the fenced block content is byte-identical between the two — that's the parity guarantee for this file.
+The grep checks above cover the wrapper (H1, preamble, closing note). The byte-level parity of the inner 5-backtick fenced block is enforced by the `check_routing_template()` function in Appendix B (Phase 2 Step 8 below) — that function extracts the fenced block from `references/routing-template.md` and diffs it against baseline L818-856.
 
 ### Step 7: Write the reference parity script
 
-Save the Python script from **Appendix B** to `/tmp/reconstruct-references.py`. This script handles `batch-triage.md` and `troubleshooting.md` only.
+Save the Python script from **Appendix B** to `/tmp/reconstruct-references.py`. This script runs three checks: `batch-triage.md` (full file vs L163-249), `troubleshooting.md` (full file vs concat), and `routing-template.md` (inner fenced block vs L818-856).
 
 ### Step 8: Run the reference parity diff
 
@@ -1016,8 +1017,8 @@ Adds the four pay-per-use reference files:
 
 - batch-triage.md — pure extraction of L163-249 (parity diff PASS)
 - troubleshooting.md — concat of L761-774 + L776-789 + L791-812 (parity diff PASS)
-- continuity.md — restructured from L309-371 with new H2 scaffolding and Archive on Completion rule (content-presence grep PASS)
-- routing-template.md — extracted from L814-858 with new preamble + separators (content-presence grep PASS)
+- routing-template.md — extracted from L814-858; inner 5-backtick fenced block parity diff vs L818-856 PASS, outer wrapper (H1, preamble, separators, closing note) verified by content-presence grep
+- continuity.md — restructured from L309-371 with new H2 scaffolding and Archive on Completion rule (content-presence grep PASS — the only grep-only reference)
 
 SKILL.md is unchanged in this phase.
 
@@ -1611,7 +1612,7 @@ If `/tmp/ark-workflow-SKILL-1.6.0.md` is missing, recapture it from git: `git sh
 
 ### Step 5: Mental walkthrough — all 13 smoke tests
 
-Walk through every smoke test in **Appendix C**, comparing the new layout's output against the expected output. **Smoke test 1 must produce a grouping that matches current `SKILL.md` L242-247 verbatim** — Group A (Light Bugfix, parallel) #2 #5; Group B (Medium Bugfix, sequential) #3; Group C (Heavy Bugfix, pending dep) #1 → #4. Any divergence from expected output is a behavioral regression and aborts the release.
+Walk through every smoke test in **Appendix C**, comparing the new layout's output against the expected output. **Smoke test 1 must produce a grouping that matches current `SKILL.md` L242-244 verbatim** (the three Group lines) — Group A (Light Bugfix, parallel) #2 #5; Group B (Medium Bugfix, sequential) #3; Group C (Heavy Bugfix, pending dep) #1 → #4. The session-recommendation line (paraphrased from L248) confirms Group C is flagged for a separate session. (L245-246 are out of scope — they are the standalone Ship and Knowledge Capture lines, neither of which appears in the 5-Bugfix prompt.) Any divergence from expected output is a behavioral regression and aborts the release.
 
 For each test, write a 1-2 line summary in scratch notes: "Test N: PASS — {1-line evidence}". The summaries get pasted into the session log at Step 6.
 
@@ -1656,10 +1657,11 @@ Reduce per-invocation context load on the common path by ≥ 50% by splitting th
 - chains/* vs L410-712 baseline: PASS (after whitespace normalization)
 - references/batch-triage.md vs L163-249 baseline: PASS
 - references/troubleshooting.md vs concat L761-774 + L776-789 + L791-812: PASS
-- references/continuity.md and routing-template.md: content-presence grep PASS
+- references/routing-template.md inner fenced block vs L818-856 baseline: PASS
+- references/continuity.md: content-presence grep PASS (only grep-only reference)
 
 **Smoke tests (13/13 PASS):**
-1. Session A batch (5 Bugfix items, grouping matches L242-247 verbatim)
+1. Session A batch (5 Bugfix items, grouping matches L242-244 verbatim, session recommendation paraphrased from L248)
 2. Session B batch (file perms + SSE + dashboard)
 3. Session C batch (TS build + ESLint cleanup, scenario split preserved)
 4. Security audit → Hygiene Audit-Only with STOP
@@ -1675,7 +1677,8 @@ Reduce per-invocation context load on the common path by ≥ 50% by splitting th
 
 ## Decisions
 - Dropped Condition Resolution "Example resolved output" block (14 lines, illustrative only)
-- continuity.md and routing-template.md use content-presence grep instead of line-by-line parity (intentional restructure with new scaffolding per spec example body)
+- continuity.md uses content-presence grep instead of line-by-line parity (intentional restructure with new H2 scaffolding and Archive on Completion rule per spec example body)
+- routing-template.md gets line-by-line parity for its inner 5-backtick fenced block (the actual copy-paste content) plus content-presence grep for its outer wrapper (added H1, preamble, separators, closing note)
 - Spec content-preservation rule #3 ("drop --- separators between weight variants") clarified — there are no such separators in original SKILL.md; only inter-scenario separators exist, and those are dropped naturally by per-scenario file split
 
 ## Follow-ups (filed, not in scope)
@@ -1981,7 +1984,7 @@ Save to `/tmp/reconstruct-references.py` in Phase 2 Step 7. Python 3 stdlib only
 Covers three files:
 1. `references/batch-triage.md` — full file vs baseline L163-249 (H1↔H2 demote reversed)
 2. `references/troubleshooting.md` — full file vs concat L761-774 + L776-789 + L791-812 (H1 strip)
-3. `references/routing-template.md` — INNER 5-backtick fenced block vs baseline L818-856 (the outer scaffolding — preamble, separators, closing note — is intentional restructure per the spec example body and uses content-presence grep instead)
+3. `references/routing-template.md` — INNER 5-backtick fenced block vs baseline L818-856 (the outer scaffolding — added H1, preamble, separators, closing note — is intentional restructure per the spec example body and is verified separately by content-presence grep in Phase 2 Step 6)
 
 `references/continuity.md` is the only reference file with no parity diff at all — it has multiple new H2 headers and the new Archive on Completion rule per the spec example body, so content-presence grep is the only available gate (see Spec Clarification § 3).
 
@@ -2480,6 +2483,6 @@ Every phase clears the ≤ 5 files/phase budget per CLAUDE.md.
 - **Placeholder scan:** the only `{X}/{Y}/{Z}/{W}` placeholders intentionally remain in the CHANGELOG entry and the session log template (Phase 4a / Phase 5) — they are filled in from the Phase 5 Step 1 measurement and are explicitly marked as "back-fill from measurement". No "TODO" / "implement later" / "TBD" / "appropriate error handling" patterns elsewhere.
 - **Type consistency:** `chains/{slug}.md` filenames are consistent across the plan (greenfield, bugfix, ship, knowledge-capture, hygiene, migration, performance). `references/{name}.md` filenames are consistent (batch-triage, continuity, troubleshooting, routing-template). Reconstruction script `ORDER` matches the spec § "File layout" order.
 - **Gap surfaced:** spec content-preservation rule #3 is misleading — there are no `---` separators between weight variants in current SKILL.md, only between scenarios. Documented in Spec Clarifications § 1.3. No spec change required since the rule's intent (drop separators that interfere with the new layout) is satisfied trivially by the per-scenario file split.
-- **Gap surfaced:** spec § 4 line-by-line parity diff for `references/continuity.md` and `references/routing-template.md` is incompatible with the spec's own example bodies for those files (added scaffolding). Documented in Spec Clarifications § 3 with the resolution: parity uses content-presence grep + visual review for those two files.
+- **Gap surfaced:** spec § 4 line-by-line parity diff for `references/continuity.md` is incompatible with the spec's own example body (added H2 scaffolding + new Archive on Completion rule). Documented in Spec Clarifications § 3 with the resolution: continuity.md uses content-presence grep + visual review only. routing-template.md gets line-by-line parity for its inner 5-backtick fenced block (the actual copy-paste content humans put in their CLAUDE.md files) plus content-presence grep for the outer wrapper.
 - **Edit Integrity:** Phase 3 has explicit `Re-read SKILL.md` steps after every cluster of ≤ 3 edits per CLAUDE.md rule.
 - **No Semantic Search:** Phase 3 Step 6 (the scenario→filename mapping) verifies all 7 filenames individually with separate greps.
