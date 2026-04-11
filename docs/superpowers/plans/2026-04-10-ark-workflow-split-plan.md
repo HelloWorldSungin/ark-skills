@@ -64,15 +64,20 @@ Ship has no `**Light/Medium/Heavy**` labels — the original L526-535 is one un-
 
 The Phase 3 H2 grep check (`grep -q "^## " chains/ship.md && FAIL`) enforces this.
 
-### 3. `references/continuity.md` and `references/routing-template.md` are NOT pure extractions
+### 3. `references/continuity.md` and `references/routing-template.md` outer scaffolding is NOT a pure extraction
 
-The spec § 4 (Phase 2 parity diff) describes both as line-range diffs against baseline, but the spec's own example bodies for these two files include **added scaffolding** (new H2 headers like `## Cross-Session Continuity`, new preamble paragraphs, the new `## Archive on Completion` rule, the routing-template's new "Copy the block below..." preamble). A pure line-range diff would not match.
+The spec § 4 (Phase 2 parity diff) describes both as line-range diffs against baseline, but the spec's own example bodies for these two files include **added scaffolding** (new H2 headers like `## Cross-Session Continuity`, new preamble paragraphs, the new `## Archive on Completion` rule, the routing-template's new "Copy the block below..." preamble). A whole-file line-range diff would not match.
 
-**Resolution:** the Phase 2 parity diff covers only the two files that ARE pure extractions:
-- `references/batch-triage.md` (vs baseline L163-249, with H1↔H2 demote reversed)
-- `references/troubleshooting.md` (vs concat of L761-774 + L776-789 + L791-812, no transformations)
+**Resolution:** Phase 2 has three line-by-line parity checks plus content-presence grep for the rest:
 
-For `references/continuity.md` and `references/routing-template.md`, Phase 2 instead uses **content-preservation grep checks** (the spec § 3 grep set) plus a manual visual review by re-reading the file and comparing against the spec's example body. This is a softer gate but matches what the spec actually constructs.
+| File | Parity check | Why |
+|---|---|---|
+| `references/batch-triage.md` | full file vs baseline L163-249 (H1↔H2 demote reversed) | pure extraction |
+| `references/troubleshooting.md` | full file vs concat L761-774 + L776-789 + L791-812 (H1 strip) | pure concatenation |
+| `references/routing-template.md` | INNER 5-backtick fenced block vs baseline L818-856 | the inner block IS pure verbatim; only the outer wrapper is restructured |
+| `references/continuity.md` | content-presence grep + visual review only | restructured with new H2 headers and a new Archive on Completion rule |
+
+The routing-template inner-block diff is critical because the fenced block is the actual copy-paste content humans put in their CLAUDE.md files — single-character drift inside that block would silently corrupt every project that uses it. Wrapping it in content-presence grep alone would miss that.
 
 ### 4. The L712 vs L713 question
 
@@ -994,6 +999,7 @@ Expected:
 ```
 PASS — batch-triage.md matches baseline L163-249 (after H1↔H2 demote reversal)
 PASS — troubleshooting.md matches baseline L761-774 + L776-789 + L791-812 (after H1 strip)
+PASS — routing-template.md inner fenced block matches baseline L818-856
 ```
 
 If FAIL: the script prints a unified diff. The most common cause is whitespace drift — the construction commands above use `sed` and `echo` which preserve byte-level fidelity, so a failure here usually means the source line ranges in the spec are wrong. Re-verify the ranges by reading current `SKILL.md` directly.
@@ -1855,9 +1861,18 @@ def reconstruct_chain_body(text: str, slug: str) -> str:
                 i = j
                 continue
 
-            # Check for italic descriptor immediately after the H2
+            # Check for italic descriptor immediately after the H2.
+            # IMPORTANT: the regex EXCLUDES italics ending in `:*` because those
+            # are session sub-labels (*Session 1 — Design:*, *Session 1 — Planning:*,
+            # *Document:*, etc.) which appear immediately after weight bold labels
+            # in Greenfield Medium/Heavy, Migration Heavy, and Performance Heavy.
+            # Lifting a sub-label as a descriptor would corrupt the reconstruction
+            # (you'd get **Heavy** (Session 1 — Design & Planning:): instead of
+            # **Heavy:** followed by *Session 1 — Design & Planning:*).
+            # Real weight descriptors end with non-colon non-asterisk
+            # (e.g. *rare for greenfield*, *framework migrations...*).
             descriptor = None
-            if j < n and re.fullmatch(r"\*[^*].*[^*]\*", lines[j]):
+            if j < n and re.fullmatch(r"\*[^*].*[^:*]\*", lines[j]):
                 descriptor = lines[j][1:-1]  # strip the surrounding *
                 j += 1
                 # Skip the blank line that should follow the descriptor
@@ -1963,23 +1978,32 @@ if __name__ == "__main__":
 
 Save to `/tmp/reconstruct-references.py` in Phase 2 Step 7. Python 3 stdlib only.
 
-Covers `batch-triage.md` and `troubleshooting.md` only — `continuity.md` and `routing-template.md` use content-presence grep instead (see Spec Clarification § 3).
+Covers three files:
+1. `references/batch-triage.md` — full file vs baseline L163-249 (H1↔H2 demote reversed)
+2. `references/troubleshooting.md` — full file vs concat L761-774 + L776-789 + L791-812 (H1 strip)
+3. `references/routing-template.md` — INNER 5-backtick fenced block vs baseline L818-856 (the outer scaffolding — preamble, separators, closing note — is intentional restructure per the spec example body and uses content-presence grep instead)
+
+`references/continuity.md` is the only reference file with no parity diff at all — it has multiple new H2 headers and the new Archive on Completion rule per the spec example body, so content-presence grep is the only available gate (see Spec Clarification § 3).
 
 ```python
 #!/usr/bin/env python3
 """
 Reference file parity diff for Phase 2.
 
-Two checks:
+Three checks:
   1. references/batch-triage.md vs baseline L163-249 (with H1 → H2 reversed)
   2. references/troubleshooting.md vs concat of L761-774 + L776-789 + L791-812
      (with the file's added H1 stripped)
+  3. references/routing-template.md INNER 5-backtick fenced block vs baseline L818-856
+     (the outer scaffolding — added H1, preamble paragraph, --- separators,
+     closing paragraph — is intentional restructure per the spec example body
+     and is verified separately by content-presence grep)
 
-continuity.md and routing-template.md are NOT covered here — they have intentional
-restructure (added H2 scaffolding, new preamble, new archive rule) per the spec's
-example bodies. Their parity is content-presence grep, not line-by-line diff.
+continuity.md is NOT covered here — it has multiple new H2 headers and a new
+Archive on Completion rule per the spec example body. Its parity is content-presence
+grep + visual review only.
 
-Exit 0 = both PASS. Exit 1 = either FAIL (prints unified diffs).
+Exit 0 = all checks PASS. Exit 1 = any FAIL (prints unified diffs).
 """
 import re
 import sys
@@ -2058,13 +2082,63 @@ def check_troubleshooting() -> bool:
     return False
 
 
+def check_routing_template() -> bool:
+    """Verify the inner 5-backtick fenced block in routing-template.md matches
+    baseline L818-856 (which is also the fenced block, including the outer
+    `````markdown` opening fence and the closing `````` fence).
+
+    The outer scaffolding (added H1 title, "Copy the block below..." preamble,
+    --- separators, and closing "To add routing..." paragraph) is intentional
+    restructure per the spec example body and is NOT covered by this diff.
+    Content-presence grep handles those.
+    """
+    text = (REFS_DIR / "routing-template.md").read_text()
+    lines = text.splitlines()
+
+    # Locate the 5-backtick fence boundaries. The opening fence carries the
+    # ```markdown info string; the closing fence is bare 5 backticks.
+    open_fence = "`````markdown"
+    close_fence = "`````"
+    start = None
+    end = None
+    for i, line in enumerate(lines):
+        if start is None and line == open_fence:
+            start = i
+        elif start is not None and end is None and line == close_fence:
+            end = i
+            break
+    if start is None or end is None:
+        print("FAIL — routing-template.md is missing the 5-backtick fenced block")
+        return False
+
+    # Inclusive of both fence lines, just like baseline L818-856 contains them.
+    inner_with_fences = "\n".join(lines[start:end + 1]) + "\n"
+    expected = baseline_slice(818, 856)
+
+    if normalize(inner_with_fences) == normalize(expected):
+        print("PASS — routing-template.md inner fenced block matches baseline L818-856")
+        return True
+
+    print("FAIL — routing-template.md inner fenced block differs from baseline L818-856")
+    diff = difflib.unified_diff(
+        normalize(expected).splitlines(keepends=True),
+        normalize(inner_with_fences).splitlines(keepends=True),
+        fromfile="baseline L818-856",
+        tofile="routing-template.md fenced block",
+        n=3,
+    )
+    sys.stdout.writelines(diff)
+    return False
+
+
 def main() -> int:
     if not BASELINE.exists():
         print(f"FAIL: baseline snapshot missing: {BASELINE}", file=sys.stderr)
         return 1
     ok1 = check_batch_triage()
     ok2 = check_troubleshooting()
-    return 0 if (ok1 and ok2) else 1
+    ok3 = check_routing_template()
+    return 0 if (ok1 and ok2 and ok3) else 1
 
 
 if __name__ == "__main__":
@@ -2077,7 +2151,7 @@ if __name__ == "__main__":
 
 Each test specifies the prompt, the files the new layout loads, the expected triage path, and the resolved chain output. Walk through every test as a mental dry-run during Phase 5 Step 5. **Tests 4, 5, and 6 also run in Phase 3 Step 16** as the Phase 3 exit gate.
 
-### Test 1 — Session A (5 Bugfix batch) — MUST MATCH L242-247 VERBATIM
+### Test 1 — Session A (5 Bugfix batch) — Group lines MUST MATCH L242-244 VERBATIM
 
 **Prompt:** "Triage these five bugs: 1) transaction isolation issue in DB client, 2) ghost pipeline runs at orchestrator startup, 3) payload drop on the invoke endpoint, 4) retry storms in process lifecycle, 5) MCP ClosedResourceError on graceful shutdown."
 
@@ -2090,11 +2164,11 @@ Each test specifies the prompt, the files the new layout loads, the expected tri
 - #4 Retry storms → Bugfix Heavy (process lifecycle)
 - #5 MCP ClosedResourceError → Bugfix Light (graceful shutdown)
 
-**Expected output (must match SKILL.md L242-247 verbatim):**
+**Expected output (the three Group lines must match SKILL.md L242-244 verbatim; the standalone lines L245-246 are out of scope because the prompt has no Ship or Knowledge Capture items):**
 - Group A (parallel): #2, #5 — Light Bugfix chain
 - Group B (sequential): #3 — Medium Bugfix chain
 - Group C (pending dep confirmation): #1 → #4 — Heavy Bugfix
-- Session recommendation: Heavy (#1 → #4) flagged for separate session
+- Session recommendation: Group C (Heavy) flagged for separate session — paraphrased from SKILL.md L248 ("Group C in a fresh session if Heavy")
 
 **PASS criteria:** the agent reads `chains/bugfix.md` and resolves the per-group chains using the Light/Medium/Heavy sections in that file. No content drift from current SKILL.md L483-522.
 
@@ -2142,23 +2216,22 @@ Each test specifies the prompt, the files the new layout loads, the expected tri
 
 **Expected triage path:** Scenario Detection security path 2 (hardening) → routed to **Hygiene Heavy** with `/cso` mandatory step 1. Agent reads `chains/hygiene.md`, picks the `## Heavy` section, applies the dedup rule from `## Dedup rule` at the bottom.
 
-**Expected resolved output (after dedup):**
-1. `/cso` — security audit (PROMOTED to step 1)
-2. `/codebase-maintenance` — audit (was step 1)
-3. `/investigate` (if any item involves broken/unexpected behavior) (was step 2)
-4. **If audit + investigation reveals systemic issues requiring rewrite: escalate to Heavy Greenfield...** (was step 3, prose escape hatch preserved)
-5. **(removed — was step 4 `/cso`, deduped per Dedup rule)**
-6. `/test-driven-development` — tests before restructuring (was step 5)
-7. Implement cleanup (was step 6)
-8. `/ark-code-review --thorough` + `/codex` → `/simplify` (was step 7)
-9. `/ship` → `/land-and-deploy` (was step 8)
-10. `/canary` (if deploy risk) (was step 9)
-11. `/wiki-update` (if vault) + session log (was step 10)
-12. `/claude-history-ingest` (was step 11)
+**Expected resolved output (after promote + dedup, contiguous 1-11):**
+1. `/cso` — infrastructure, dependency, secrets audit (PROMOTED from original step 4 to step 1)
+2. `/codebase-maintenance` — audit
+3. `/investigate` (if any item involves broken/unexpected behavior)
+4. **If audit + investigation reveals systemic issues requiring rewrite: escalate to Heavy Greenfield. `/checkpoint` findings, end session, start fresh with design phase.** (prose escape hatch preserved)
+5. `/test-driven-development` — tests before restructuring
+6. Implement cleanup
+7. `/ark-code-review --thorough` + `/codex` → `/simplify`
+8. `/ship` → `/land-and-deploy`
+9. `/canary` (if deploy risk)
+10. `/wiki-update` (if vault) + session log
+11. `/claude-history-ingest`
 
 Plus the resolution note: "Security hardening detected — `/cso` promoted to step 1; later `/cso` deduped."
 
-**PASS criteria:** `/cso` appears EXACTLY ONCE in the resolved output. The original step 4 `/cso` is removed.
+**PASS criteria:** the resolved chain has exactly 11 contiguously numbered steps (no gaps, no "(removed)" placeholders). `/cso` appears EXACTLY ONCE — at step 1. The original Hygiene Heavy step 4 `/cso` is gone.
 
 ### Test 6 — Decision-density escalation (Phase 3 exit gate)
 
