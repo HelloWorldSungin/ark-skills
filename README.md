@@ -70,7 +70,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 
 ### Workflow Orchestration
 
-**`/ark-workflow`** — Task triage and skill chain orchestration. Detects scenario (greenfield, bugfix, ship, knowledge capture, hygiene), classifies weight (light/medium/heavy) with risk as the primary signal, and outputs an ordered skill chain with project-specific conditions resolved. Entry point for all non-trivial work.
+**`/ark-workflow`** — Task triage and skill chain orchestration. Detects scenario across 7 types (greenfield, bugfix, ship, knowledge capture, hygiene, migration, performance), classifies weight (light/medium/heavy) via risk-primary triage with decision-density escalation, and outputs an ordered skill chain with project-specific conditions resolved. Handles multi-item batches with per-item classification, root cause consolidation, and dependency grouping. Includes cross-session continuity via `.ark-workflow/current-chain.md` state file and TodoWrite rehydration. Entry point for all non-trivial work.
 
 ### Core Skills
 
