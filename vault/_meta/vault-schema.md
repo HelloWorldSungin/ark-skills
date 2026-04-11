@@ -62,7 +62,7 @@ All pages use YAML frontmatter. Required fields:
 
 ### Type-specific fields
 
-**Session logs:** `prev`, `epic`, `session`, `source-tasks`
+**Session logs:** `session`, `date`, `status`, `prev`, `epic`, `source-tasks`
 **Tasks/Bugs:** `task-id`, `status`, `priority`, `component`
 **Compiled insights:** `source-sessions`, `source-tasks`
 **Research:** `source-sessions`, `source-tasks`

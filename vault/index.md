@@ -4,7 +4,7 @@ type: meta
 tags:
   - meta
 summary: "Machine-generated flat catalog of all vault pages."
-last-updated: 2026-04-09
+last-updated: 2026-04-10
 ---
 
 # Index

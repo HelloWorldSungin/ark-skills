@@ -76,7 +76,7 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 ### Core (generalized from existing)
 - `/ark-code-review` — Multi-agent code review with fan-out architecture
 - `/codebase-maintenance` — Repo cleanup, vault sync, skill health
-- `/notebooklm-vault` — NotebookLM vault context and sync
+- `/notebooklm-vault` — NotebookLM vault context and sync (bootstrap, ask, session-continue, conflict-check). End-of-session handoff lives in `/wiki-update`.
 
 ### Task Automation
 - `/ark-tasknotes` — Agent-driven task creation and status via tasknotes MCP. Use `status` subcommand for task overview and triage recommendations.
@@ -89,7 +89,7 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 - `/wiki-query` — Query vault knowledge with tiered retrieval
 - `/wiki-lint` — Audit vault health (links, frontmatter, tags, index)
 - `/wiki-status` — Vault statistics and insights
-- `/wiki-update` — Sync project knowledge into vault, regenerate index
+- `/wiki-update` — End-of-session workflow: create/update session log, update TaskNote epic/stories, extract compiled insights, regenerate index
 - `/wiki-setup` — Initialize new Ark vault with standard structure
 - `/wiki-ingest` — Distill documents into vault pages
 - `/tag-taxonomy` — Validate and normalize tags against taxonomy

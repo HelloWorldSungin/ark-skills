@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-04-10
+
+### Changed
+- **`/wiki-update` is now the single end-of-session workflow.** Previously a
+  5-step knowledge-sync-and-index skill, it now runs a 6-step flow that creates
+  or updates the session log, updates linked TaskNote epic/stories, extracts
+  compiled insights from the session log content, regenerates `index.md`, and
+  commits. Includes skip detection for ad-hoc docs syncs (preserves backward
+  compat for narrow invocations with no git changes since the last session log).
+- Session log frontmatter schema merged: `vault/_Templates/Session-Template.md`
+  now uses `title` (with session number), `type: session-log`, `summary`,
+  `session` (with `S` prefix), `status`, `date`, `prev`, `epic`, `source-tasks`,
+  `created`, `last-updated`. The template's prior `title: "Session: {TITLE}"`
+  (missing the session number) is fixed. `vault/_meta/vault-schema.md` type-specific
+  fields row updated to document `date` and `status`.
+- `skills/ark-workflow/SKILL.md` — the Medium and Heavy Hygiene chains previously
+  ended with `/wiki-update (if vault) + session log`. The `+ session log` suffix
+  is dropped because session log creation is now implicit in `/wiki-update`.
+- `CLAUDE.md` (plugin) — `/wiki-update` and `/notebooklm-vault` skill descriptions
+  updated to reflect the new split of responsibility.
+
+### Removed
+- **`/notebooklm-vault session-handoff` sub-command removed.** Its session log
+  write, TaskNote epic/stories update, and sync-notify logic moved into
+  `/wiki-update` (Step 2 + Step 3). `/notebooklm-vault` is now focused purely on
+  NotebookLM query/sync concerns: `setup`, `ask`, `session-continue`, `bootstrap`,
+  `audio`, `report`, `conflict-check`, `status`. The skill description and README
+  sub-command list were updated accordingly. Any existing invocation using
+  `wrap up`, `end session`, `hand off`, or `session log` triggers now routes to
+  `/wiki-update`. Schema mismatch between the old session-handoff writes and the
+  Session-Template (latent bug — old format omitted `title` and `summary`, which
+  the vault index generator treats as canonical) is resolved by the merged schema.
+
+### Known Issues (deferred)
+- Existing session logs in `vault/Session-Logs/` lack the new `date` and `status`
+  fields. They still parse cleanly against `_meta/generate-index.py` (defaults
+  via `.get()`), so no migration is strictly required. A follow-up PR should
+  backfill them and resolve the pre-existing `S002` collision
+  (`S002-Ark-Workflow-Skill.md` vs `S002-Vault-Retrieval-Tiers-Phase1.md` both
+  use session number 2; one should be renumbered to `S003`).
+
 ## [1.5.0] - 2026-04-09
 
 ### Added

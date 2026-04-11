@@ -78,7 +78,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 
 **`/codebase-maintenance`** — Three workflows: code cleanup (dead code, stale scripts), vault sync (map code changes to vault docs), and skill sync (heal drifted skill references). Routes via argument: `code`, `vault`, `skills`, `full`.
 
-**`/notebooklm-vault`** — Bridges the Obsidian vault with Google NotebookLM for persistent cross-session memory. Sub-commands: `setup`, `ask`, `session-continue`, `bootstrap`, `session-handoff`, `audio`, `report`, `conflict-check`, `status`.
+**`/notebooklm-vault`** — Bridges the Obsidian vault with Google NotebookLM for persistent cross-session memory. Sub-commands: `setup`, `ask`, `session-continue`, `bootstrap`, `audio`, `report`, `conflict-check`, `status`. End-of-session workflows (session log, TaskNote updates) are handled by `/wiki-update`.
 
 ### Task Automation
 

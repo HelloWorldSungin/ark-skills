@@ -1,18 +1,21 @@
 ---
-title: "Session: {TITLE}"
+title: "Session {NNN}: {TITLE}"
 type: session-log
 tags:
   - session-log
+  - "S{NNN}"
 summary: ""
+session: "S{NNN}"
+status: complete
+date: {DATE}
 prev: ""
 epic: ""
-session: "S{NNN}"
 source-tasks: []
 created: {DATE}
 last-updated: {DATE}
 ---
 
-# Session: {TITLE}
+# Session {NNN}: {TITLE}
 
 ## Objective
 <!-- What are we trying to accomplish? -->
