@@ -4,7 +4,7 @@ type: meta
 tags:
   - meta
 summary: "Machine-generated flat catalog of all vault pages."
-last-updated: 2026-04-09
+last-updated: 2026-04-10
 ---
 
 # Index
@@ -31,5 +31,6 @@ last-updated: 2026-04-09
 | [[Session-Logs/S002-Ark-Workflow-Skill.md|Session: /ark-workflow Skill Implementation]] | session-log | Implemented /ark-workflow skill: task triage, scenario detection, weight-class skill chains. 11 tasks via subagent-driven-development, shipped v1.2.0. |
 | [[Session-Logs/S002-Vault-Retrieval-Tiers-Phase1.md|Session: Vault Retrieval Tiers Phase 1 Implementation]] | session-log | Implemented T1-T4 multi-backend retrieval for wiki-query: mine-vault.sh, CLAUDE.md tier table, wiki-query rewrite, README update. 4 commits, all reviews passed. |
 | [[Session-Logs/S003-Ark-Workflow-v2-Rewrite.md|Session: /ark-workflow v2 Rewrite]] | session-log | Rewrote /ark-workflow SKILL.md to address 22 gaps: 7 scenarios, risk+density triage, batch triage, continuity mechanism, cross-session resume. Shipped 1.6.0 in 6 phases. |
+| [[Session-Logs/S004-Ark-Workflow-Split.md|Session: /ark-workflow Progressive-Disclosure Split (1.7.0)]] | session-log | Split the 858-line ark-workflow SKILL.md into a 270-line router + 7 chain files + 4 reference files. All 22 v2 gaps + 19 chain variants preserved; 13/13 smoke tests pass. |
 | [[TaskNotes/00-Project-Management-Guide.md|Project Management Guide]] | moc | How task IDs, statuses, and task notes work in the ark-skills project. |
 | [[TaskNotes/Tasks/Epic/Arkskill-001-vault-retrieval-tiers.md|Multi-Backend Vault Retrieval Tiers]] |  |  |
