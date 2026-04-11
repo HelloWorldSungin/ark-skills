@@ -84,7 +84,7 @@ Identify which scenario applies based on the user's request. Ask if ambiguous.
 If the user's intent is ambiguous between audit and hardening, ask:
 > Are you asking for an audit (findings only) or hardening (findings + fixes + ship)?
 
-**Multi-scenario resolution:** If the user's request matches multiple scenarios (e.g., "fix this bug and ship it"), use the primary scenario (bugfix) — the ship phase is included in the bugfix workflow. If the prompt describes multiple distinct tasks (numbered, bulleted, or in prose), use Batch Triage instead (see below).
+**Multi-scenario resolution:** If the user's request matches multiple scenarios (e.g., "fix this bug and ship it"), use the primary scenario (bugfix) — the ship phase is included in the bugfix workflow. If the prompt describes multiple distinct tasks (numbered, bulleted, or in prose), read `references/batch-triage.md` and follow that algorithm instead.
 
 If no pattern matches clearly, ask:
 
@@ -158,7 +158,7 @@ If decision density is unclear:
 
 **Knowledge Capture classification:** Light if syncing recent changes or updating a few pages. Full if catching up after extended period, rebuilding tags, or ingesting external documents.
 
-**Re-triage rule:** If a task reveals more complexity mid-flight (e.g., a "light" bug turns out to involve auth, or an investigation reveals architecture decisions are required), escalate to the appropriate class and pick up the remaining phases from there. Don't restart — just add the phases you would have run. If the scenario itself changes (e.g., Bugfix → Greenfield redesign), see the Re-triage section below for scenario shift handling.
+**Re-triage rule:** If a task reveals more complexity mid-flight (e.g., a "light" bug turns out to involve auth, or an investigation reveals architecture decisions are required), escalate to the appropriate class and pick up the remaining phases from there. Don't restart — just add the phases you would have run. If the scenario itself changes (e.g., Bugfix → Greenfield redesign), see `references/troubleshooting.md` § Re-triage for scenario shift handling.
 
 ## Workflow
 
