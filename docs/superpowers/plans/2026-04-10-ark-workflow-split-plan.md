@@ -79,7 +79,39 @@ The spec § 4 (Phase 2 parity diff) describes both as line-range diffs against b
 
 The routing-template inner-block diff is critical because the fenced block is the actual copy-paste content humans put in their CLAUDE.md files — single-character drift inside that block would silently corrupt every project that uses it. Wrapping it in content-presence grep alone would miss that.
 
-### 4. The L712 vs L713 question
+### 4. `/test-driven-development` post-refactor count is 10, not 12 (spec § 2 Gap 2 arithmetic error)
+
+**Spec issue (flagged, not silently compensated):** Spec § 2 Gap 2 states `grep -rc "/test-driven-development" skills/ark-workflow/` sums to **12** post-refactor. Direct grep against current `SKILL.md` shows **12 occurrences** at lines 282, 436, 461, 497, 511, 585, 598, 626, 645, 677, 698, 751. Of these:
+
+| Line | Location | Fate post-refactor |
+|---|---|---|
+| 282 | Continuity § "Write chain state file" — inside the fenced state-file example body (`3. [ ] /test-driven-development — failing test`) | **DROPPED.** Phase 3 slims Step 6.5; the new inline body uses `[numbered checklist of chain steps, each as `- [ ]`]` as a placeholder, not literal step content. |
+| 436 | Greenfield Medium step 5 | preserved in `chains/greenfield.md` |
+| 461 | Greenfield Heavy step 7 (`/executing-plans` with `/test-driven-development`) | preserved in `chains/greenfield.md` |
+| 497 | Bugfix Medium step 3 | preserved in `chains/bugfix.md` |
+| 511 | Bugfix Heavy step 3 | preserved in `chains/bugfix.md` |
+| 585 | Hygiene Medium step 4 | preserved in `chains/hygiene.md` |
+| 598 | Hygiene Heavy step 5 | preserved in `chains/hygiene.md` |
+| 626 | Migration Medium step 3 | preserved in `chains/migration.md` |
+| 645 | Migration Heavy step 6 | preserved in `chains/migration.md` |
+| 677 | Performance Medium step 3 | preserved in `chains/performance.md` |
+| 698 | Performance Heavy step 7 | preserved in `chains/performance.md` |
+| 751 | Condition Resolution "Example resolved output" block | **DROPPED.** Spec § "Dropped content" explicitly removes the entire L746-759 block. |
+
+**Post-refactor expected total: 10** (all in `chains/`; 0 in main `SKILL.md`; 0 in `references/`).
+
+The spec verification expecting 12 is therefore wrong by 2 — it didn't account for the two intentional drops (one in the slimmed Step 6.5, one in the dropped example block). Both drops are explicitly authorized by the spec elsewhere; the spec just forgot to subtract them from the Gap 2 check.
+
+**Resolution in this plan:**
+- Phase 1a Step 9 sanity grep expects **6** in the first 5 chains (greenfield 2 + bugfix 2 + hygiene 2; ship 0, knowledge-capture 0).
+- Phase 1b Step 7 sanity grep expects **10** total across all 7 chains (the 6 above + migration 2 + performance 2).
+- Phase 5 Appendix D Gap 2 expects **10** total in `skills/ark-workflow/`, with a comment explaining the 2 intentional drops.
+- Phase 4a CHANGELOG and Phase 5 session log describe the count as "10 chain references preserved (2 intentional drops: slimmed Step 6.5 + dropped example block)" instead of "12 references preserved".
+- The original baseline grep (Phase 1a Step 1) still expects 12 in the un-modified `SKILL.md` snapshot — that's the pre-refactor count and is unchanged.
+
+**Recommended spec revision (out of scope for this refactor):** update spec § 2 Gap 2 to expect 10 with the same explanation. Filed as a follow-up.
+
+### 5. The L712 vs L713 question
 
 Spec § 4 says "Reconstruct the original `## Skill Chains` section (current SKILL.md lines 410-712) ... diff the reconstruction against `sed -n '410,712p' /tmp/ark-workflow-SKILL-1.6.0.md`". Verified for this plan: L711 is the last step of Performance Heavy (`18. /claude-history-ingest`), L712 is blank, L713 is the closing `---` separator before Condition Resolution. The slice 410-712 ends at the blank line and **does not include** the closing `---`. The reconstruction script therefore emits no trailing `---` after the Performance section.
 
@@ -466,7 +498,8 @@ grep -q "STOP"                                skills/ark-workflow/chains/hygiene
 ```bash
 ls skills/ark-workflow/chains/
 [ "$(ls skills/ark-workflow/chains/*.md | wc -l)" -eq 5 ]
-grep -rho "/test-driven-development" skills/ark-workflow/chains/ | wc -l   # expect 5 so far
+# Per Spec Clarification § 4: greenfield 2 + bugfix 2 + hygiene 2 + ship 0 + knowledge-capture 0 = 6
+grep -rho "/test-driven-development" skills/ark-workflow/chains/ | wc -l   # expect 6 so far
 grep -rho "/TDD\b"                    skills/ark-workflow/chains/ | wc -l   # expect 0
 ```
 
@@ -700,12 +733,13 @@ Re-run after each fix. Do not advance until PASS.
 
 ```bash
 [ "$(ls skills/ark-workflow/chains/*.md | wc -l)" -eq 7 ]
-grep -rho "/test-driven-development" skills/ark-workflow/chains/ | wc -l   # expect 9 (greenfield 2 + bugfix 2 + hygiene 2 + migration 2 + performance 1)
+# Per Spec Clarification § 4: greenfield 2 + bugfix 2 + hygiene 2 + migration 2 + performance 2 = 10
+# (ship 0, knowledge-capture 0). The other 2 baseline references at L282 and L751 are
+# intentionally dropped by Phase 3 (slimmed Step 6.5 + dropped example resolved output block).
+grep -rho "/test-driven-development" skills/ark-workflow/chains/ | wc -l   # expect 10
 grep -rho "/TDD\b" skills/ark-workflow/chains/ | wc -l                       # expect 0
 grep -l "handoff_marker" skills/ark-workflow/chains/*.md                     # expect 3 files: greenfield, migration, performance
 ```
-
-Note: the precise per-chain `/test-driven-development` count is recorded from the script's PASS run; the global total across `chains/` should match the baseline grep count of 12 minus the 3 instances that live outside the chain section in original SKILL.md (zero — the spec says all 12 are in chain content), so total in `chains/` should be 12. **If the count is 9 instead of 12, re-verify the per-chain counts manually:** greenfield 2, bugfix 2, hygiene 2, migration 2, performance 2, knowledge-capture 0, ship 0 → 10. Wait — that is 10, not 12. The other 2 live in main `SKILL.md` Step 6.5 wording / batch triage step text. Re-derive the expected value from the parity-script PASS output, not from this comment. The Phase 5 final check is `grep -rho '/test-driven-development' skills/ark-workflow/ | wc -l` = 12, summed across main + chains.
 
 ### Step 8: Commit Phase 1b
 
@@ -1436,7 +1470,7 @@ Use the Edit tool. Find the line `## [1.6.0] - 2026-04-09` and prepend a new sec
   - Common-path context load (router + one chain file): 858 → {Y} lines avg ({reduction}%); worst case 858 → {Z} lines ({reduction}%)
   - Chain variants moved to `chains/{scenario}.md` (7 files: greenfield, bugfix, ship, knowledge-capture, hygiene, migration, performance)
   - Pay-per-use content moved to `references/{batch-triage,continuity,troubleshooting,routing-template}.md`
-  - Behavioral parity: all 22 v2 gaps preserved, all 19 chain variants preserved, 12 `/test-driven-development` references preserved, 0 `/TDD` references
+  - Behavioral parity: all 22 v2 gaps preserved, all 19 chain variants preserved, 10 `/test-driven-development` references preserved in chains/ (2 baseline references at SKILL.md L282 and L751 were intentionally dropped by Phase 3 — slimmed Step 6.5 and removed example block; see Spec Clarification § 4 in the plan), 0 `/TDD` references
   - File count in `skills/ark-workflow/`: 1 → 12
   - Total repo footprint: 858 → {W} lines ({delta} lines, intentional on-disk overhead in exchange for context-load savings)
   - Dropped the Condition Resolution "Example resolved output" block (14 lines, illustrative only)
@@ -1650,7 +1684,7 @@ Reduce per-invocation context load on the common path by ≥ 50% by splitting th
 **Behavioral parity:**
 - 22/22 v2 gaps preserved (Appendix D check PASS)
 - 19/19 chain variants preserved (Appendix E H2 assertions PASS)
-- 12 `/test-driven-development` references preserved, 0 `/TDD` references
+- 10 `/test-driven-development` references preserved in chains/, 0 `/TDD` references (2 baseline references intentionally dropped per Phase 3 — see Spec Clarification § 4)
 - handoff_marker total occurrences = baseline (gap C6 PASS)
 
 **Parity diffs:**
@@ -2348,7 +2382,12 @@ Run from the repo root after Phase 5 Step 1. Every check must exit 0 (or print P
 grep -l "Root cause consolidation" skills/ark-workflow/references/batch-triage.md
 
 # Gap 2 — /TDD → /test-driven-development
-[ "$(grep -rho '/test-driven-development' skills/ark-workflow/ | wc -l)" -eq 12 ] || echo "FAIL gap 2: /test-driven-development total != 12"
+# Per Spec Clarification § 4 (spec arithmetic correction): post-refactor count is 10,
+# not 12. The two baseline references at SKILL.md L282 (chain state file example) and
+# L751 (Condition Resolution example resolved output) are intentionally dropped by
+# Phase 3 — both drops are explicitly authorized elsewhere in the spec (slimmed Step 6.5
+# + dropped example block). Spec § 2 Gap 2 expecting 12 is a spec arithmetic error.
+[ "$(grep -rho '/test-driven-development' skills/ark-workflow/ | wc -l)" -eq 10 ] || echo "FAIL gap 2: /test-driven-development total != 10 (see Spec Clarification § 4)"
 [ "$(grep -rho '/TDD\b'                   skills/ark-workflow/ | wc -l)" -eq 0  ] || echo "FAIL gap 2: /TDD references present"
 
 # Gap 3 — /investigate in Hygiene
