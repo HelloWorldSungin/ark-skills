@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - 2026-04-10
+
+### Changed
+- **ark-workflow**: Progressive-disclosure split of the monolithic router
+  - Main `SKILL.md`: 858 → 270 lines (68.5%)
+  - Common-path context load (router + one chain file): 858 → ~313 lines avg (63.5%); worst case (Greenfield) 858 → 334 lines (61.1%); best case (Ship) 858 → 280 lines (67.4%)
+  - Chain variants moved to `chains/{scenario}.md` (7 files: greenfield, bugfix, ship, knowledge-capture, hygiene, migration, performance)
+  - Pay-per-use content moved to `references/{batch-triage,continuity,troubleshooting,routing-template}.md`
+  - Behavioral parity: all 22 v2 gaps preserved, all 19 chain variants preserved, 10 `/test-driven-development` references preserved in chains/ (2 baseline references at SKILL.md L282 and L751 were intentionally dropped by Phase 3 — slimmed Step 6.5 and removed example block), 0 `/TDD` references
+  - File count in `skills/ark-workflow/`: 1 → 12
+  - Total repo footprint: 858 → 833 lines (−25 net — the progressive-disclosure split is a net shrink on disk AND a major context-load win)
+  - Dropped the Condition Resolution "Example resolved output" block (14 lines, illustrative only)
+
 ## [1.6.0] - 2026-04-09
 
 ### Changed
