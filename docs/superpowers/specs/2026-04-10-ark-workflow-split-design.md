@@ -133,7 +133,7 @@ To:
 >
 > If security hardening triggered mandatory early `/cso`, apply the dedup rule documented at the bottom of `chains/hygiene.md`.
 
-Current L413-712 Skill Chains section (298 lines of 19 chain variants, spanning the `## Skill Chains` header through the Performance Heavy closing separator) is **deleted** from main.
+Current L410-712 Skill Chains section is **deleted** from main: L410 is the `## Skill Chains` header, L414 is the first scenario sub-header (`### Greenfield Feature`), and L712 is the Performance Heavy closing separator. The 19 chain variants span L414-711 (298 lines of variant content).
 
 #### Step 6.5 — Activate Continuity (slimmed to ~18 inline lines)
 
@@ -388,11 +388,11 @@ workflow history. This rule also appears in abbreviated form inline in main Step
 ## Session Handoff — Per-Scenario Guidance
 {current L761-774 verbatim — per-Heavy-scenario handoff points, plus "don't rely on tool-call counts" reminder.}
 
-Only four chain variants use inline `handoff_marker` values: Greenfield Medium step 3, Greenfield Heavy step 5, Migration Heavy step 4, Performance Heavy step 5. Heavy Bugfix step 2 and Heavy Hygiene step 3 have prose pivot escape hatches inline in their chain files but do NOT set `handoff_marker`. For `handoff_marker` mechanics (setting, resuming, rehydration on session start), see `references/continuity.md#handoff-markers`.
-
 ## When Things Go Wrong
 {current L776-789 verbatim — all 10 failure-recovery entries}
 ```
+
+**Pure consolidation, no additions.** The troubleshooting.md body content is the text-verbatim concatenation of three baseline ranges (L761-774 + L776-789 + L791-812) with no added prose, cross-references, or commentary. The Phase 2 parity diff (Verification § 4) checks this against the baseline concatenation and aborts on any drift. The "Bugfix/Hygiene do not use handoff_marker" invariant that previously appeared as an added paragraph here has been removed — the invariant is documented in this spec (Chain file format § Handoff markers) and enforced by the Gap 5 verification grep, not by inline runtime prose.
 
 ### 4. `references/routing-template.md` (~45 lines)
 
@@ -418,7 +418,7 @@ The /ark-workflow skill is already available globally via the ark-skills plugin.
 
 ### Cross-reference DAG
 
-The new layout forms a one-way DAG with no cycles:
+The new layout forms a strict tree fanning out from main with no cycles and no inter-reference edges:
 
 ```
 main SKILL.md
@@ -426,20 +426,17 @@ main SKILL.md
  ├── references/batch-triage.md           (Step 2)
  ├── references/continuity.md             (Step 6.5)
  ├── references/troubleshooting.md        (When Things Change ×3)
- └── references/routing-template.md       (Routing Rules Template section)
-
-references/troubleshooting.md
- └── references/continuity.md             (Session Handoff → handoff_marker mechanics)
+ └── references/routing-template.md       (Routing Rules Template section pointer)
 ```
 
 **Invariants:**
 - Main `SKILL.md` is the only file that points into `chains/`
 - Main `SKILL.md` points into all 4 reference files (5 specific pointer sites total)
 - Chain files never point to other chain files or `references/`
-- Only one inter-reference link exists: `troubleshooting.md → continuity.md` (for handoff_marker mechanics)
+- **No inter-reference edges:** `references/` files are independent of each other. Earlier drafts contemplated a `troubleshooting.md → continuity.md` cross-link for handoff_marker mechanics, but that would require either an addition to the pure-consolidation of troubleshooting.md (breaking the parity diff) or a normalization rule in the reconstruction script (adding complexity without commensurate benefit). The agent can reach `continuity.md` from main's File Map or Step 6.5 pointer; it does not need a reference-to-reference shortcut.
 - No reference file or chain file points back to main
 
-This makes the edit mental model trivial: editing a chain file cannot break anything outside that file; editing main requires preserving 5 pointer sites + 7 chain filenames; editing a reference file cannot break main.
+This strict tree makes the edit mental model trivial: editing a chain file cannot break anything outside that file; editing main requires preserving 5 pointer sites + 7 chain filenames; editing a reference file cannot break main, chains, or other references.
 
 ### Dropped content
 
@@ -515,7 +512,7 @@ Every v2 gap must still have observable content in the new layout. The implement
 | 2. `/TDD` → `/test-driven-development` | All chain files | `grep -rc "/test-driven-development" skills/ark-workflow/` sums to **12**; `grep -rc "/TDD\b"` sums to **0** |
 | 3. `/investigate` in Hygiene | `chains/hygiene.md` | `grep -c "/investigate" chains/hygiene.md` ≥ **3** |
 | 4. Migration + Performance scenarios | `chains/migration.md`, `chains/performance.md` | Both files exist; each has 3 H2 variant headers |
-| 5. Session handoff for non-Greenfield Heavy | Inline `handoff_marker` values in `chains/greenfield.md`, `chains/migration.md`, `chains/performance.md`; prose pivot escape hatches inline in `chains/bugfix.md` and `chains/hygiene.md`; per-scenario handoff point summary in `references/troubleshooting.md` | `grep -l "handoff_marker" skills/ark-workflow/chains/greenfield.md skills/ark-workflow/chains/migration.md skills/ark-workflow/chains/performance.md` finds all 3; `grep -l "pivot to Heavy Greenfield\|pivot to Heavy Greenfield from step 1" skills/ark-workflow/chains/bugfix.md skills/ark-workflow/chains/hygiene.md` finds both; `grep -l "Session Handoff" skills/ark-workflow/references/troubleshooting.md` |
+| 5. Session handoff for non-Greenfield Heavy | Inline `handoff_marker` values in `chains/greenfield.md`, `chains/migration.md`, `chains/performance.md`; prose pivot escape hatches inline in `chains/bugfix.md` and `chains/hygiene.md` (using the exact wording from current 1.6.0 — Bugfix uses "pivot to Heavy Greenfield from step 1", Hygiene uses "escalate to Heavy Greenfield"); per-scenario handoff point summary in `references/troubleshooting.md` | `grep -l "handoff_marker" skills/ark-workflow/chains/greenfield.md skills/ark-workflow/chains/migration.md skills/ark-workflow/chains/performance.md` finds all 3; `grep -l "pivot to Heavy Greenfield" skills/ark-workflow/chains/bugfix.md` finds it; `grep -l "escalate to Heavy Greenfield" skills/ark-workflow/chains/hygiene.md` finds it; `grep -l "Session Handoff" skills/ark-workflow/references/troubleshooting.md` |
 | 6. Risk-primary + density triage | main `SKILL.md` Triage section | `grep -c "Risk sets the floor" SKILL.md` ≥ 1 |
 | 7. Scenario-shift re-triage | `references/troubleshooting.md` | `grep -l "Scenario shift" references/troubleshooting.md` |
 | 8. Knowledge Capture Light/Full | `chains/knowledge-capture.md` | `grep -c "^## " chains/knowledge-capture.md` = **2** |
@@ -633,7 +630,7 @@ Reconstruct each reference file's corresponding slice of the original:
 
 ### 5. Smoke tests — mental walkthrough
 
-These validate that the new layout produces the same triage output as the current monolithic `SKILL.md` would, given identical Project Discovery inputs. Twelve tests total, covering single-item paths for each scenario plus batch, security, decision-density, and cross-session resume edge cases.
+These validate that the new layout produces the same triage output as the current monolithic `SKILL.md` would, given identical Project Discovery inputs. Thirteen tests total, covering single-item paths for each scenario plus batch, security, decision-density, and cross-session resume (happy path + stale) edge cases.
 
 | # | Test | Expected triage path | Files the agent loads |
 |---|---|---|---|
