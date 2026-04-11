@@ -29,7 +29,7 @@
 6. `/ark-code-review --quick` → `/simplify`
 7. `/ship` → `/land-and-deploy`
 8. `/canary` (if deploy risk)
-9. `/wiki-update` (if vault) + session log
+9. `/wiki-update` (if vault)
 
 ## Heavy
 
@@ -42,7 +42,7 @@
 7. `/ark-code-review --thorough` + `/codex` → `/simplify`
 8. `/ship` → `/land-and-deploy`
 9. `/canary` (if deploy risk)
-10. `/wiki-update` (if vault) + session log
+10. `/wiki-update` (if vault)
 11. `/claude-history-ingest`
 
 ## Dedup rule

@@ -113,11 +113,12 @@ For writing notes, invoke the `obsidian:obsidian-markdown` skill to ensure prope
 </step_5>
 
 <step_6>
-<title>Check Session Logs</title>
+<title>Check Session Logs (delegate to /wiki-update)</title>
+<description>Session log creation and updates are owned by `/wiki-update`. This workflow no longer drafts session logs directly — it only notes whether one is needed so the sync plan can remind the user to run `/wiki-update` after sync.</description>
 <actions>
-<action>Use `obsidian read file="00-Session-Logs-Index"` for the latest session number</action>
-<action>Check if the work on this branch should be captured in a session log</action>
-<action>If a new session log is needed, note it in the sync plan</action>
+<action>Check if the work on this branch warrants a session log (substantive changes, decisions made, experiments run).</action>
+<action>If yes, note in the sync plan: "Run `/wiki-update` after vault sync — it will create/update the session log using the canonical merged schema, update linked TaskNote epic/stories, and extract compiled insights in one pass."</action>
+<action>Do NOT draft session log content here. `/wiki-update` owns the create-vs-continuation decision, frontmatter schema, and TaskNote epic/story updates.</action>
 </actions>
 </step_6>
 
@@ -147,9 +148,10 @@ Show the sync plan:
 | # | Task | Current Status | Suggested Status | Reason |
 |---|------|---------------|-----------------|--------|
 
-### SESSION LOG
-| # | Action | Details |
-|---|--------|---------|
+### SESSION LOG (delegated to /wiki-update)
+| # | Needed | Reason |
+|---|--------|--------|
+<!-- If any row: remind user to run `/wiki-update` after this sync — it owns session log creation and TaskNote updates. Do not draft content here. -->
 
 ### LAYOUT CHANGES
 | # | Change | Details |
@@ -173,7 +175,7 @@ After vault changes are applied, sync to NotebookLM via `/notebooklm-vault` skil
 <action>For STALE notes: Read → Edit stale fields → update `last-updated` frontmatter</action>
 <action>For MISSING notes: Read matching template from `_Templates/` → populate with current data → write to correct path</action>
 <action>For TASKNOTES: Update task status and add relevant notes</action>
-<action>For SESSION LOGS: Draft session log with branch summary, changes, and decisions</action>
+<action>For SESSION LOGS: Do NOT draft a session log here. After this workflow finishes, run `/wiki-update` — it owns session log create/update, TaskNote epic/story sync, and compiled insight extraction.</action>
 <action>For LAYOUT CHANGES: Update the vault_layout section in this workflow file</action>
 <action>Add wikilinks from parent MOC notes to any newly created notes</action>
 <action>Preserve existing wikilinks, callouts, and structure — only update drifted content</action>
