@@ -14,7 +14,7 @@ last-updated: 2026-04-10
 | Page | Type | Summary |
 |------|------|---------|
 | [[00-Home.md|Ark Skills Knowledge Base]] | moc | Navigation hub for ark-skills: links to project areas and key resources. |
-| [[Compiled-Insights/Development-Workflow-Patterns.md|Development Workflow Patterns]] | compiled-insight | Established workflow: brainstorm → spec → codex review → plan → implement. Audit-first for restructuring. NotebookLM for vault queries over reading files. |
+| [[Compiled-Insights/Development-Workflow-Patterns.md|Development Workflow Patterns]] | compiled-insight | Workflow patterns: brainstorm→spec→codex→plan→implement, audit-first, NotebookLM queries, risk-primary triage with density escalation, hybrid TodoWrite+file continuity. |
 | [[Compiled-Insights/Dogfooding-Driven-Skill-Development.md|Dogfooding-Driven Skill Development]] | compiled-insight | The most effective way to develop skills is to use them on the plugin's own repo — wiki-setup grew from 10 to 13 steps after dogfooding. |
 | [[Compiled-Insights/Ecosystem-Architecture-Map.md|Ecosystem Architecture Map]] | compiled-insight | The Ark ecosystem connects 7 repos via shared skills plugin, Obsidian vaults synced to NotebookLM, Linear via linear-updater, and Proxmox homelab infrastructure. |
 | [[Compiled-Insights/MemPalace-Integration-Architecture.md|MemPalace Integration Architecture]] | compiled-insight | claude-history-ingest wraps mempalace with custom hooks and three modes (index/compile/full) — NOT using mempalace's built-in hooks, which are too intrusive. |
@@ -30,5 +30,7 @@ last-updated: 2026-04-10
 | [[Session-Logs/S001-MemPalace-Integration.md|Session: MemPalace Integration for claude-history-ingest]] | session-log | Implemented MemPalace (ChromaDB) backend for claude-history-ingest: Stop hook, installer, SKILL.md rewrite, shipped v1.1.0-1.1.2. |
 | [[Session-Logs/S002-Ark-Workflow-Skill.md|Session: /ark-workflow Skill Implementation]] | session-log | Implemented /ark-workflow skill: task triage, scenario detection, weight-class skill chains. 11 tasks via subagent-driven-development, shipped v1.2.0. |
 | [[Session-Logs/S002-Vault-Retrieval-Tiers-Phase1.md|Session: Vault Retrieval Tiers Phase 1 Implementation]] | session-log | Implemented T1-T4 multi-backend retrieval for wiki-query: mine-vault.sh, CLAUDE.md tier table, wiki-query rewrite, README update. 4 commits, all reviews passed. |
+| [[Session-Logs/S003-Ark-Workflow-v2-Rewrite.md|Session: /ark-workflow v2 Rewrite]] | session-log | Rewrote /ark-workflow SKILL.md to address 22 gaps: 7 scenarios, risk+density triage, batch triage, continuity mechanism, cross-session resume. Shipped 1.6.0 in 6 phases. |
+| [[Session-Logs/S004-Ark-Workflow-Split.md|Session: /ark-workflow Progressive-Disclosure Split (1.7.0)]] | session-log | Split the 858-line ark-workflow SKILL.md into a 270-line router + 7 chain files + 4 reference files. All 22 v2 gaps + 19 chain variants preserved; 13/13 smoke tests pass. |
 | [[TaskNotes/00-Project-Management-Guide.md|Project Management Guide]] | moc | How task IDs, statuses, and task notes work in the ark-skills project. |
 | [[TaskNotes/Tasks/Epic/Arkskill-001-vault-retrieval-tiers.md|Multi-Backend Vault Retrieval Tiers]] |  |  |

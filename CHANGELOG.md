@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.6.0] - 2026-04-10
+## [1.8.0] - 2026-04-10
 
 ### Changed
 - **`/wiki-update` is now the single end-of-session workflow.** Previously a
@@ -17,9 +17,10 @@ All notable changes to this project will be documented in this file.
   `created`, `last-updated`. The template's prior `title: "Session: {TITLE}"`
   (missing the session number) is fixed. `vault/_meta/vault-schema.md` type-specific
   fields row updated to document `date` and `status`.
-- `skills/ark-workflow/SKILL.md` — the Medium and Heavy Hygiene chains previously
-  ended with `/wiki-update (if vault) + session log`. The `+ session log` suffix
-  is dropped because session log creation is now implicit in `/wiki-update`.
+- `skills/ark-workflow/` — Hygiene chains previously ended with `/wiki-update
+  (if vault) + session log`. The `+ session log` suffix is dropped in the
+  progressive-disclosure chain files because session log creation is now
+  implicit in `/wiki-update`.
 - `CLAUDE.md` (plugin) — `/wiki-update` and `/notebooklm-vault` skill descriptions
   updated to reflect the new split of responsibility.
 
@@ -36,12 +37,45 @@ All notable changes to this project will be documented in this file.
   the vault index generator treats as canonical) is resolved by the merged schema.
 
 ### Known Issues (deferred)
-- Existing session logs in `vault/Session-Logs/` lack the new `date` and `status`
-  fields. They still parse cleanly against `_meta/generate-index.py` (defaults
-  via `.get()`), so no migration is strictly required. A follow-up PR should
-  backfill them and resolve the pre-existing `S002` collision
-  (`S002-Ark-Workflow-Skill.md` vs `S002-Vault-Retrieval-Tiers-Phase1.md` both
-  use session number 2; one should be renumbered to `S003`).
+- Existing session logs in `vault/Session-Logs/` (S001, S002×2, S003, S004) lack
+  the new `date` and `status` fields. They still parse cleanly against
+  `_meta/generate-index.py` (defaults via `.get()`), so no migration is strictly
+  required. A follow-up PR should backfill them and resolve the pre-existing
+  `S002` numbering collision (`S002-Ark-Workflow-Skill.md` vs
+  `S002-Vault-Retrieval-Tiers-Phase1.md` both use session number 2).
+
+## [1.7.0] - 2026-04-10
+
+### Changed
+- **ark-workflow**: Progressive-disclosure split of the monolithic router
+  - Main `SKILL.md`: 858 → 270 lines (68.5%)
+  - Common-path context load (router + one chain file): 858 → ~313 lines avg (63.5%); worst case (Greenfield) 858 → 334 lines (61.1%); best case (Ship) 858 → 280 lines (67.4%)
+  - Chain variants moved to `chains/{scenario}.md` (7 files: greenfield, bugfix, ship, knowledge-capture, hygiene, migration, performance)
+  - Pay-per-use content moved to `references/{batch-triage,continuity,troubleshooting,routing-template}.md`
+  - Behavioral parity: all 22 v2 gaps preserved, all 19 chain variants preserved, 10 `/test-driven-development` references preserved in chains/ (2 baseline references at SKILL.md L282 and L751 were intentionally dropped by Phase 3 — slimmed Step 6.5 and removed example block), 0 `/TDD` references
+  - File count in `skills/ark-workflow/`: 1 → 12
+  - Total repo footprint: 858 → 833 lines (−25 net — the progressive-disclosure split is a net shrink on disk AND a major context-load win)
+  - Dropped the Condition Resolution "Example resolved output" block (14 lines, illustrative only)
+
+## [1.6.0] - 2026-04-09
+
+### Changed
+- **ark-workflow**: Major rewrite of the task triage skill addressing 22 gaps (12 initial + 10 from Codex review)
+  - Expanded from 5 to 7 scenarios: added Migration and Performance as first-class scenarios
+  - Replaced factor-matrix triage with risk-primary + decision-density escalation (Heavy risk stays Heavy; architecture decisions escalate Light → Heavy)
+  - Added Batch Triage for multi-item prompts with root cause consolidation, dependency heuristics, and per-group execution plans
+  - Added Continuity mechanism: TodoWrite tasks + `.ark-workflow/current-chain.md` state file for in-session and cross-session chain tracking, with handoff markers, stale-chain detection, and context recovery after compaction
+  - Added Hygiene Audit-Only variant for assessment-only requests (no implementation/ship forced)
+  - Split security routing into Audit and Hardening paths, with `/cso` dedup rule (`/cso` runs exactly once per chain)
+  - Added `/investigate` as conditional step in Hygiene chains for bug-like items
+  - Added session handoff guidance for Heavy Bugfix, Hygiene, Migration, and Performance
+  - Added scenario-shift re-triage handling with pivot examples
+  - Fixed `/TDD` naming to `/test-driven-development` across all chains
+  - Rewrote Routing Rules Template with session-resume block and new-task triggers for 7 scenarios
+
+### Fixed
+- ark-workflow: removed unreliable "10 tool calls since last file read" handoff trigger (output quality signals replace it)
+- ark-workflow: Knowledge Capture now has Light/Full split instead of one-size-fits-all chain
 
 ## [1.5.0] - 2026-04-09
 
