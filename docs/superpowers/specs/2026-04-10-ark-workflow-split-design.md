@@ -379,20 +379,20 @@ workflow history. This rule also appears in abbreviated form inline in main Step
 ```markdown
 # Troubleshooting — When Things Change or Break
 
-## Re-triage
-### Weight escalation
-{current L793-799 verbatim}
-### Scenario shift
-{current L801-812 verbatim — pivot examples: Bugfix→Greenfield, Performance→Migration, Hygiene→Bugfix}
-
 ## Session Handoff — Per-Scenario Guidance
 {current L761-774 verbatim — per-Heavy-scenario handoff points, plus "don't rely on tool-call counts" reminder.}
 
 ## When Things Go Wrong
 {current L776-789 verbatim — all 10 failure-recovery entries}
+
+## Re-triage
+### Weight escalation
+{current L793-799 verbatim}
+### Scenario shift
+{current L801-812 verbatim — pivot examples: Bugfix→Greenfield, Performance→Migration, Hygiene→Bugfix}
 ```
 
-**Pure consolidation, no additions.** The troubleshooting.md body content is the text-verbatim concatenation of three baseline ranges (L761-774 + L776-789 + L791-812) with no added prose, cross-references, or commentary. The Phase 2 parity diff (Verification § 4) checks this against the baseline concatenation and aborts on any drift. The "Bugfix/Hygiene do not use handoff_marker" invariant that previously appeared as an added paragraph here has been removed — the invariant is documented in this spec (Chain file format § Handoff markers) and enforced by the Gap 5 verification grep, not by inline runtime prose.
+**Pure consolidation, no additions, baseline order preserved.** The troubleshooting.md body content is the text-verbatim concatenation of three baseline ranges in the exact order they appear in current SKILL.md: Session Handoff (L761-774) → When Things Go Wrong (L776-789) → Re-triage (L791-812). The section order matches the baseline line order so that the Phase 2 parity diff (Verification § 4) is a direct diff against `sed -n '761,774p' + sed -n '776,789p' + sed -n '791,812p'` with no reordering required. No added prose, no cross-references, no commentary. The "Bugfix/Hygiene do not use handoff_marker" invariant that previously appeared as an added paragraph has been removed — the invariant is documented in this spec (Chain file format § Handoff markers) and enforced by the Gap 5 verification grep, not by inline runtime prose.
 
 ### 4. `references/routing-template.md` (~45 lines)
 
