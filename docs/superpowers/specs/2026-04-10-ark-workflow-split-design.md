@@ -20,7 +20,7 @@ Breaking down the current file by actual usage:
 | Core router (Project Discovery, Scenario Detection, Triage, Workflow algorithm, Condition Resolution) | ~258 | every triage |
 | Batch Triage | 87 | only when multi-item prompt detected |
 | Continuity protocols | 121 | mostly pay-per-use (batch mode, cross-session resume, handoff markers, stale detection, compaction recovery) — only ~18 lines are common path |
-| Chain variants (19 across 7 scenarios) | 302 | only one variant matches any given triage |
+| Chain variants (19 across 7 scenarios) | 298 | only one variant matches any given triage |
 | Routing Rules Template | 45 | never runtime — it is a copy-paste block for project CLAUDE.md files |
 | Session Handoff + When Things Go Wrong + Re-triage details + Condition Resolution example | 64 | only consulted on mid-flight events |
 | Structural overhead (headers, separators, blank lines) | ~81 | — |
@@ -31,7 +31,7 @@ Only ~31% of the current file's bytes are truly common path. The rest is load-on
 ## Goals
 
 1. **Reduce per-invocation context load by ≥50% on the single-item common path.** This is the forcing function. Every design decision is judged against it.
-2. **Preserve behavioral parity.** All 22 v2 gaps stay addressed. All 19 chain variants stay byte-exact in content. All 7 scenarios stay. Security routing split, Hygiene Audit-Only, `/cso` dedup rule, Batch Triage, Continuity protocols, scenario-shift re-triage, and cross-session resume all stay intact.
+2. **Preserve behavioral parity.** All 22 v2 gaps stay addressed. All 19 chain variants stay **text-verbatim** in their step content (see Chain file format § Content preservation rules for the exhaustive list of permitted structural changes). All 7 scenarios stay. Security routing split, Hygiene Audit-Only, `/cso` dedup rule, Batch Triage, Continuity protocols, scenario-shift re-triage, and cross-session resume all stay intact.
 3. **Keep main `SKILL.md` ≤ 400 lines** (hard cap with a documented-deviation exit). Target ~285 lines.
 4. **Use idiomatic progressive disclosure** — the standard Claude Code skill pattern of main router + sub-files, matching how the superpowers skills are organized.
 
@@ -69,7 +69,7 @@ skills/ark-workflow/
 
 | File | Lines | Derivation |
 |---|---|---|
-| Main `SKILL.md` | ~285 | Frontmatter (4) + header+purpose (5) + Project Discovery (48) + Scenario Detection (42) + Triage (63) + Workflow Steps (42) + Condition Resolution minus example (31) + slim Step 6.5 inline (18 lines inside Workflow) + When Things Change new (12) + Routing Rules pointer (3) + File Map (10) + structural whitespace (~7) |
+| Main `SKILL.md` | ~285 | Frontmatter (4) + header+purpose (5) + Project Discovery (48) + Scenario Detection (42) + Triage (63) + Workflow Steps (42, which already includes the ~18-line slim Step 6.5 inline block) + Condition Resolution minus example (31) + When Things Change new (12) + Routing Rules pointer (3) + File Map (10) + structural whitespace (~25). Sum: 285. |
 | `chains/` total | ~318 | Sum of 7 scenario chain files, avg 45 lines/scenario |
 | `references/` total | ~290 | batch-triage (95) + continuity (100) + troubleshooting (50) + routing-template (45) |
 | **Grand total** | **~893** | +35 lines vs current 858 (structural file headers + 1-line pointer glue) |
@@ -133,11 +133,11 @@ To:
 >
 > If security hardening triggered mandatory early `/cso`, apply the dedup rule documented at the bottom of `chains/hygiene.md`.
 
-Current L410-712 Skill Chains section (302 lines of 19 chain variants) is **deleted** from main.
+Current L413-712 Skill Chains section (298 lines of 19 chain variants, spanning the `## Skill Chains` header through the Performance Heavy closing separator) is **deleted** from main.
 
 #### Step 6.5 — Activate Continuity (slimmed to ~18 inline lines)
 
-Replaces current L401-408 (Step 6.5 preamble) + inline frontmatter example:
+Replaces current L401-406 (the existing Step 6.5 bullet list in Workflow Steps) and pulls in a slimmed subset of the Continuity frontmatter schema currently at L264-291 (inside the `## Continuity` section). The result is a self-contained Step 6.5 that the agent can execute without a second Read:
 
 ```markdown
 ### Step 6.5: Activate Continuity
@@ -282,7 +282,9 @@ If security hardening triggers mandatory early `/cso` (before the chain starts),
 
 ### Handoff markers and dedup rule placement
 
-- **Inline `handoff_marker` markers** stay inside the step they trigger on (Greenfield M step 3, Greenfield H step 5, Migration H step 4, Performance H step 5, Heavy Bugfix step 2 pivot, Heavy Hygiene step 3 pivot). No separate "## Handoff" sub-section.
+- **Inline `handoff_marker` values** stay inside the step that sets them, text-verbatim from the current SKILL.md. Only four variants have explicit `handoff_marker` values: Greenfield Medium step 3 (`after-step-3`), Greenfield Heavy step 5 (`after-step-5`), Migration Heavy step 4 (`after-step-4`), Performance Heavy step 5 (`after-step-5`). These live inline in `chains/greenfield.md`, `chains/migration.md`, and `chains/performance.md`. No separate `## Handoff` sub-section in any chain file.
+- **Prose pivot escape hatches** — the existing Heavy Bugfix step 2 ("If investigation reveals architectural redesign is needed...") and Heavy Hygiene step 3 ("If audit + investigation reveals systemic issues requiring rewrite...") — stay inline as prose text-verbatim. They are **not** `handoff_marker` assignments; the current SKILL.md does not use `handoff_marker` for these cases, and the refactor must not introduce it.
+- **Per-scenario handoff point summary** (the bullet list from current SKILL.md L761-774 that cross-references these inline locations) moves to `references/troubleshooting.md#session-handoff` — see References section below.
 - **Dedup rule** lives at the bottom of `chains/hygiene.md` only (shown above). Main `SKILL.md` Step 4 references it by pointing at the file.
 
 ### What chain files do NOT contain
@@ -384,7 +386,9 @@ workflow history. This rule also appears in abbreviated form inline in main Step
 {current L801-812 verbatim — pivot examples: Bugfix→Greenfield, Performance→Migration, Hygiene→Bugfix}
 
 ## Session Handoff — Per-Scenario Guidance
-{current L761-774 verbatim — per-Heavy-scenario handoff points, plus "don't rely on tool-call counts" reminder. Chain files carry inline handoff_marker values; this section exists for the cross-reference view.}
+{current L761-774 verbatim — per-Heavy-scenario handoff points, plus "don't rely on tool-call counts" reminder.}
+
+Only four chain variants use inline `handoff_marker` values: Greenfield Medium step 3, Greenfield Heavy step 5, Migration Heavy step 4, Performance Heavy step 5. Heavy Bugfix step 2 and Heavy Hygiene step 3 have prose pivot escape hatches inline in their chain files but do NOT set `handoff_marker`. For `handoff_marker` mechanics (setting, resuming, rehydration on session start), see `references/continuity.md#handoff-markers`.
 
 ## When Things Go Wrong
 {current L776-789 verbatim — all 10 failure-recovery entries}
@@ -474,7 +478,8 @@ Not common path: `references/batch-triage.md` (only multi-item), `references/con
 - Main `SKILL.md` > 400 lines
 - Common-path average > 386 lines
 - Any behavioral-parity gap check FAILs
-- Any of the 7 smoke tests produces divergent triage output vs current `SKILL.md`
+- Any of the post-extraction parity diffs (Section 4) produces a non-empty diff after normalization
+- Any smoke test (Section 5) produces divergent triage output vs current `SKILL.md`
 
 ## Verification plan
 
@@ -510,7 +515,7 @@ Every v2 gap must still have observable content in the new layout. The implement
 | 2. `/TDD` → `/test-driven-development` | All chain files | `grep -rc "/test-driven-development" skills/ark-workflow/` sums to **12**; `grep -rc "/TDD\b"` sums to **0** |
 | 3. `/investigate` in Hygiene | `chains/hygiene.md` | `grep -c "/investigate" chains/hygiene.md` ≥ **3** |
 | 4. Migration + Performance scenarios | `chains/migration.md`, `chains/performance.md` | Both files exist; each has 3 H2 variant headers |
-| 5. Session handoff for non-Greenfield Heavy | Inline `handoff_marker` in chain files | `grep -l "handoff_marker" chains/bugfix.md chains/hygiene.md chains/migration.md chains/performance.md` finds all 4 |
+| 5. Session handoff for non-Greenfield Heavy | Inline `handoff_marker` values in `chains/greenfield.md`, `chains/migration.md`, `chains/performance.md`; prose pivot escape hatches inline in `chains/bugfix.md` and `chains/hygiene.md`; per-scenario handoff point summary in `references/troubleshooting.md` | `grep -l "handoff_marker" skills/ark-workflow/chains/greenfield.md skills/ark-workflow/chains/migration.md skills/ark-workflow/chains/performance.md` finds all 3; `grep -l "pivot to Heavy Greenfield\|pivot to Heavy Greenfield from step 1" skills/ark-workflow/chains/bugfix.md skills/ark-workflow/chains/hygiene.md` finds both; `grep -l "Session Handoff" skills/ark-workflow/references/troubleshooting.md` |
 | 6. Risk-primary + density triage | main `SKILL.md` Triage section | `grep -c "Risk sets the floor" SKILL.md` ≥ 1 |
 | 7. Scenario-shift re-triage | `references/troubleshooting.md` | `grep -l "Scenario shift" references/troubleshooting.md` |
 | 8. Knowledge Capture Light/Full | `chains/knowledge-capture.md` | `grep -c "^## " chains/knowledge-capture.md` = **2** |
@@ -523,7 +528,7 @@ Every v2 gap must still have observable content in the new layout. The implement
 | C3. Grouping into parallel / sequential / separate-session | `references/batch-triage.md` | `grep -l "parallel groups\|sequential chains" references/batch-triage.md` |
 | C4. Cross-session continuity mechanism | `references/continuity.md` | `grep -l "Cross-Session Continuity" references/continuity.md` |
 | C5. Rehydrate TodoWrite protocol | `references/continuity.md` | `grep -l "Rehydrate" references/continuity.md` |
-| C6. `handoff_marker` logic | `references/continuity.md` + chain files | `grep -rc "handoff_marker" skills/ark-workflow/` ≥ same count as current |
+| C6. `handoff_marker` logic | `references/continuity.md` (mechanics) + inline values in 3 chain files (greenfield, migration, performance) | `TOTAL_NEW=$(grep -rho "handoff_marker" skills/ark-workflow/ \| wc -l); TOTAL_BASELINE=$(grep -ho "handoff_marker" /tmp/ark-workflow-SKILL-1.6.0.md \| wc -l); [ "$TOTAL_NEW" -eq "$TOTAL_BASELINE" ]` (total occurrences equal to baseline capture) |
 | C7. Stale chain detection | `references/continuity.md` | `grep -l "Stale Chain" references/continuity.md` |
 | C8. Context recovery after compaction | `references/continuity.md` | `grep -l "Context Recovery" references/continuity.md` |
 | C9. Hygiene Audit-Only variant | `chains/hygiene.md` | `grep -c "^## Audit-Only" chains/hygiene.md` = 1 |
@@ -532,33 +537,59 @@ Every v2 gap must still have observable content in the new layout. The implement
 ### 3. Structural/file checks
 
 ```bash
-# From the task prompt, verbatim
-grep -c "/TDD" skills/ark-workflow/SKILL.md skills/ark-workflow/chains/*.md   # → 0 (all lines)
-grep -rc "/test-driven-development" skills/ark-workflow/                      # → 12 total
+# /TDD vs /test-driven-development — count total occurrences, not per-file
+# grep -rc returns per-file counts; use grep -rho + wc -l for a real total
+[ "$(grep -rho '/test-driven-development' skills/ark-workflow/ | wc -l)" -eq 12 ] \
+  || echo "FAIL: /test-driven-development total not 12"
+[ "$(grep -rho '/TDD\b' skills/ark-workflow/ | wc -l)" -eq 0 ] \
+  || echo "FAIL: /TDD references present"
 
 # All 7 scenario chain files exist
 for f in greenfield bugfix ship knowledge-capture hygiene migration performance; do
-  [ -f skills/ark-workflow/chains/$f.md ] || echo "MISSING: $f.md"
+  [ -f skills/ark-workflow/chains/$f.md ] || echo "MISSING: chains/$f.md"
 done
 
-# Weight-class H2 count per chain file
-grep -c "^## " skills/ark-workflow/chains/greenfield.md        # 3 (L/M/H)
-grep -c "^## " skills/ark-workflow/chains/bugfix.md            # 3 (L/M/H)
-grep -c "^## " skills/ark-workflow/chains/ship.md              # 0 (standalone)
-grep -c "^## " skills/ark-workflow/chains/knowledge-capture.md # 2 (Light/Full)
-grep -c "^## " skills/ark-workflow/chains/hygiene.md           # 5 (Audit-Only/L/M/H + Dedup rule)
-grep -c "^## " skills/ark-workflow/chains/migration.md         # 3 (L/M/H)
-grep -c "^## " skills/ark-workflow/chains/performance.md       # 3 (L/M/H)
-# Sum: 19 H2s across chain files — matches 19 weight-class variants
+# Per-variant H2 assertions — each expected H2 heading named explicitly by exact string.
+# This replaces the earlier H2-count heuristic, which could pass by coincidence if a
+# variant was dropped and an unrelated H2 added elsewhere.
+grep -q "^## Light$"      skills/ark-workflow/chains/greenfield.md        || echo "FAIL: greenfield Light"
+grep -q "^## Medium$"     skills/ark-workflow/chains/greenfield.md        || echo "FAIL: greenfield Medium"
+grep -q "^## Heavy$"      skills/ark-workflow/chains/greenfield.md        || echo "FAIL: greenfield Heavy"
 
-# References contain required keywords
-grep -l "current-chain.md" references/continuity.md
-grep -l "handoff_marker"   references/continuity.md
-grep -l "rehydrate"        references/continuity.md
-grep -c "Step [0-4] —"     references/batch-triage.md          # ≥ 5
-grep -l "Example Output"   references/batch-triage.md
+grep -q "^## Light$"      skills/ark-workflow/chains/bugfix.md            || echo "FAIL: bugfix Light"
+grep -q "^## Medium$"     skills/ark-workflow/chains/bugfix.md            || echo "FAIL: bugfix Medium"
+grep -q "^## Heavy$"      skills/ark-workflow/chains/bugfix.md            || echo "FAIL: bugfix Heavy"
 
-# .gitignore still contains .ark-workflow/
+# Ship has no H2 headers — it is a single un-sectioned variant
+grep -q "^## "            skills/ark-workflow/chains/ship.md              && echo "FAIL: ship.md should have no H2 headers"
+
+grep -q "^## Light$"      skills/ark-workflow/chains/knowledge-capture.md || echo "FAIL: knowledge-capture Light"
+grep -q "^## Full$"       skills/ark-workflow/chains/knowledge-capture.md || echo "FAIL: knowledge-capture Full"
+
+grep -q "^## Audit-Only$" skills/ark-workflow/chains/hygiene.md           || echo "FAIL: hygiene Audit-Only"
+grep -q "^## Light$"      skills/ark-workflow/chains/hygiene.md           || echo "FAIL: hygiene Light"
+grep -q "^## Medium$"     skills/ark-workflow/chains/hygiene.md           || echo "FAIL: hygiene Medium"
+grep -q "^## Heavy$"      skills/ark-workflow/chains/hygiene.md           || echo "FAIL: hygiene Heavy"
+grep -q "^## Dedup rule$" skills/ark-workflow/chains/hygiene.md           || echo "FAIL: hygiene Dedup rule"
+
+grep -q "^## Light$"      skills/ark-workflow/chains/migration.md         || echo "FAIL: migration Light"
+grep -q "^## Medium$"     skills/ark-workflow/chains/migration.md         || echo "FAIL: migration Medium"
+grep -q "^## Heavy$"      skills/ark-workflow/chains/migration.md         || echo "FAIL: migration Heavy"
+
+grep -q "^## Light$"      skills/ark-workflow/chains/performance.md       || echo "FAIL: performance Light"
+grep -q "^## Medium$"     skills/ark-workflow/chains/performance.md       || echo "FAIL: performance Medium"
+grep -q "^## Heavy$"      skills/ark-workflow/chains/performance.md       || echo "FAIL: performance Heavy"
+
+# References contain required keywords (full paths for unambiguity)
+grep -l "current-chain.md" skills/ark-workflow/references/continuity.md
+grep -l "handoff_marker"   skills/ark-workflow/references/continuity.md
+grep -l "Rehydrate\|rehydrate" skills/ark-workflow/references/continuity.md
+grep -c "Step [0-4] —"     skills/ark-workflow/references/batch-triage.md   # ≥ 5
+grep -l "Example Output"   skills/ark-workflow/references/batch-triage.md
+
+# The plugin repo's own .gitignore retains .ark-workflow/ (this repo dogfoods /ark-workflow on itself).
+# The runtime rule that *consumer* projects add .ark-workflow/ to their own gitignores is
+# enforced by the inline instruction in main Step 6.5; it is not a build-time check.
 grep -l "^\.ark-workflow/" .gitignore
 
 # Main SKILL.md pointer sites
@@ -566,23 +597,65 @@ grep -c "chains/"     skills/ark-workflow/SKILL.md   # ≥ 1 (Step 4 + File Map)
 grep -c "references/" skills/ark-workflow/SKILL.md   # ≥ 5 (Step 2, Step 6.5, ×3 When Things Change, Routing Rules, File Map)
 ```
 
-### 4. The 7 smoke tests — mental walkthrough
+### 4. Post-extraction content parity diff (Phase 1b and Phase 2 gates)
 
-These validate that the new layout produces the same triage output as the current monolithic `SKILL.md` would, given identical Project Discovery inputs.
+The grep checks in Section 3 only catch content that's missing from the wrong file. They do **not** catch content that moved between variants, dropped inline conditional annotations, shifted `handoff_marker` positions by one step, or reordered steps within a variant. Those are the highest-risk silent regressions for a pure-extraction refactor.
+
+**Mitigation:** after Phase 1b and after Phase 2, run a diff-based parity check that reconstructs the original source ranges from the extracted files and compares against the baseline snapshot (`/tmp/ark-workflow-SKILL-1.6.0.md`).
+
+**For Phase 1b (chain files):**
+
+Reconstruct the original `## Skill Chains` section (current SKILL.md lines 410-712, including the header, chain separators, and all 7 scenario sub-sections) from the 7 chain files by reversing the permitted formatting changes:
+- `# {Scenario}` (H1 in chain file) → `### {Scenario}` (H3 in original) with the original scenario name
+- `## {WeightClass}` (H2 in chain file) → `**{WeightClass}:**` (bold label in original)
+- Restore the `---` separators between weight variants and between scenarios
+- Preserve inline bold labels like `**Dedup rule:**` as-is
+- Preserve italic sub-labels like `*Session 1 — Design:*` as-is
+- Preserve all other content character-for-character
+
+Then diff the reconstruction against `sed -n '410,712p' /tmp/ark-workflow-SKILL-1.6.0.md`. Any non-empty diff (after whitespace normalization) aborts Phase 1b and requires extraction fixes before Phase 2.
+
+**For Phase 2 (reference files):**
+
+Reconstruct each reference file's corresponding slice of the original:
+- `references/batch-triage.md` vs baseline `sed -n '163,249p'` (with H1→H2 demotion reversed)
+- `references/continuity.md` vs baseline `sed -n '309,371p'` (no structural changes — the Step 6.5 inline block comes from L259-299 which is *separate* and stays in main)
+- `references/troubleshooting.md` vs concatenation of baseline `sed -n '761,774p'` + `sed -n '776,789p'` + `sed -n '791,812p'` (three non-contiguous ranges merged in a specific order)
+- `references/routing-template.md` vs baseline `sed -n '814,858p'` (with H1→H2 demotion reversed and the added "Copy the block below..." preamble stripped)
+
+**Implementation plan will specify:** the concrete reconstruction scripts (Python or shell), whitespace/separator normalization rules, the exact source line ranges (re-verified against the baseline snapshot), and the exact diff commands. The plan authors should **test the reconstruction against the current SKILL.md before Phase 1b begins** to verify the reconstruction algorithm is sound — the algorithm should produce a byte-identical match for any hypothetical "perfect extraction" and should fail noisily for any drift.
+
+**Abort condition:** any non-empty diff after documented normalization aborts the offending phase. The implementing agent reverts that phase, fixes the extraction, re-runs the check.
+
+**What this catches:** step text moved between variants, dropped conditional annotations (`(if X)`), shifted `handoff_marker` positions, rewritten step phrases, missing or added steps, reordered steps within a variant, lost italic sub-labels like `*Session 1 — Design:*`, missing paragraphs in reference files.
+
+**What this does NOT catch:** Phase 3 main `SKILL.md` rewrite errors (caught by Section 5 line-count verification + manual review), cross-file behavioral outcomes (caught by Section 5 smoke tests), or grep-missable content completely absent from the new layout (caught by Section 2 gap checklist).
+
+### 5. Smoke tests — mental walkthrough
+
+These validate that the new layout produces the same triage output as the current monolithic `SKILL.md` would, given identical Project Discovery inputs. Twelve tests total, covering single-item paths for each scenario plus batch, security, decision-density, and cross-session resume edge cases.
 
 | # | Test | Expected triage path | Files the agent loads |
 |---|---|---|---|
-| 1 | **Session A** — 5 bugfix items: transaction isolation, ghost pipeline runs, payload drop, retry storms, MCP shutdown | Multi-item → Batch Triage → per-item classification M/L/M/H/L all Bugfix → grouping: Group A (L, parallel) #2 #5, Group B (M) #1 #3, Group C (H) #4 flagged for separate session | main + `references/batch-triage.md` + `chains/bugfix.md` |
-| 2 | **Session B** — file permissions + SSE tunnel + dashboard blocking | Multi-item → Batch Triage → Bugfix Heavy, Bugfix Medium, Performance Light | main + `references/batch-triage.md` + `chains/bugfix.md` + `chains/performance.md` |
-| 3 | **Session C** — TS build break + ESLint cleanup | Multi-item → Batch Triage → Bugfix Medium + Hygiene Light (scenario split preserved) | main + `references/batch-triage.md` + `chains/bugfix.md` + `chains/hygiene.md` |
+| 1 | **Session A (batch)** — the 5 Bugfix items from the Batch Triage example in current SKILL.md L225-247: #1 transaction isolation (M), #2 ghost pipeline runs (L), #3 payload drop (M), #4 retry storms (H), #5 MCP shutdown (L) | Multi-item → Batch Triage → per-item M/L/M/H/L all Bugfix → grouping **must match current example verbatim**: Group A (L, parallel) #2 #5, Group B (M, sequential) #3, Group C (H, pending dep confirmation) #1 → #4, Heavy flagged for separate session | main + `references/batch-triage.md` + `chains/bugfix.md` |
+| 2 | **Session B (batch)** — file permissions + SSE tunnel + dashboard blocking | Multi-item → Batch Triage → Bugfix Heavy, Bugfix Medium, Performance Light | main + `references/batch-triage.md` + `chains/bugfix.md` + `chains/performance.md` |
+| 3 | **Session C (batch)** — TS build break + ESLint cleanup | Multi-item → Batch Triage → Bugfix Medium + Hygiene Light (scenario split preserved) | main + `references/batch-triage.md` + `chains/bugfix.md` + `chains/hygiene.md` |
 | 4 | **Security audit** — "audit our auth subsystem" | Scenario Detection security path 1 → Hygiene Audit-Only → chain ends with STOP + user choice | main + `chains/hygiene.md` (Audit-Only section) |
 | 5 | **Security hardening** — "harden our auth subsystem" | Scenario Detection security path 2 → Hygiene Heavy with `/cso` prepended + later `/cso` deduped per Dedup rule | main + `chains/hygiene.md` (Heavy + Dedup rule) |
 | 6 | **Decision-density escalation** — "redesign the caching layer" (low risk, architecture density) | Triage: Low risk → Light floor; architecture decisions → escalate to Heavy; scenario Hygiene or Greenfield → Heavy variant | main + `chains/hygiene.md` or `chains/greenfield.md` |
-| 7 | **Cross-session resume** — Session 2 starts in a project with existing `.ark-workflow/current-chain.md` | Routing template fires → agent reads chain file → sees `handoff_marker: after-step-5` checked → announces "Session 2, design phase complete, next: `/executing-plans` with spec at X" → rehydrates TodoWrite | `.ark-workflow/current-chain.md` + `references/continuity.md` |
+| 7 | **Cross-session resume (happy path)** — Session 2 starts in a project with existing `.ark-workflow/current-chain.md`, `handoff_marker: after-step-5` set and checked | Routing template fires → agent reads chain file → announces "Session 2, design phase complete, next: `/executing-plans` with spec at X" → rehydrates TodoWrite from unchecked steps | `.ark-workflow/current-chain.md` + `references/continuity.md` + `chains/greenfield.md` |
+| 8 | **Standalone Ship** — "cherry-pick the hotfix from master and deploy" | Ship scenario (no weight class) → Ship chain → `/review` → `/ship` → `/land-and-deploy` | main + `chains/ship.md` |
+| 9 | **Knowledge Capture Full** — "catch up the vault after two weeks, rebuild tags, ingest the external ADR docs" | KC scenario → Full (not Light, based on scope signals: extended period + tag rebuild + external ingest) | main + `chains/knowledge-capture.md` (Full section) |
+| 10 | **Single-item Migration Medium** — "upgrade the React Native dep from 0.72 to 0.74, API changes required" | Migration scenario → Medium (major version bump with API changes, risk moderate, density some trade-offs) | main + `chains/migration.md` (Medium section) |
+| 11 | **Single-item Performance Heavy** — "redesign the database query layer for the dashboard, currently 10-second page loads, need a caching architecture" | Performance scenario → Heavy (architecture density escalates from Low risk to Heavy) | main + `chains/performance.md` (Heavy section) |
+| 12 | **Mixed batch with Knowledge Capture** — "fix the login redirect bug AND update the README to document the new auth flow" | Multi-item → Batch Triage → Bugfix (Light/Medium) + Knowledge Capture Light; executed sequentially since KC depends on bug fix landing | main + `references/batch-triage.md` + `chains/bugfix.md` + `chains/knowledge-capture.md` |
+| 13 | **Stale chain detection** — session start finds `.ark-workflow/current-chain.md` with `created:` 10 days old | Agent detects >7-day staleness → prompts user "still active or archive?" → does NOT auto-delete → waits for user decision | `.ark-workflow/current-chain.md` + `references/continuity.md` (stale detection section) |
 
 Execution: the Session 2 implementing agent will trace each test step-by-step against the new files and record the chain output in the session log. No automated harness — these are markdown skills, not code. Any divergence from expected output is a behavioral regression and aborts the release.
 
-### 5. Line count verification — numbers for CHANGELOG
+**Coverage confirmation:** Tests 1-3 cover batch triage across the 4 scenario chain files it touches most (Bugfix, Performance, Hygiene). Test 4 covers Hygiene Audit-Only. Test 5 covers the `/cso` dedup rule. Test 6 covers the risk-density triage escalation logic. Test 7 covers the cross-session resume happy path. Tests 8-11 cover standalone single-item paths for Ship, Knowledge Capture Full, Migration, and Performance — the scenarios with the least batch exposure. Test 12 covers a mixed-scenario batch that includes KC. Test 13 covers a non-happy-path resume (stale chain). Every chain file is exercised by at least one test; every major edge case (no weight class, Light/Full split, Audit-Only, dedup, density escalation, resume, stale) has a dedicated test.
+
+### 6. Line count verification — numbers for CHANGELOG
 
 After all phases complete:
 
@@ -611,7 +684,7 @@ Report shape (filled in at release):
 >
 > Behavioral parity: all 22 v2 gaps preserved, all 19 chain variants preserved, all 12 `/test-driven-development` references preserved, 0 `/TDD` references.
 
-### 6. Rollback plan
+### 7. Rollback plan
 
 Each phase is an atomic commit. Rollback options in order of preference:
 
@@ -623,21 +696,22 @@ Each phase is an atomic commit. Rollback options in order of preference:
 
 The detailed implementation plan is produced by `/writing-plans` after this spec is approved. This section sketches the high-level phase structure only, per CLAUDE.md's `≤5 files per phase` rule with approval checkpoints between phases.
 
+**Phase 0 is explicitly dropped.** The v2 rewrite shipped 4 days ago through `/codex` review; there is no dead content to clean ahead of this refactor. The CLAUDE.md Step 0 rule ("remove dead code before structural refactors of code files >300 LOC") applies to source code, not to a freshly-reviewed markdown router. If real dead content surfaces mid-refactor, handle it in Phase 3 (the main SKILL.md rewrite) where the content is already being touched. Dropping Phase 0 also preserves the baseline capture integrity — all later grep/diff checks compare against the actual shipped 1.6.0 file, not a pre-cleaned variant.
+
+**Baseline capture** is the **first action of Phase 1a**, before any chain file extraction begins.
+
 | Phase | Description | Files touched | Commit style |
 |---|---|---|---|
-| 0 | Pre-work (Step 0 rule): scan current `SKILL.md` for any dead content, unused references, redundant prose; remove in a separate commit before structural work begins | 1 (`SKILL.md`) | `chore(ark-workflow): pre-refactor cleanup` |
-| 1a | Create first 5 `chains/` files with text-verbatim content extracted from current `SKILL.md`. `SKILL.md` not yet modified. | 5 new: `chains/{greenfield,bugfix,ship,knowledge-capture,hygiene}.md` | `refactor(ark-workflow): extract chains/ (5/7)` |
+| 1a | **First action:** run baseline capture commands from Verification § 1 (line counts, word counts, `/tmp/ark-workflow-SKILL-1.6.0.md` snapshot, grep baselines). **Then:** create first 5 `chains/` files with text-verbatim content extracted from current `SKILL.md`. `SKILL.md` not yet modified. | 5 new: `chains/{greenfield,bugfix,ship,knowledge-capture,hygiene}.md` | `refactor(ark-workflow): extract chains/ (5/7)` |
 | 1b | Create remaining 2 `chains/` files. | 2 new: `chains/{migration,performance}.md` | `refactor(ark-workflow): extract chains/ (7/7)` |
 | 2 | Create all 4 `references/` files with text-verbatim content (minus the dropped Condition Resolution example block). `SKILL.md` still not modified. | 4 new: `references/{batch-triage,continuity,troubleshooting,routing-template}.md` | `refactor(ark-workflow): extract references/` |
 | 3 | Rewrite main `SKILL.md`: delete migrated content, add pointers, slim Step 6.5, add When Things Change, add File Map, update Steps 2 and 4 | 1 modified: `SKILL.md` | `refactor(ark-workflow): slim main SKILL.md to router` |
 | 4a | Release core: version bump + CHANGELOG | 4 modified: `VERSION`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `CHANGELOG.md` | `chore: bump 1.6.0 → 1.7.0 + CHANGELOG` |
-| 4b | Release docs sync: README (if it references file count or structure) + TODO.md (mark split complete + file Heavy Hygiene design-phase gap as follow-up) | Up to 2 modified: `README.md` (conditional), `TODO.md` | `docs: sync README + update TODO for 1.7.0` |
-| 5 | Verification: baseline capture, run all grep checks, mental walkthrough of 7 smoke tests, record line counts, write session log S004 | 1 new: `vault/Session-Logs/S004-Ark-Workflow-Split.md` | `docs(vault): add S004 session log` |
+| 4b | Release docs sync: README (if it references file count or structure) + TODO.md (mark the deferred split as completed; do NOT file the Heavy Hygiene design-phase follow-up here — that is out of scope for this parity refactor) | Up to 2 modified: `README.md` (conditional), `TODO.md` | `docs: sync README + update TODO for 1.7.0` |
+| 5 | Verification: baseline capture was already done at the start of Phase 1a; here we run all grep checks (Verification § 2, § 3), post-extraction parity diffs (§ 4) for chains and references, mental walkthrough of all 13 smoke tests (§ 5), record final line counts, write session log S004 | 1 new: `vault/Session-Logs/S004-Ark-Workflow-Split.md` | `docs(vault): add S004 session log` |
 | 6 | Ship: feature branch `refactor/ark-workflow-split`, `/ark-code-review --thorough`, `/simplify`, `/codex` review of implementation, `/ship` → `/land-and-deploy` | 0 directly (only commit metadata) | Per `/ship` convention |
 
-Every phase is ≤ 5 files. Every phase ends with a commit and an explicit `CHECKPOINT` marker in the written plan; the implementing session halts between phases for user approval.
-
-Each phase ends with an explicit `CHECKPOINT` marker in the written plan. The implementing session halts between phases for user approval per CLAUDE.md rule.
+Every phase is ≤ 5 files. Every phase ends with a commit and an explicit `CHECKPOINT` marker in the written plan; the implementing session halts between phases for user approval per CLAUDE.md rule.
 
 ## Release
 
@@ -661,7 +735,7 @@ Each phase ends with an explicit `CHECKPOINT` marker in the written plan. The im
 
 ## Follow-ups (filed separately — not fixed in this refactor)
 
-1. **Latent v2 gap — Heavy Hygiene lacks a front-loaded design phase.** v2's Heavy Hygiene chain is `audit → /cso → /test-driven-development → implement`. The only escape hatch is Step 3's reactive pivot-to-Heavy-Greenfield *after* audit runs. A structural refactor with genuine architecture decisions — like this split — needs `brainstorm → spec → /codex → /writing-plans → /codex → /executing-plans` up front. For markdown-only plugins the asymmetry is especially sharp because `/cso` and `/test-driven-development` do not apply. **Proposed fix for a later release:** Heavy Hygiene should fork on decision density — obvious cleanup follows the current chain; architecture refactors use the Heavy Greenfield design phase. To be added to `TODO.md` during Phase 4 of this refactor.
+1. **Latent v2 gap — Heavy Hygiene lacks a front-loaded design phase.** v2's Heavy Hygiene chain is `audit → /cso → /test-driven-development → implement`. The only escape hatch is Step 3's reactive pivot-to-Heavy-Greenfield *after* audit runs. A structural refactor with genuine architecture decisions — like this split — needs `brainstorm → spec → /codex → /writing-plans → /codex → /executing-plans` up front. For markdown-only plugins the asymmetry is especially sharp because `/cso` and `/test-driven-development` do not apply. **Proposed fix for a later release:** Heavy Hygiene should fork on decision density — obvious cleanup follows the current chain; architecture refactors use the Heavy Greenfield design phase. **Not filed in this refactor** to keep scope clean: file as a separate `chore:` commit after 1.7.0 ships, or raise it during the next routine TODO.md review. Do not bundle into the release phases.
 
 2. **Smoke tests remain mental, not executed.** The v2 verification was also mental (per S003). The skill is markdown with no test harness. Real validation comes from the next several `/ark-workflow` invocations in practice across Ark projects.
 
