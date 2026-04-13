@@ -292,6 +292,93 @@ Read `.notebooklm/config.json` to determine notebook structure:
 - **Single notebook:** Query the one configured notebook
 - **Multiple notebooks:** Query each notebook, merge results, note which notebook each answer came from
 
+## Warmup Contract
+
+Machine-readable subcontract consumed by `/ark-context-warmup`. Spec: `docs/superpowers/specs/2026-04-12-ark-context-warmup-design.md`. Calling convention: `docs/superpowers/plans/2026-04-12-ark-context-warmup-implementation.md` D6.
+
+```yaml
+warmup_contract:
+  version: 1
+  commands:
+    - id: session-continue
+      shell: 'notebooklm ask "{{prompt}}" --notebook {{notebook_id}} --json --timeout 60'
+      inputs:
+        notebook_id:
+          from: config
+          config_path: '.notebooklm/config.json'
+          config_lookup_order: ['vault_root/.notebooklm/config.json', '.notebooklm/config.json']
+          # Per D5 (plan §Decisions Pinned): if config.notebooks has exactly one entry,
+          # use it. If it has >1 entry, config.default_for_warmup MUST be set —
+          # otherwise the availability probe skips the lane with a remediation hint.
+          # No silent fallback to "main". The executor resolves this via the lookup
+          # rule, not a json_path fallback syntax.
+          lookup: single_or_default_for_warmup
+          required: true
+        prompt:
+          from: template
+          template_id: session_continue_prompt
+      preconditions:
+        - id: recent_session_with_shape
+          script: scripts/session_shape_check.sh
+          description: 'Exits 0 if latest session log <7 days old AND has Next Steps section AND resolvable epic link'
+      output:
+        format: json
+        extract:
+          where_we_left_off: '$.answer.sections.where_we_left_off'
+          epic_progress: '$.answer.sections.epic_progress'
+          immediate_next_steps: '$.answer.sections.immediate_next_steps'
+          critical_context: '$.answer.sections.critical_context'
+          citations: '$.citations'
+        required_fields: [where_we_left_off, immediate_next_steps]
+    - id: bootstrap
+      shell: 'notebooklm ask "{{prompt}}" --notebook {{notebook_id}} --json --timeout 60'
+      inputs:
+        notebook_id:
+          from: config
+          config_path: '.notebooklm/config.json'
+          config_lookup_order: ['vault_root/.notebooklm/config.json', '.notebooklm/config.json']
+          # Per D5 (plan §Decisions Pinned): if config.notebooks has exactly one entry,
+          # use it. If it has >1 entry, config.default_for_warmup MUST be set —
+          # otherwise the availability probe skips the lane with a remediation hint.
+          # No silent fallback to "main". The executor resolves this via the lookup
+          # rule, not a json_path fallback syntax.
+          lookup: single_or_default_for_warmup
+          required: true
+        prompt:
+          from: template
+          template_id: bootstrap_prompt
+      output:
+        format: json
+        extract:
+          recent_sessions: '$.answer.sections.recent_sessions'
+          current_state: '$.answer.sections.current_state'
+          open_issues: '$.answer.sections.open_issues'
+          citations: '$.citations'
+        required_fields: [recent_sessions, current_state]
+  prompt_templates:
+    session_continue_prompt: |
+      What sessions are related to: {WARMUP_TASK_TEXT}? Include session numbers,
+      outcomes, and any gotchas. Structure the answer with these exact headings:
+      "Where We Left Off", "Epic Progress", "Immediate Next Steps", "Critical Context".
+    bootstrap_prompt: |
+      For the {WARMUP_PROJECT_NAME} project, provide: (1) the 5 most recent session
+      logs with session number, date, objective, key outcomes, unresolved items;
+      (2) the current project state — what is built, what is planned; (3) the top
+      open issues, ongoing experiments, or blocked work items. Structure the answer
+      with these exact headings: "Recent Sessions", "Current State", "Open Issues".
+  selection_rules:
+    # Per spec decision D5: no silent first-pick on multi-notebook configs.
+    - rule: single_notebook
+      when: 'config.notebooks has exactly one entry'
+      action: 'use that notebook'
+    - rule: explicit_default
+      when: 'config.notebooks has >1 entry AND config.default_for_warmup is set'
+      action: 'use config.notebooks[config.default_for_warmup]'
+    - rule: ambiguous_multi_notebook
+      when: 'config.notebooks has >1 entry AND config.default_for_warmup is NOT set'
+      action: 'skip entire lane; log: "Multi-notebook NotebookLM config without default_for_warmup — lane skipped. Add default_for_warmup to .notebooklm/config.json pointing at the notebook key to use."'
+```
+
 ## Important Notes
 
 - **Always use `--notebook <id>` explicitly** — never rely on `notebooklm use` context, which can be overwritten by parallel agent sessions.
