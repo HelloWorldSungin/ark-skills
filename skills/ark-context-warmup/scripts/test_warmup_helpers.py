@@ -157,3 +157,77 @@ class TestCli:
         )
         assert r.returncode != 0
         assert "unknown command" in r.stderr.lower()
+
+
+import importlib.util as _ilu
+from pathlib import Path as _P
+
+_CONTRACT_PATH = _P(__file__).parent / "contract.py"
+_spec_c = _ilu.spec_from_file_location("contract", _CONTRACT_PATH)
+contract = _ilu.module_from_spec(_spec_c)
+_spec_c.loader.exec_module(contract)
+
+
+class TestContractParser:
+    SAMPLE_SKILL_MD = """\
+# Sample
+
+Some content.
+
+## Warmup Contract
+
+```yaml
+warmup_contract:
+  version: 1
+  commands:
+    - id: cmd-a
+      shell: 'echo {{foo}}'
+      inputs:
+        foo:
+          from: env
+          env_var: FOO
+          required: true
+      output:
+        format: json
+        extract:
+          result: '$.result'
+        required_fields: [result]
+```
+"""
+
+    def test_extracts_contract(self, tmp_path):
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text(self.SAMPLE_SKILL_MD)
+        c = contract.load_contract(skill_md)
+        assert c is not None
+        assert c["version"] == 1
+        assert c["commands"][0]["id"] == "cmd-a"
+
+    def test_missing_contract_returns_none(self, tmp_path):
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("# Skill with no contract\n")
+        assert contract.load_contract(skill_md) is None
+
+    def test_malformed_yaml_returns_none(self, tmp_path):
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("## Warmup Contract\n\n```yaml\nnot: valid: yaml\n```\n")
+        assert contract.load_contract(skill_md) is None
+
+    def test_validates_required_shell(self, tmp_path):
+        bad = """## Warmup Contract
+
+```yaml
+warmup_contract:
+  version: 1
+  commands:
+    - id: no-shell
+      inputs: {}
+      output:
+        format: json
+        extract: {}
+        required_fields: []
+```
+"""
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text(bad)
+        assert contract.load_contract(skill_md) is None
