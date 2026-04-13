@@ -1,0 +1,19 @@
+description: 45% overlap, no structural match → DROPPED (below noise floor)
+input:
+  task_normalized: rate limiting api
+  scenario: greenfield
+  tasknotes:
+    matches:
+      - id: X-003
+        title: unrelated caching work
+        status: open
+        component: cache
+        work-type: feature
+        matched_field: title_overlap=0.45
+        title_overlap: 0.45
+    status_summary:
+      open: 1
+    extracted_component: rate
+expected:
+  exact: false
+  candidates: []

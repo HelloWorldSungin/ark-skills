@@ -1,0 +1,22 @@
+description: Open TaskNote with matching `component` field should emit high-confidence Possible duplicate
+input:
+  task_normalized: auth migration provider
+  scenario: greenfield
+  tasknotes:
+    matches:
+      - id: X-001
+        title: Auth rework
+        status: in-progress
+        component: auth
+        work-type: feature
+        matched_field: component
+        title_overlap: 0.2
+    status_summary:
+      in-progress: 1
+    extracted_component: auth
+expected:
+  exact: false
+  candidates:
+    - type: Possible duplicate
+      confidence: high
+      id: X-001

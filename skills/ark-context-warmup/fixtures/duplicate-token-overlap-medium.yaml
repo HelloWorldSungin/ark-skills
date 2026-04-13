@@ -1,0 +1,22 @@
+description: 70% token overlap with open task, no structural match → medium-confidence duplicate
+input:
+  task_normalized: rate limiting api
+  scenario: greenfield
+  tasknotes:
+    matches:
+      - id: X-002
+        title: rate limiting implementation api
+        status: open
+        component: server
+        work-type: feature
+        matched_field: title_overlap=0.75
+        title_overlap: 0.75
+    status_summary:
+      open: 1
+    extracted_component: rate
+expected:
+  exact: false
+  candidates:
+    - type: Possible duplicate
+      confidence: medium
+      id: X-002

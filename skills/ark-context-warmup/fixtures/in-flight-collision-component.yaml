@@ -1,0 +1,22 @@
+description: Shared component + status=in-progress → high-confidence collision
+input:
+  task_normalized: auth migration
+  scenario: greenfield
+  tasknotes:
+    matches:
+      - id: X-006
+        title: Auth rework phase 2
+        status: in-progress
+        component: auth
+        work-type: feature
+        matched_field: component
+        title_overlap: 0.3
+    status_summary:
+      in-progress: 1
+    extracted_component: auth
+expected:
+  exact: false
+  candidates:
+    - type: Possible in-flight collision
+      confidence: high
+      id: X-006

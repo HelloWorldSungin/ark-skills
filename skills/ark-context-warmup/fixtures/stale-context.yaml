@@ -1,0 +1,15 @@
+description: Passing tasknotes=null simulates lane unavailable → Degraded coverage (stand-in for future Stale-context candidate type, deferred per plan Post-Completion Follow-up 2)
+input:
+  task_normalized: any task
+  scenario: greenfield
+  tasknotes: null
+  notebooklm:
+    citations: []
+    bootstrap: "some content"
+    session_continue: ""
+  wiki:
+    matches: [{title: "X", summary: "y", path: "X.md"}]
+expected:
+  exact: false
+  candidates:
+    - type: Degraded coverage

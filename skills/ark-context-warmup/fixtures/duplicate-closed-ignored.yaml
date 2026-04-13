@@ -1,0 +1,19 @@
+description: Matching component but status=done → no candidate
+input:
+  task_normalized: auth migration
+  scenario: greenfield
+  tasknotes:
+    matches:
+      - id: X-004
+        title: Auth migration
+        status: done
+        component: auth
+        work-type: feature
+        matched_field: component
+        title_overlap: 1.0
+    status_summary:
+      done: 1
+    extracted_component: auth
+expected:
+  exact: false
+  candidates: []
