@@ -1280,6 +1280,18 @@ If CLAUDE.md does not exist, create it. If it exists but is missing fields, upda
 | **Task Management** | `{tasknotes_path}` — prefix: `{task_prefix}`, project: `{project_name}` |
 ```
 
+**Vault-layout row (conditional):**
+
+If the user picked **centralized** in Step 1, the default layout is symlinked. No extra row needed — check #20 defaults to `pass` when the `vault` symlink resolves.
+
+If the user picked **embedded** (escape hatch), append this row to the Project Configuration table so check #20 recognizes the opt-out:
+
+```markdown
+| **Vault layout** | embedded (not symlinked) |
+```
+
+Check #20's grep contract: `^\|\s*\*\*Vault layout\*\*\s*\|[^|]*embedded` (case-insensitive). Do not deviate from this exact row format — the diagnostic won't detect alternatives.
+
 For monorepo layout, adjust the Obsidian Vault row to point at the project docs subdirectory and add the vault root separately.
 
 ### Greenfield Step 11: Obsidian plugins (Standard+ tier only)
