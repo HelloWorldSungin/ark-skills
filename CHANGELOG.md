@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.0] - 2026-04-12
+
+### Added
+
+- `/ark-context-warmup` skill: automatic context loader that runs as step 0 of every `/ark-workflow` chain. Queries `/notebooklm-vault`, `/wiki-query`, and `/ark-tasknotes` backends in a partial parallel fan-out, synthesizes one Context Brief, surfaces possible duplicates / prior rejections / in-flight collisions as Evidence candidates. Cache keyed on `chain_id + task_hash`, 2-hour TTL, 24-hour pruning. Spec: `docs/superpowers/specs/2026-04-12-ark-context-warmup-design.md`.
+- `warmup_contract` YAML blocks in `skills/notebooklm-vault/SKILL.md`, `skills/wiki-query/SKILL.md`, `skills/ark-tasknotes/SKILL.md` describing the machine-readable interface warm-up consumes.
+- `skills/ark-workflow/SKILL.md` Step 6.5 now persists five additional frontmatter fields in `.ark-workflow/current-chain.md`: `chain_id`, `task_text`, `task_summary`, `task_normalized`, `task_hash`.
+- Chain-integrity and contract-extension CI checks (`check_chain_integrity.py`, `check_contract_extension.py`) that run against the chains and `/ark-workflow` SKILL.md to catch regressions to step-0 insertion and Step 6.5 frontmatter fields.
+- Evidence-candidate regression fixtures (9 YAMLs) locked-down at data level, replayed through `evidence.derive_candidates` via `test_fixtures.py`.
+
+### Changed
+
+- All seven chain files (`skills/ark-workflow/chains/*.md`) prepend `0. /ark-context-warmup` as step 0 in every weight-class section; handoff markers preserved (still reference original step numbers — see the plan's Task 20 notes).
+
+### Migration notes
+
+Chains produced by `/ark-workflow` before 1.11.0 (legacy chain files) still work — `/ark-context-warmup` detects missing extended-contract fields, prompts for task text inline, and logs a warning that cache will be cold. Re-run `/ark-workflow` to regenerate `.ark-workflow/current-chain.md` with the new fields.
+
 ## [1.10.1] - 2026-04-12
 
 ### Corrected
