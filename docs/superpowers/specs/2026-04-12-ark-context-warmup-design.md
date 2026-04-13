@@ -35,7 +35,7 @@ Before any chain executes, automatically gather the most recent and relevant pro
 | Implementation location | New standalone skill `/ark-context-warmup`, prepended as step 0 to every `chains/*.md` | Single source of truth for warm-up logic; reusable on demand; decouples triage from context fetching |
 | Overall shape | Partial fan-out + synthesized `## Context Brief` with an `Evidence` section (replaces boolean flags) | NotebookLM runs in parallel with vault-local lane; wiki-query + tasknotes are serialized inside the vault-local lane to avoid MCP/Obsidian contention |
 | Flag output | Evidence-backed candidates with task ids / citations / confidence — not boolean flags | Codex point: heuristic flags are too noisy and too blind; readers need the evidence, not a verdict |
-| Cache identity | `sha256({project_path, chain_id, task_hash})` — NOT scenario + age alone | Codex critical #2: scenario+age keyed cache reuses wrong brief for same-scenario different-task work |
+| Cache identity | Cache file is `context-brief-{chain_id}-{task_hash_short}.md` inside `.ark-workflow/`. No `project_path` in the hash — the directory is already repo-scoped. Portable across symlinks, repo moves, machine handoff. | Codex 2nd-round: absolute-path hashing was over-correction. Repo-local `.ark-workflow/` already scopes the cache. |
 
 ## Prerequisites — Changes to `/ark-workflow`'s Continuity Contract
 
@@ -107,37 +107,60 @@ All existing numbered steps shift down by 1. For chains with session-handoff mar
 - `/ark-workflow` triages and emits the chain. It does NOT invoke `/ark-context-warmup` itself — consistent with the existing "ark-workflow does not invoke downstream skills" policy. The chain is guidance; the agent runs the steps. **New:** `/ark-workflow` now persists the extended frontmatter described in Prerequisites.
 - `/ark-context-warmup` is self-contained. It does its own Project Discovery, availability checks, fan-out, synthesis, and emits one `## Context Brief` to the session.
 
-### Dependency direction — machine-readable backend subcontracts
+### Dependency direction — machine-readable backend subcontracts (strictly required)
 
-`/ark-context-warmup` does NOT re-implement the backend skills. Codex flagged that inline reimplementation would drift from the real contracts.
+`/ark-context-warmup` does NOT re-implement the backend skills. Codex flagged that inline reimplementation drifts from real contracts. Codex's second-round review flagged that a "fallback if contract missing" path re-introduces the same drift under a new name.
 
-Instead, each backend skill exposes a **machine-readable subcontract** in its own `SKILL.md` — a small fenced YAML block named `warmup_contract` that specifies:
+Resolution: **the contracts are strictly required, no fallback path.** If a backend skill lacks a valid `warmup_contract` block, warm-up treats that backend as unavailable (same as missing CLI or missing config) and logs a remediation hint. No inline reimplementation exists in warm-up.
+
+Each backend skill exposes a **machine-readable subcontract** in its own `SKILL.md` — a fenced YAML block named `warmup_contract`:
 
 ```yaml
 warmup_contract:
   version: 1
   commands:
     - id: session-continue
-      invoke: bash
-      cmd: 'notebooklm ask "..." --notebook <id> --json'
+      shell: 'notebooklm ask {{prompt_file}} --notebook {{notebook_id}} --json --timeout 60'
+      inputs:
+        notebook_id: { from: config, path: 'notebooks.main.id', required: true }
+        prompt_file: { from: template, template_id: session_continue_prompt }
       preconditions:
-        - session_log_exists: true
-        - session_log_shape_valid: true  # checks for Next Steps + epic link
-      output_shape: notebooklm_session_brief_v1
+        - id: recent_session_log
+          script: scripts/session_shape_check.sh
+          description: 'Exits 0 if latest session log <7 days old AND has Next Steps section AND epic link resolves'
+      output:
+        format: json
+        extract:
+          where_we_left_off: '$.sections.where_we_left_off.text'
+          epic_progress: '$.sections.epic_progress.text'
+          immediate_next_steps: '$.sections.immediate_next_steps.text'
+          critical_context: '$.sections.critical_context.text'
+        required_fields: [where_we_left_off, immediate_next_steps]
     - id: bootstrap
-      invoke: bash
-      cmd: 'notebooklm ask "..." --notebook <id> --json'
-      output_shape: notebooklm_bootstrap_brief_v1
-  output_shapes:
-    notebooklm_session_brief_v1:
-      required_sections: [where_we_left_off, epic_progress, immediate_next_steps, critical_context]
-    notebooklm_bootstrap_brief_v1:
-      required_sections: [recent_sessions, current_state, open_issues]
+      shell: 'notebooklm ask {{prompt_file}} --notebook {{notebook_id}} --json --timeout 60'
+      inputs:
+        notebook_id: { from: config, path: 'notebooks.main.id', required: true }
+        prompt_file: { from: template, template_id: bootstrap_prompt }
+      output:
+        format: json
+        extract:
+          recent_sessions: '$.sections.recent_sessions.text'
+          current_state: '$.sections.current_state.text'
+          open_issues: '$.sections.open_issues.text'
+        required_fields: [recent_sessions, current_state]
+  prompt_templates:
+    session_continue_prompt: 'What sessions are related to: {task_text}? Include session numbers, outcomes, and gotchas.'
+    bootstrap_prompt: 'List the 5 most recent session logs with numbers, dates, objectives, outcomes. Current project state. Top open issues.'
 ```
 
-Warm-up reads each backend's `warmup_contract`, picks the right command, runs it, validates the output against the declared shape. If the contract block is absent (backend not yet updated) warm-up falls back to defensive inline logic and logs a remediation hint: `"Backend {skill} has no warmup_contract block — using fallback. Run the subcontract migration."`
+Contract reader rules (pinned here so they don't drift across implementers):
 
-This keeps drift bounded to the backend skill's own file rather than spreading copy of its behavior into warm-up.
+1. **shell** is a command template with `{{var}}` substitution from `inputs`. Warm-up refuses to run if any `required: true` input is missing.
+2. **preconditions** are external scripts that exit 0 for "run this command" or non-zero to skip. Scripts live in the backend skill's own `scripts/` directory.
+3. **output.extract** uses JSONPath on the command's stdout to pull named fields. `required_fields` must be non-empty strings or warm-up treats the lane as semantically empty and records it in Evidence.
+4. If the `warmup_contract` block is absent, malformed, or the script files it references don't exist: warm-up marks that backend as unavailable and logs `"Backend {skill} has no valid warmup_contract — skipped. Update the backend skill to include one."` No inline reimplementation.
+
+This gives the abstraction teeth: the interface is concrete (shell templates, JSONPath, exit-code preconditions), the fallback path is gone (drift cannot re-enter), and the contract is a hard prerequisite of the implementation plan.
 
 ## Components
 
@@ -174,7 +197,7 @@ Dispatches subagents via the `Agent` tool. **Two lanes, not three:**
 
 **Lane 2 — Vault-local (serialized):** `wiki-query` and `ark-tasknotes` both touch Obsidian / MCP. Obsidian MCP connections can be brittle under concurrent access. Run as a single subagent that executes wiki-query → ark-tasknotes sequentially. Skipped entirely if `HAS_VAULT_BACKEND_AVAILABLE=false`.
 
-**Snapshot-before-query:** the vault-local subagent first snapshots the files it needs (index.md summary lines, TaskNotes counter, relevant Tasks/ filenames) via atomic reads. Subsequent queries go against the snapshot where possible, isolating warm-up from mid-flight `/wiki-update` regeneration.
+**Consistency model — best-effort, not snapshot-isolated.** Codex's second-round review pointed out that a filename snapshot doesn't isolate warm-up from `/wiki-update` regeneration (wiki-query and ark-tasknotes need actual content, not just filenames), and snapshotting content means reimplementing the backends. So: warm-up does NOT attempt to isolate from concurrent `/wiki-update` runs. It reads vault state live with serialized reads. If a read fails mid-read (e.g., file truncated mid-regenerate), the subagent retries once; on second failure, the lane records a `Degraded coverage` Evidence candidate noting the concurrent-regenerate condition and moves on. Users who need point-in-time consistency should wait for `/wiki-update` to complete before running warm-up, or pass `--refresh` afterward.
 
 | Lane | Subagent responsibility | Expected output |
 |------|-------------------------|-----------------|
@@ -265,10 +288,11 @@ Candidates with `low` confidence and no structural evidence are dropped (noise f
     Lane 1 (parallel): NotebookLM subagent
       - Read warmup_contract from notebooklm-vault/SKILL.md
       - Smart-pick: session-continue if shape-valid recent log, else bootstrap
-    Lane 2 (serial): Vault-local subagent
-      - Snapshot index.md summary lines, TaskNotes counter, relevant Tasks/
+    Lane 2 (serial): Vault-local subagent (live reads, best-effort)
       - Run wiki-query with scenario-specific template
       - Run ark-tasknotes status + structured search
+      - On mid-read failure: retry once; on second failure, record
+        Degraded coverage Evidence and move on
   |
   v
 [6] Fan-in: collect results (90s per-lane timeout; partial results OK)
@@ -289,16 +313,16 @@ Candidates with `low` confidence and no structural evidence are dropped (noise f
 
 ### Cache identity and lifecycle
 
-- **Cache key:** `sha256({project_absolute_path, chain_id, task_hash})` → 16-char prefix → filename `context-brief-{hash}.md`
+- **Cache filename:** `context-brief-{chain_id}-{task_hash[:8]}.md`. No hash of the absolute path. The cache file lives inside `.ark-workflow/` which is already repo-scoped. This keeps the cache portable across symlinks, repo moves, and machine handoff — codex's second-round concern.
 - **Location:** `.ark-workflow/` (same directory as `current-chain.md`)
-- **Fresh if:** file exists AND mtime within 2 hours AND `chain_id` + `task_hash` in the file's frontmatter match the current chain's values
+- **Fresh if:** file exists AND mtime within 2 hours AND the `chain_id` + `task_hash` in the file's own frontmatter match the current chain's values (defense-in-depth: filename can't be the only identity check because `chain_id` collisions are theoretically possible)
 - **Invalidated by:**
   - File age >2 hours
   - `chain_id` change (new chain — either re-triage or new `/ark-workflow` invocation)
   - `task_hash` change (task was edited mid-chain)
   - Explicit `/ark-context-warmup --refresh`
-- **Concurrent-write safety:** Synthesizer writes to `context-brief-{hash}.md.tmp`, then atomic-renames. If two warmup instances race, last writer wins cleanly; no partial-write corruption.
-- **Pruning:** On each run, delete `context-brief-*.md` older than 24 hours. Prevents unbounded directory growth across re-triage events.
+- **Concurrent-write safety:** Synthesizer writes to `context-brief-{chain_id}-{task_hash[:8]}.md.tmp`, then atomic-renames. If two warmup instances race, last writer wins cleanly; no partial-write corruption.
+- **Pruning:** On each run, delete `context-brief-*.md` files older than 24 hours. Prevents unbounded directory growth across re-triage events.
 
 ### Token and latency budget
 
@@ -335,8 +359,8 @@ Subagent raw outputs stay within subagent contexts — only the synthesized brie
 | Obsidian not running (MCP unavailable for tasknotes) | `tasknotes_health_check` fails | Fall back to markdown scan of `{tasknotes_path}/Tasks/`; log degraded mode |
 | TaskNotes counter missing | Availability probe | Log + remediation (`/wiki-setup`); skip tasknotes step in vault lane |
 | TaskNotes search returns 100+ matches | TaskNotes step | Truncate to top 10 by structural relevance (status=in-progress first, then component match); note truncation count |
-| `/wiki-update` regenerating index while warm-up reads | Not reliably detectable | Snapshot-before-query approach in vault lane; if a snapshot read fails with "file changed during read", retry once, then fall back to direct re-read with log: `"Vault appears to be regenerating — results may reflect pre-regenerate state."` |
-| Backend skill has no `warmup_contract` YAML block | Subcontract read | Use fallback defensive inline logic; log: `"Backend {skill} has no warmup_contract block — using fallback."` |
+| `/wiki-update` regenerating index/files while warm-up reads | Read-mid-regeneration error (truncated file, YAML parse failure, empty read) | Retry read once. On second failure, mark lane semantically empty and record a `Degraded coverage` Evidence candidate noting concurrent-regenerate. No snapshot isolation — live reads only. |
+| Backend skill has no valid `warmup_contract` block (missing, malformed, or referenced script files absent) | Subcontract read + validation | Mark that backend as unavailable (same outcome as missing CLI). Log: `"Backend {skill} has no valid warmup_contract — skipped. Update the backend skill to include one."` **No inline fallback.** The contract is strictly required. |
 | Any subagent lane exceeds 90s timeout | Parent timer | Kill lane; log; continue fan-in with partial results |
 | Subagent returns structurally valid but semantically empty output | Evidence generator pre-scan | Include empty output in brief; add `Degraded coverage` candidate noting empty response |
 | Subagent returns malformed output (doesn't validate against declared shape) | Synthesizer validation | Include raw under lane's section with `[warm-up: unstructured output follows]` prefix; skip evidence extraction for that lane |
@@ -442,10 +466,29 @@ CI parses `skills/ark-workflow/SKILL.md` for the frontmatter template in the con
 - Parallel subagent timing precision (we test completion-or-timeout, not wall-clock numbers).
 - LLM-driven synthesis quality (synthesizer is deterministic template assembly, no LLM call).
 
-## Open Questions
+## Open Questions — to be pinned by `/writing-plans`
 
-- **Obsidian MCP concurrency model:** the spec assumes MCP connections are brittle enough to require serializing the vault-local lane. If empirical testing shows safe concurrent access, we can re-parallelize wiki-query + tasknotes. Worth a dedicated bats-core concurrency test during implementation.
-- **NotebookLM multi-notebook default:** spec picks the first notebook when no default is configured. Alternative: require a `default_for_warmup` field in `.notebooklm/config.json`. Defer decision to implementation; log-and-pick behavior is the safe default.
+These are implementation-level decisions that don't change the spec's shape but must be pinned before code is written. Codex's second-round review identified these as sources of drift if left unpinned:
+
+1. **`task_text` → `task_summary` → `task_hash` algorithm.** Pin exact normalization: NFC Unicode normalization, lowercase via `str.lower()` (not locale-dependent folds), strip punctuation except `-` and `_`, collapse whitespace, remove stop-words from a pinned wordlist (use `scripts/stopwords.txt`, committed to the repo), truncate summary to 120 chars at a word boundary. Empty or all-stop-word tasks use the literal string `__empty__` as the summary. `task_hash = sha256(task_summary.encode('utf-8'))[:16]`. `task_hash` is computed once at chain emission and NEVER updated — if the user edits the task mid-chain, they must re-trigger `/ark-workflow` to get a new chain. The implementation plan will include test fixtures covering empty strings, Unicode variants (é vs e◌́), stop-word-only tasks, and non-BMP characters.
+
+2. **`task_summary` role split.** Per codex second-round: `task_summary` was doing too much (hash input + human display + matching). Split:
+   - `task_normalized` — used as the hash input (internal only, not user-facing)
+   - `task_summary` — used for human display only, formatted as a single-line truncation of `task_text` with whitespace collapsed but preserving case and punctuation (up to 120 chars)
+   - Token-overlap matching for duplicate detection uses `task_normalized` as its token source
+   - The frontmatter stores both fields
+
+3. **Evidence confidence calibration rules (deterministic).** `/writing-plans` must pin:
+   - Duplicate: `high` = structural field match (component, work-type) + open status. `medium` = ≥60% token-overlap on `task_normalized` with an open task's normalized title. `low` = 40-59% overlap with no structural match → dropped as noise.
+   - Prior rejection: `medium` = trigger phrase ("decided against"/"tried and failed"/"rejected"/"won't do") within a 30-token window of at least 2 keyword tokens from `task_normalized`. Anything less → dropped.
+   - In-flight collision: `high` = shared `component` field + status=in-progress on another TaskNote. `medium` = shared session tag resolvable via the current epic's backlinks. No `low` tier (too noisy).
+   - `work-type` alone does NOT produce high confidence (too generic) — codex's call.
+
+4. **Obsidian MCP concurrency model.** Spec assumes MCP connections are brittle enough to require serializing the vault-local lane. Implementation plan runs a concurrency probe test; if safe, `/writing-plans` can relax to parallel wiki + tasknotes inside Lane 2.
+
+5. **NotebookLM multi-notebook selection.** Spec's current behavior ("pick first notebook + log") is not safe — silently fetches wrong context. `/writing-plans` must resolve: either (a) require a `default_for_warmup` field in `.notebooklm/config.json` and skip the lane if absent, OR (b) warm-up prompts user at runtime to pick. Defer the choice, but do NOT ship with silent first-pick.
+
+6. **`warmup_contract` preconditions scripts — exact interface.** Spec says preconditions are external scripts that exit 0 to run / non-zero to skip. `/writing-plans` pins the exact calling convention (argv, env vars, stdin), the timeout (5s default), and what happens if the script itself errors.
 
 ## Implementation Checklist (high-level; detailed plan to follow via `/writing-plans`)
 
@@ -463,7 +506,7 @@ CI parses `skills/ark-workflow/SKILL.md` for the frontmatter template in the con
 7. Add unit tests for helpers.
 8. Implement availability probe (including extended-contract check).
 9. Implement NotebookLM lane (parallel subagent, reads warmup_contract, smart-pick with shape validation).
-10. Implement vault-local lane (serialized subagent, snapshot-before-query, wiki-query then tasknotes).
+10. Implement vault-local lane (serialized subagent, live reads with retry-once-then-degrade, wiki-query then tasknotes).
 11. Implement evidence generator with confidence calibration.
 12. Implement synthesizer with atomic cache write + 24h pruning.
 13. Implement `--refresh` flag.
