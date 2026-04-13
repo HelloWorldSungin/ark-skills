@@ -412,6 +412,29 @@ class TestAvailabilityProbe:
         )
         assert p["notebooklm"] is True
 
+    def test_notebooklm_config_falls_through_on_malformed_vault_side(self, tmp_path):
+        """Codex P3: the documented lookup order is vault config first then
+        project-repo config. A malformed vault-side .notebooklm/config.json
+        must not short-circuit the lookup — we must still try the project-repo
+        fallback."""
+        vault = tmp_path / "vault"
+        (vault / ".notebooklm").mkdir(parents=True)
+        (vault / ".notebooklm" / "config.json").write_text("this is not valid json")
+        (tmp_path / ".notebooklm").mkdir()
+        (tmp_path / ".notebooklm" / "config.json").write_text(
+            '{"notebooks": {"main": {"id": "fallback-nb"}}}'
+        )
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=vault,
+            tasknotes_path=tmp_path / "nope",
+            task_prefix="X-",
+            notebooklm_cli_path="/usr/bin/echo",
+        )
+        assert p["notebooklm"] is True, (
+            f"Should have fallen back to project-repo config; got {p.get('notebooklm_skip_reason')!r}"
+        )
+
     def test_notebooklm_multi_notebook_without_default_skipped(self, tmp_path):
         (tmp_path / ".notebooklm").mkdir()
         (tmp_path / ".notebooklm" / "config.json").write_text(
@@ -548,6 +571,28 @@ class TestEvidenceCandidates:
         )
         dups = [c for c in out if c["type"] == "Possible duplicate"]
         assert dups == []
+
+    def test_prior_rejection_apostrophe_variants(self):
+        """Codex P2: tokenization strips apostrophes from citation text, so
+        the configured trigger 'won't do' must match the natural spelling
+        after normalization, not just the rarer 'wont do' form."""
+        apostrophed = evidence.derive_candidates(
+            task_normalized="service mesh adoption",
+            scenario="greenfield",
+            tasknotes=None,
+            notebooklm={
+                "recent_sessions": "",
+                "immediate_next_steps": "",
+                "where_we_left_off": "",
+                "citations": [
+                    {"quote": "we won't do service mesh because complexity is high and team lacks experience"}
+                ],
+            },
+            wiki=None,
+        )
+        assert any(c["type"] == "Possible prior rejection" for c in apostrophed), (
+            "apostrophized 'won't do' must still match after tokenization"
+        )
 
     def test_prior_rejection_hit(self):
         out = evidence.derive_candidates(
@@ -687,6 +732,50 @@ class TestSynthesize:
         assert brief.startswith("---\n")
         assert "chain_id: CID123" in brief
         assert "task_hash: hash1234abcd5678" in brief
+
+    def test_frontmatter_yaml_safe_for_risky_task_summary(self, tmp_path):
+        """Codex P2: the cache brief's frontmatter must roundtrip through
+        yaml.safe_load even when task_summary contains YAML-significant
+        characters. Otherwise cached_brief_if_fresh misparses, returns None,
+        and every warm-up for tasks like 'Fix auth: rate limit' or
+        '# cleanup' runs cold. Same class as the chain-file P1 #1."""
+        import yaml
+        risky_cases = [
+            "Fix auth: rate limit",
+            "# starts with hash",
+            "pipe | in middle",
+            'quote "inside" it',
+            "apostrophe 'inside' it",
+            "yes: maybe",
+        ]
+        for summary in risky_cases:
+            brief = synthesize.assemble_brief(
+                chain_id="C1", task_hash="abcdef1234567890", task_summary=summary,
+                scenario="bugfix", notebooklm_out="", wiki_out="", tasknotes_out="", evidence=[],
+            )
+            m = re.match(r"---\n(.*?)\n---\n", brief, re.DOTALL)
+            assert m is not None, f"frontmatter markers not found for summary={summary!r}"
+            fm = yaml.safe_load(m.group(1))
+            assert isinstance(fm, dict), f"yaml.safe_load returned non-dict for summary={summary!r}: {fm!r}"
+            assert fm.get("task_summary", "").strip() == summary
+
+    def test_cache_freshness_works_with_risky_task_summary(self, tmp_path):
+        """End-to-end: write → read roundtrip must hit the cache even when
+        the task summary contains YAML-significant text. Without the P2 fix,
+        cached_brief_if_fresh returned None → every warm-up cold."""
+        cache_dir = tmp_path / ".ark-workflow"
+        cache_dir.mkdir()
+        risky = "Fix auth: rate limit"
+        brief = synthesize.assemble_brief(
+            chain_id="C2", task_hash="abcdef1234567890", task_summary=risky,
+            scenario="bugfix", notebooklm_out="", wiki_out="", tasknotes_out="", evidence=[],
+        )
+        synthesize.write_brief_atomic(cache_dir=cache_dir, chain_id="C2",
+                                      task_hash="abcdef1234567890", brief_text=brief)
+        hit = synthesize.cached_brief_if_fresh(
+            cache_dir=cache_dir, chain_id="C2", task_hash="abcdef1234567890"
+        )
+        assert hit is not None, "cache must hit for YAML-safe-frontmatter brief"
 
     def test_atomic_write_and_prune(self, tmp_path):
         cache_dir = tmp_path / ".ark-workflow"

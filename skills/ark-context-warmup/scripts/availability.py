@@ -6,14 +6,18 @@ from pathlib import Path
 
 
 def _load_notebooklm_config(project_repo: Path, vault_path: Path) -> dict | None:
-    # Lookup order: vault_path/.notebooklm/config.json first, then project_repo/.notebooklm/config.json
+    # Lookup order: vault_path/.notebooklm/config.json first, then project_repo/.notebooklm/config.json.
+    # A malformed/unreadable config at the first location must NOT short-circuit
+    # the lookup — continue to the next location (codex P3 finding). Only
+    # return None if every location is missing or unparseable.
     for base in (vault_path, project_repo):
         cfg = base / ".notebooklm" / "config.json"
-        if cfg.exists():
-            try:
-                return json.loads(cfg.read_text())
-            except (json.JSONDecodeError, OSError):
-                return None
+        if not cfg.exists():
+            continue
+        try:
+            return json.loads(cfg.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
     return None
 
 

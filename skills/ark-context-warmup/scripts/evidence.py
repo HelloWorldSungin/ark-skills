@@ -16,11 +16,21 @@ def _tokens(s: str) -> set:
     return set(re.findall(r"[a-z0-9]+", s.lower()))
 
 
+def _tokenize_for_trigger(s: str) -> list:
+    """Tokenize for rejection-trigger matching. Strip apostrophes so quotes
+    containing 'won't' produce the same tokens ('wont') as the trigger list
+    after apostrophe removal. Without this, the natural spelling 'won't do'
+    never matched and codex P2 flagged it as an unreachable trigger branch."""
+    return re.findall(r"[a-zA-Z0-9]+", s.lower().replace("'", "").replace("\u2019", ""))
+
+
 def _has_trigger_near_keywords(quote: str, task_tokens: set, window: int = 30) -> bool:
     """True if any trigger phrase occurs within `window` tokens of ≥2 task tokens."""
-    words = re.findall(r"[a-zA-Z0-9]+", quote.lower())
+    words = _tokenize_for_trigger(quote)
     for trigger in _REJECTION_TRIGGERS:
-        trig_words = trigger.split()
+        trig_words = _tokenize_for_trigger(trigger)
+        if not trig_words:
+            continue
         for i in range(len(words) - len(trig_words) + 1):
             if words[i:i + len(trig_words)] == trig_words:
                 start = max(0, i - window)

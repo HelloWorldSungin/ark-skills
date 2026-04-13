@@ -46,13 +46,26 @@ def assemble_brief(
     tasknotes_out: str,
     evidence: list,
 ) -> str:
+    # Serialize frontmatter via yaml.safe_dump so task_summary values
+    # containing ':', '#', '|', or quotes don't invalidate the block that
+    # cached_brief_if_fresh later parses. Without this, cache reuse silently
+    # falls through to cold warm-up every time for very common summaries
+    # (codex P2 finding).
+    fm = yaml.safe_dump(
+        {
+            "chain_id": chain_id,
+            "task_hash": task_hash,
+            "task_summary": task_summary,
+            "scenario": scenario,
+            "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+    )
     return (
         "---\n"
-        f"chain_id: {chain_id}\n"
-        f"task_hash: {task_hash}\n"
-        f"task_summary: {task_summary}\n"
-        f"scenario: {scenario}\n"
-        f"generated: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n"
+        f"{fm}"
         "---\n\n"
         "## Context Brief\n\n"
         "### Where We Left Off\n"
