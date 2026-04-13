@@ -2244,6 +2244,129 @@ echo "Next step: review the plan, then run /executing-plans $PLAN_FILE"
 
 For vaults that have Ark structure but some checks are failing.
 
+### Centralized-Vault Repair (triggered before generic repair)
+
+If state detection set `REPAIR_REASON=centralized-vault-drift` or `centralized-vault-script-missing`, run this subsection FIRST — before the generic 5-step repair flow below. These are idempotent, non-destructive fixes.
+
+**Determine `<vault_repo_path>` in this order:**
+
+1. If `scripts/setup-vault-symlink.sh` exists, extract `VAULT_TARGET` via the grep contract, then expand `$HOME`:
+```bash
+SCRIPT_TARGET=$(grep -E '^VAULT_TARGET="[^"]*"\s*$' scripts/setup-vault-symlink.sh | head -1 | sed -E 's/^VAULT_TARGET="([^"]+)".*$/\1/')
+VAULT_REPO_PATH_EXPANDED=$(eval "echo $SCRIPT_TARGET")
+```
+2. Else if `vault` is a broken symlink, use `readlink vault` as the intended target.
+3. Else prompt the user with the Greenfield smart default (detect `$HOME/.superset/` etc.).
+
+**Apply fixes based on the specific failure:**
+
+- **`vault` missing entirely + script present:**
+```bash
+read -rp "Recreate vault symlink to $VAULT_REPO_PATH_EXPANDED? [Y/n] " ANS
+case "$ANS" in n|N) ;; *)
+  if [ -d "$VAULT_REPO_PATH_EXPANDED" ]; then
+    ln -s "$VAULT_REPO_PATH_EXPANDED" vault
+    echo "vault symlink recreated."
+  else
+    echo "ERROR: $VAULT_REPO_PATH_EXPANDED not present. Clone the vault repo there first:"
+    echo "  git clone <remote> $VAULT_REPO_PATH_EXPANDED"
+  fi
+;; esac
+```
+
+- **`vault` is a broken symlink:**
+```bash
+read -rp "Remove broken symlink and relink? [Y/n] " ANS
+case "$ANS" in n|N) ;; *)
+  TARGET=$(readlink vault)
+  rm vault
+  if [ -d "$TARGET" ]; then
+    ln -s "$TARGET" vault
+    echo "symlink recreated."
+  else
+    echo "Original target $TARGET missing. Clone or restore it, then rerun /ark-onboard."
+  fi
+;; esac
+```
+
+- **Symlink drift (`readlink vault` != script's `VAULT_TARGET`):**
+```bash
+SYMLINK_TARGET=$(readlink vault)
+echo "Drift detected:"
+echo "  vault symlink points to: $SYMLINK_TARGET"
+echo "  script VAULT_TARGET expands to: $VAULT_REPO_PATH_EXPANDED"
+echo ""
+echo "Which is canonical? Choose one:"
+echo "  [S] Trust the symlink — update the script's VAULT_TARGET to match."
+echo "  [V] Trust the script — remove the symlink and recreate from VAULT_TARGET."
+echo "  [N] Do nothing — leave as-is."
+read -rp "Choice [S/V/N]: " ANS
+case "$ANS" in
+  S|s)
+    # Convert back to portable form (if possible)
+    PORTABLE=$(echo "$SYMLINK_TARGET" | sed "s|^$HOME|\$HOME|")
+    case "$PORTABLE" in
+      '$HOME/'*)
+        sed -i.bak -E "s|^VAULT_TARGET=\"[^\"]*\"|VAULT_TARGET=\"$PORTABLE\"|" scripts/setup-vault-symlink.sh
+        rm scripts/setup-vault-symlink.sh.bak
+        echo "Script updated. Commit the change."
+        ;;
+      *)
+        echo "ERROR: current symlink target $SYMLINK_TARGET is not under \$HOME."
+        echo "Move the vault under \$HOME first, then rerun."
+        ;;
+    esac
+    ;;
+  V|v)
+    rm vault
+    if [ -d "$VAULT_REPO_PATH_EXPANDED" ]; then
+      ln -s "$VAULT_REPO_PATH_EXPANDED" vault
+      echo "Symlink recreated from script VAULT_TARGET."
+    else
+      echo "ERROR: $VAULT_REPO_PATH_EXPANDED not present. Fix the script OR clone to that path."
+    fi
+    ;;
+  *) echo "No changes made." ;;
+esac
+```
+
+- **`scripts/setup-vault-symlink.sh` missing but symlink is valid (backfill, e.g., ArkNode-Poly's original hand-rolled layout):**
+```bash
+SYMLINK_TARGET=$(readlink vault)
+PORTABLE=$(echo "$SYMLINK_TARGET" | sed "s|^$HOME|\$HOME|")
+case "$PORTABLE" in
+  '$HOME/'*)
+    read -rp "Backfill scripts/setup-vault-symlink.sh with VAULT_TARGET=$PORTABLE? [Y/n] " ANS
+    case "$ANS" in n|N) ;; *)
+      mkdir -p scripts
+      # Write the template from the SKILL.md "scripts/setup-vault-symlink.sh template" section,
+      # with VAULT_TARGET set to $PORTABLE.
+      # (Template body elided here — see the canonical section for the exact content.)
+      chmod +x scripts/setup-vault-symlink.sh
+      echo "Script backfilled."
+    ;; esac
+    ;;
+  *) echo "Current symlink target not under \$HOME. Cannot backfill portable script."; ;;
+esac
+```
+
+- **`<common_git_dir>/hooks/post-checkout` missing or non-executable:**
+```bash
+HOOK_PATH="$(git rev-parse --git-common-dir)/hooks/post-checkout"
+read -rp "Install post-checkout hook at $HOOK_PATH? [Y/n] " ANS
+case "$ANS" in n|N) ;; *)
+  cat > "$HOOK_PATH" <<'HOOK_EOF'
+#!/usr/bin/env bash
+[ "$3" != "1" ] && exit 0
+exec "$(git rev-parse --show-toplevel)/scripts/setup-vault-symlink.sh"
+HOOK_EOF
+  chmod +x "$HOOK_PATH"
+  echo "Hook installed."
+;; esac
+```
+
+After centralized-vault repairs complete, fall through to the generic 5-step repair flow below (it will re-run the diagnostic and catch any remaining failures).
+
 ### Repair Step 1: Run full diagnostic
 
 > **You are at Step 1 — Diagnostic scan.**
