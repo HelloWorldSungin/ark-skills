@@ -69,3 +69,39 @@ def chain_id_new() -> str:
     ts_part = _encode_crockford(timestamp_ms, 10)
     rand_part = _encode_crockford(random_bits, 16)
     return ts_part + rand_part
+
+
+def _main(argv):
+    import sys
+    if len(argv) < 2:
+        sys.stderr.write("usage: warmup-helpers.py <command> [args...]\n")
+        return 2
+    cmd = argv[1]
+    if cmd == "normalize":
+        if len(argv) < 3:
+            sys.stderr.write("usage: normalize <task_text>\n")
+            return 2
+        print(task_normalize(argv[2]))
+        return 0
+    if cmd == "summary":
+        if len(argv) < 3:
+            sys.stderr.write("usage: summary <task_text>\n")
+            return 2
+        print(task_summary(argv[2]))
+        return 0
+    if cmd == "hash":
+        if len(argv) < 3:
+            sys.stderr.write("usage: hash <task_normalized>\n")
+            return 2
+        print(task_hash(argv[2]))
+        return 0
+    if cmd == "chain-id":
+        print(chain_id_new())
+        return 0
+    sys.stderr.write(f"unknown command: {cmd}\n")
+    return 2
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(_main(sys.argv))

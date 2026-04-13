@@ -116,3 +116,44 @@ class TestChainId:
             _t.sleep(0.002)  # ensure >= 1 ms between calls
         prefixes = [c[:10] for c in cids]
         assert prefixes == sorted(prefixes)
+
+
+import subprocess
+
+
+class TestCli:
+    def test_cli_normalize(self):
+        r = subprocess.run(
+            ["python3", str(HELPERS_PATH), "normalize", "Add rate limiting to API"],
+            capture_output=True, text=True, check=True,
+        )
+        assert r.stdout.strip() == "rate limiting api"
+
+    def test_cli_summary(self):
+        r = subprocess.run(
+            ["python3", str(HELPERS_PATH), "summary", "Fix Auth!"],
+            capture_output=True, text=True, check=True,
+        )
+        assert r.stdout.strip() == "Fix Auth!"
+
+    def test_cli_hash(self):
+        r = subprocess.run(
+            ["python3", str(HELPERS_PATH), "hash", "add rate limiting"],
+            capture_output=True, text=True, check=True,
+        )
+        assert len(r.stdout.strip()) == 16
+
+    def test_cli_chain_id(self):
+        r = subprocess.run(
+            ["python3", str(HELPERS_PATH), "chain-id"],
+            capture_output=True, text=True, check=True,
+        )
+        assert len(r.stdout.strip()) == 26
+
+    def test_cli_unknown_command(self):
+        r = subprocess.run(
+            ["python3", str(HELPERS_PATH), "bogus"],
+            capture_output=True, text=True,
+        )
+        assert r.returncode != 0
+        assert "unknown command" in r.stderr.lower()
