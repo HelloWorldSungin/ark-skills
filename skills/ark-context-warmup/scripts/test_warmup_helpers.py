@@ -335,3 +335,206 @@ class TestAvailabilityProbe:
             notebooklm_cli_path="/usr/bin/echo",
         )
         assert p["notebooklm"] is True
+
+
+_ilu = importlib.util
+_P = Path
+
+
+_EV_PATH = _P(__file__).parent / "evidence.py"
+_spec_e = _ilu.spec_from_file_location("evidence", _EV_PATH)
+evidence = _ilu.module_from_spec(_spec_e)
+_spec_e.loader.exec_module(evidence)
+
+
+class TestEvidenceCandidates:
+    def test_duplicate_component_match_high(self):
+        out = evidence.derive_candidates(
+            task_normalized="auth migration provider",
+            scenario="greenfield",
+            tasknotes={
+                "matches": [
+                    {"id": "X-001", "title": "Auth rework", "status": "in-progress",
+                     "component": "auth", "work-type": "feature", "matched_field": "component", "title_overlap": 0.2}
+                ],
+                "status_summary": {"in-progress": 1},
+                "extracted_component": "auth",
+            },
+            notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
+            wiki={"matches": []},
+        )
+        dups = [c for c in out if c["type"] == "Possible duplicate"]
+        assert len(dups) == 1
+        assert dups[0]["confidence"] == "high"
+        assert dups[0]["id"] == "X-001"
+
+    def test_duplicate_medium_overlap(self):
+        out = evidence.derive_candidates(
+            task_normalized="rate limiting api",
+            scenario="greenfield",
+            tasknotes={
+                "matches": [
+                    {"id": "X-002", "title": "rate limiting implementation api", "status": "open",
+                     "component": "server", "work-type": "feature",
+                     "matched_field": "title_overlap=0.75", "title_overlap": 0.75}
+                ],
+                "status_summary": {"open": 1},
+                "extracted_component": "rate",
+            },
+            notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
+            wiki={"matches": []},
+        )
+        dups = [c for c in out if c["type"] == "Possible duplicate"]
+        assert len(dups) == 1
+        assert dups[0]["confidence"] == "medium"
+
+    def test_duplicate_low_overlap_dropped(self):
+        out = evidence.derive_candidates(
+            task_normalized="rate limiting api",
+            scenario="greenfield",
+            tasknotes={
+                "matches": [
+                    {"id": "X-003", "title": "unrelated caching work", "status": "open",
+                     "component": "cache", "work-type": "feature",
+                     "matched_field": "title_overlap=0.45", "title_overlap": 0.45}
+                ],
+                "status_summary": {"open": 1},
+                "extracted_component": "rate",
+            },
+            notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
+            wiki={"matches": []},
+        )
+        dups = [c for c in out if c["type"] == "Possible duplicate"]
+        assert dups == []
+
+    def test_closed_task_not_duplicate(self):
+        out = evidence.derive_candidates(
+            task_normalized="auth migration",
+            scenario="greenfield",
+            tasknotes={
+                "matches": [
+                    {"id": "X-004", "title": "Auth migration", "status": "done",
+                     "component": "auth", "work-type": "feature",
+                     "matched_field": "component", "title_overlap": 1.0}
+                ],
+                "status_summary": {"done": 1},
+                "extracted_component": "auth",
+            },
+            notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
+            wiki={"matches": []},
+        )
+        assert not [c for c in out if c["type"] == "Possible duplicate"]
+
+    def test_worktype_alone_not_high(self):
+        out = evidence.derive_candidates(
+            task_normalized="fix authentication bug",
+            scenario="bugfix",
+            tasknotes={
+                "matches": [
+                    {"id": "X-005", "title": "completely unrelated feature", "status": "open",
+                     "component": "billing", "work-type": "bug",
+                     "matched_field": None, "title_overlap": 0.1}
+                ],
+                "status_summary": {"open": 1},
+                "extracted_component": "authentication",
+            },
+            notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
+            wiki={"matches": []},
+        )
+        dups = [c for c in out if c["type"] == "Possible duplicate"]
+        assert dups == []
+
+    def test_prior_rejection_hit(self):
+        out = evidence.derive_candidates(
+            task_normalized="service mesh adoption",
+            scenario="greenfield",
+            tasknotes={"matches": [], "status_summary": {}, "extracted_component": "service"},
+            notebooklm={
+                "citations": [
+                    {"session": "S042", "quote": "We decided against service mesh adoption because of operational overhead."}
+                ],
+                "bootstrap": "",
+                "session_continue": "",
+            },
+            wiki={"matches": []},
+        )
+        prs = [c for c in out if c["type"] == "Possible prior rejection"]
+        assert len(prs) == 1
+        assert prs[0]["confidence"] == "medium"
+
+    def test_prior_rejection_false_positive(self):
+        out = evidence.derive_candidates(
+            task_normalized="rate limiting",
+            scenario="greenfield",
+            tasknotes={"matches": [], "status_summary": {}, "extracted_component": "rate"},
+            notebooklm={
+                "citations": [
+                    {"session": "S042", "quote": "We decided against the old quarterly planning cadence."}
+                ],
+                "bootstrap": "",
+                "session_continue": "",
+            },
+            wiki={"matches": []},
+        )
+        prs = [c for c in out if c["type"] == "Possible prior rejection"]
+        assert prs == []
+
+    def test_in_flight_collision_high(self):
+        out = evidence.derive_candidates(
+            task_normalized="auth migration",
+            scenario="greenfield",
+            tasknotes={
+                "matches": [
+                    {"id": "X-006", "title": "Auth rework phase 2", "status": "in-progress",
+                     "component": "auth", "work-type": "feature",
+                     "matched_field": "component", "title_overlap": 0.3}
+                ],
+                "status_summary": {"in-progress": 1},
+                "extracted_component": "auth",
+            },
+            notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
+            wiki={"matches": []},
+        )
+        colls = [c for c in out if c["type"] == "Possible in-flight collision"]
+        assert len(colls) == 1
+        assert colls[0]["confidence"] == "high"
+
+    def test_degraded_coverage_emitted(self):
+        out = evidence.derive_candidates(
+            task_normalized="anything",
+            scenario="greenfield",
+            tasknotes=None,  # lane unavailable
+            notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
+            wiki={"matches": []},
+        )
+        deg = [c for c in out if c["type"] == "Degraded coverage"]
+        assert len(deg) == 1
+        assert "tasknotes" in deg[0]["detail"].lower()
+
+    def test_empty_lanes_not_degraded(self):
+        # Deferred finding (codex round 3): an available-but-empty lane is NOT Degraded coverage.
+        # Only a lane that was unavailable (None) counts as Degraded coverage.
+        out = evidence.derive_candidates(
+            task_normalized="unrelated task",
+            scenario="greenfield",
+            tasknotes={"matches": [], "status_summary": {}, "extracted_component": "unrelated"},
+            notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
+            wiki={"matches": []},
+        )
+        deg = [c for c in out if c["type"] == "Degraded coverage"]
+        assert deg == []
+
+    def test_all_lanes_unavailable_three_degraded(self):
+        out = evidence.derive_candidates(
+            task_normalized="anything",
+            scenario="greenfield",
+            tasknotes=None,
+            notebooklm=None,
+            wiki=None,
+        )
+        deg = [c for c in out if c["type"] == "Degraded coverage"]
+        assert len(deg) == 3
+        details = " ".join(d["detail"].lower() for d in deg)
+        assert "tasknotes" in details
+        assert "notebooklm" in details
+        assert "wiki" in details
