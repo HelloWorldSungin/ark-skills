@@ -68,7 +68,7 @@ Both fields live in the frontmatter. `task_summary` is for human display (preser
 
 ### D4 — Obsidian MCP concurrency model
 
-Default: vault-local lane runs **serialized** (wiki-query → ark-tasknotes sequentially). A concurrency probe test (Task 19) runs in CI against a reference Obsidian instance; if the probe passes consistently across 20 runs, a follow-up plan may relax to parallel. For now: serialized is the only supported mode.
+Default: vault-local lane runs **serialized** (wiki-query → ark-tasknotes sequentially). A concurrency probe script (Task 18) runs in CI against a reference Obsidian instance; if the probe passes consistently across 20 runs, a follow-up plan may relax to parallel. For now: serialized is the only supported mode.
 
 ### D5 — NotebookLM multi-notebook selection
 
@@ -90,6 +90,7 @@ If exactly one notebook: use it. If zero notebooks: lane is skipped (no backend 
   - `WARMUP_CHAIN_ID` — chain_id
   - `WARMUP_VAULT_PATH` — absolute vault path from CLAUDE.md
   - `WARMUP_PROJECT_DOCS_PATH` — absolute project_docs_path
+  - `WARMUP_PROJECT_NAME` — project_name from CLAUDE.md (used by NotebookLM prompt template)
   - `WARMUP_TASK_PREFIX` — task_prefix (e.g., `Arkskill-`)
   - `WARMUP_TASKNOTES_PATH` — absolute tasknotes_path
 - **Stdin:** empty
@@ -109,8 +110,13 @@ skills/ark-context-warmup/
 ├── SKILL.md                              # Main skill entry point
 ├── scripts/
 │   ├── stopwords.txt                     # Committed wordlist for task_normalized
-│   ├── warmup-helpers.py                 # Python helper module (all pure logic)
-│   ├── test_warmup_helpers.py            # pytest tests for the above
+│   ├── warmup-helpers.py                 # Python helper module (pure logic)
+│   ├── contract.py                       # warmup_contract YAML parser + validator
+│   ├── executor.py                       # runtime engine: inputs, preconditions, shell, JSONPath
+│   ├── availability.py                   # backend availability probe (D5 rules)
+│   ├── evidence.py                       # deterministic evidence-candidate generator (D3)
+│   ├── synthesize.py                     # brief assembly + atomic cache write + pruning
+│   ├── test_warmup_helpers.py            # pytest tests for all of the above
 │   ├── integration/
 │   │   ├── test_availability.bats        # Integration: availability probe
 │   │   ├── test_cache.bats               # Integration: cache identity + atomic write
@@ -273,7 +279,8 @@ spec.loader.exec_module(wh)
 
 class TestTaskNormalize:
     def test_simple(self):
-        assert wh.task_normalize("Add rate limiting to API") == "add rate limiting api"
+        # "Add" and "to" are in the stopwords list; "API" survives as "api".
+        assert wh.task_normalize("Add rate limiting to API") == "rate limiting api"
 
     def test_empty_string(self):
         assert wh.task_normalize("") == "__empty__"
@@ -284,8 +291,9 @@ class TestTaskNormalize:
     def test_all_stopwords(self):
         assert wh.task_normalize("and the of") == "__empty__"
 
-    def test_single_letter_removed(self):
-        assert wh.task_normalize("x y z add feature") == "add feature"
+    def test_single_letter_and_stopwords_removed(self):
+        # Single letters filtered by len>1 rule; "add" is a stopword.
+        assert wh.task_normalize("x y z add feature") == "feature"
 
     def test_punctuation_stripped(self):
         assert wh.task_normalize("Fix: users' auth!") == "users auth"
@@ -449,10 +457,17 @@ class TestChainId:
     def test_two_calls_produce_different_ids(self):
         assert wh.chain_id_new() != wh.chain_id_new()
 
-    def test_monotonically_increasing_within_ms(self):
-        # ULIDs include timestamp prefix; two adjacent calls should sort correctly
-        cids = [wh.chain_id_new() for _ in range(10)]
-        assert cids == sorted(cids)
+    def test_timestamp_prefix_non_decreasing_across_ms(self):
+        # ULID timestamp prefix (first 10 chars) is non-decreasing across calls
+        # separated by ≥1 ms. Within the same ms, the random tail may not sort — that
+        # is acceptable for our use (chain_id is a coarse ordering, not a sequence).
+        import time as _t
+        cids = []
+        for _ in range(10):
+            cids.append(wh.chain_id_new())
+            _t.sleep(0.002)  # ensure >= 1 ms between calls
+        prefixes = [c[:10] for c in cids]
+        assert prefixes == sorted(prefixes)
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -654,13 +669,15 @@ Replace with:
 ```
 ### Step 6.5: Activate Continuity
 - Create TodoWrite tasks for each step in the resolved chain
-- Compute task fields for `/ark-context-warmup` (step 0 of every chain):
+- Compute task fields for `/ark-context-warmup` (step 0 of every chain). `/ark-workflow` needs the same `ARK_SKILLS_ROOT` resolution as the warm-up skill — see `/ark-context-warmup` SKILL.md's Project Discovery section for the canonical snippet. Reuse it here:
   ```bash
+  # Resolve ARK_SKILLS_ROOT (see /ark-context-warmup/SKILL.md for full logic)
+  ARK_SKILLS_ROOT="${CLAUDE_PLUGIN_DIR:-$(find ~/.claude/plugins -maxdepth 6 -type d -name ark-skills 2>/dev/null | head -1)}"
   TASK_TEXT="<verbatim user request>"
-  TASK_NORMALIZED=$(python3 skills/ark-context-warmup/scripts/warmup-helpers.py normalize "$TASK_TEXT")
-  TASK_SUMMARY=$(python3 skills/ark-context-warmup/scripts/warmup-helpers.py summary "$TASK_TEXT")
-  TASK_HASH=$(python3 skills/ark-context-warmup/scripts/warmup-helpers.py hash "$TASK_NORMALIZED")
-  CHAIN_ID=$(python3 skills/ark-context-warmup/scripts/warmup-helpers.py chain-id)
+  TASK_NORMALIZED=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" normalize "$TASK_TEXT")
+  TASK_SUMMARY=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" summary "$TASK_TEXT")
+  TASK_HASH=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" hash "$TASK_NORMALIZED")
+  CHAIN_ID=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" chain-id)
   ```
 - Write `.ark-workflow/current-chain.md` at project root with this frontmatter:
 
@@ -712,7 +729,9 @@ Create `skills/notebooklm-vault/scripts/session_shape_check.sh`:
 ```bash
 #!/usr/bin/env bash
 # Precondition for notebooklm-vault's session-continue command.
-# Exit 0: latest session log exists, is <7 days old, has Next Steps section, has resolvable epic link.
+# Exit 0: latest session log exists, is <7 days old (by file mtime), has "## Next Steps"
+#         heading, and has a non-empty "epic:" frontmatter field (link resolution is done
+#         later by notebooklm-vault's session-continue logic itself, not by this probe).
 # Exit 1: any above check fails → warm-up should use bootstrap instead.
 #
 # Reads env vars (set by warm-up per D6):
@@ -858,7 +877,12 @@ warmup_contract:
           from: config
           config_path: '.notebooklm/config.json'
           config_lookup_order: ['vault_root/.notebooklm/config.json', '.notebooklm/config.json']
-          json_path: 'notebooks.${default_for_warmup|main}.id'
+          # Per D5 (plan §Decisions Pinned): if config.notebooks has exactly one entry,
+          # use it. If it has >1 entry, config.default_for_warmup MUST be set —
+          # otherwise the availability probe skips the lane with a remediation hint.
+          # No silent fallback to "main". The executor resolves this via the lookup
+          # rule, not a json_path fallback syntax.
+          lookup: single_or_default_for_warmup
           required: true
         prompt:
           from: template
@@ -883,7 +907,12 @@ warmup_contract:
           from: config
           config_path: '.notebooklm/config.json'
           config_lookup_order: ['vault_root/.notebooklm/config.json', '.notebooklm/config.json']
-          json_path: 'notebooks.${default_for_warmup|main}.id'
+          # Per D5 (plan §Decisions Pinned): if config.notebooks has exactly one entry,
+          # use it. If it has >1 entry, config.default_for_warmup MUST be set —
+          # otherwise the availability probe skips the lane with a remediation hint.
+          # No silent fallback to "main". The executor resolves this via the lookup
+          # rule, not a json_path fallback syntax.
+          lookup: single_or_default_for_warmup
           required: true
         prompt:
           from: template
@@ -960,7 +989,7 @@ warmup_contract:
     - id: scenario-query
       # Warm-up invokes wiki-query inline via its T4 scan path (index.md + summaries).
       # For the warm-up's purposes, we only need the top-3 most relevant summaries, not the full T1/T2/T3 routing.
-      shell: 'python3 skills/wiki-query/scripts/warmup_scan.py --vault "{{vault_path}}" --query "{{query}}" --top 3 --json'
+      shell: 'python3 "$ARK_SKILLS_ROOT/skills/wiki-query/scripts/warmup_scan.py" --vault "{{vault_path}}" --query "{{query}}" --top 3 --json'
       inputs:
         vault_path:
           from: env
@@ -1383,7 +1412,7 @@ warmup_contract:
   version: 1
   commands:
     - id: status-and-search
-      shell: 'python3 skills/ark-tasknotes/scripts/warmup_search.py --tasknotes "{{tasknotes_path}}" --prefix "{{task_prefix}}" --task-normalized "{{task_normalized}}" --scenario "{{scenario}}" --json'
+      shell: 'python3 "$ARK_SKILLS_ROOT/skills/ark-tasknotes/scripts/warmup_search.py" --tasknotes "{{tasknotes_path}}" --prefix "{{task_prefix}}" --task-normalized "{{task_normalized}}" --scenario "{{scenario}}" --json'
       inputs:
         tasknotes_path:
           from: env
@@ -2393,9 +2422,460 @@ git commit -m "feat(warmup): add synthesizer, atomic cache write, and 24h prunin
 
 ---
 
-## Phase 5 — SKILL.md Orchestration Layer
+## Phase 5 — Contract Executor + SKILL.md Orchestration
 
-### Task 15: Write SKILL.md with frontmatter + routing
+### Task 15: Contract Executor (engine that runs warmup_contract commands)
+
+**Rationale:** `contract.py` parses/validates the YAML. An executor is required to actually *run* contracts — resolve inputs, run preconditions, interpolate shell templates, execute commands with timeouts, extract fields via simple JSONPath, and validate required_fields. Without it, Task 16's SKILL.md orchestration has no runtime engine. (Gap identified by `/codex` third-round review.)
+
+**Files:**
+- Create: `skills/ark-context-warmup/scripts/executor.py`
+- Modify: `skills/ark-context-warmup/scripts/test_warmup_helpers.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `test_warmup_helpers.py`:
+
+```python
+_EXEC_PATH = _P(__file__).parent / "executor.py"
+_spec_ex = _ilu.spec_from_file_location("executor", _EXEC_PATH)
+executor = _ilu.module_from_spec(_spec_ex)
+_spec_ex.loader.exec_module(executor)
+
+
+class TestInputResolution:
+    def test_env_input(self, monkeypatch):
+        monkeypatch.setenv("WARMUP_SCENARIO", "greenfield")
+        input_spec = {"from": "env", "env_var": "WARMUP_SCENARIO", "required": True}
+        assert executor.resolve_input(input_spec, config=None, templates={}) == "greenfield"
+
+    def test_env_input_missing_required(self, monkeypatch):
+        monkeypatch.delenv("MISSING_VAR", raising=False)
+        input_spec = {"from": "env", "env_var": "MISSING_VAR", "required": True}
+        import pytest
+        with pytest.raises(executor.InputResolutionError):
+            executor.resolve_input(input_spec, config=None, templates={})
+
+    def test_config_input_simple_json_path(self):
+        cfg = {"notebooks": {"main": {"id": "nb-abc"}}}
+        input_spec = {"from": "config", "json_path": "notebooks.main.id", "required": True}
+        assert executor.resolve_input(input_spec, config=cfg, templates={}) == "nb-abc"
+
+    def test_config_input_lookup_single_or_default_for_warmup(self):
+        # Single notebook → use it
+        cfg = {"notebooks": {"main": {"id": "nb-abc"}}}
+        input_spec = {"from": "config", "lookup": "single_or_default_for_warmup",
+                      "json_path_template": "notebooks.{key}.id", "required": True}
+        assert executor.resolve_input(input_spec, config=cfg, templates={}) == "nb-abc"
+
+    def test_config_input_lookup_multi_with_default(self):
+        cfg = {"notebooks": {"a": {"id": "nb-a"}, "b": {"id": "nb-b"}}, "default_for_warmup": "b"}
+        input_spec = {"from": "config", "lookup": "single_or_default_for_warmup",
+                      "json_path_template": "notebooks.{key}.id", "required": True}
+        assert executor.resolve_input(input_spec, config=cfg, templates={}) == "nb-b"
+
+    def test_config_input_lookup_multi_without_default_raises(self):
+        cfg = {"notebooks": {"a": {"id": "nb-a"}, "b": {"id": "nb-b"}}}
+        input_spec = {"from": "config", "lookup": "single_or_default_for_warmup",
+                      "json_path_template": "notebooks.{key}.id", "required": True}
+        import pytest
+        with pytest.raises(executor.InputResolutionError, match="default_for_warmup"):
+            executor.resolve_input(input_spec, config=cfg, templates={})
+
+    def test_template_input(self):
+        input_spec = {"from": "template", "template_id": "my_prompt"}
+        result = executor.resolve_input(
+            input_spec, config=None,
+            templates={"my_prompt": "Hello, {WARMUP_TASK_TEXT}!"},
+        )
+        assert result == "Hello, {WARMUP_TASK_TEXT}!"
+
+
+class TestShellSubstitution:
+    def test_substitute(self):
+        result = executor.substitute_shell_template(
+            "run {{cmd}} with id {{id}}", {"cmd": "do-thing", "id": "xyz"}
+        )
+        assert result == "run do-thing with id xyz"
+
+    def test_missing_var_raises(self):
+        import pytest
+        with pytest.raises(KeyError):
+            executor.substitute_shell_template("run {{missing}}", {})
+
+
+class TestJSONPathExtract:
+    def test_dotted(self):
+        data = {"answer": {"sections": {"recent": "stuff"}}}
+        assert executor.extract_json_path(data, "$.answer.sections.recent") == "stuff"
+
+    def test_missing_key_returns_none(self):
+        assert executor.extract_json_path({"a": 1}, "$.b.c") is None
+
+    def test_root(self):
+        assert executor.extract_json_path({"x": 1}, "$") == {"x": 1}
+
+    def test_array_indexing_not_supported_raises(self):
+        import pytest
+        with pytest.raises(executor.JSONPathError, match="array"):
+            executor.extract_json_path({"a": [1, 2]}, "$.a[0]")
+
+
+class TestPrecondition:
+    def test_script_exit_zero_runs(self, tmp_path):
+        script = tmp_path / "ok.sh"
+        script.write_text("#!/usr/bin/env bash\nexit 0\n")
+        script.chmod(0o755)
+        ok, stderr = executor.run_precondition(
+            script_path=script, env={}, timeout_s=5
+        )
+        assert ok is True
+
+    def test_script_nonzero_skips(self, tmp_path):
+        script = tmp_path / "nope.sh"
+        script.write_text("#!/usr/bin/env bash\necho skip reason >&2\nexit 1\n")
+        script.chmod(0o755)
+        ok, stderr = executor.run_precondition(
+            script_path=script, env={}, timeout_s=5
+        )
+        assert ok is False
+        assert "skip reason" in stderr
+
+    def test_script_timeout_treated_as_skip(self, tmp_path):
+        script = tmp_path / "slow.sh"
+        script.write_text("#!/usr/bin/env bash\nsleep 10\n")
+        script.chmod(0o755)
+        ok, stderr = executor.run_precondition(
+            script_path=script, env={}, timeout_s=1
+        )
+        assert ok is False
+        assert "timeout" in stderr.lower() or "timed out" in stderr.lower()
+
+    def test_script_receives_env(self, tmp_path):
+        script = tmp_path / "echoenv.sh"
+        script.write_text("#!/usr/bin/env bash\n[ \"$WARMUP_TASK_HASH\" = 'abc' ] && exit 0 || exit 1\n")
+        script.chmod(0o755)
+        ok, _ = executor.run_precondition(
+            script_path=script, env={"WARMUP_TASK_HASH": "abc"}, timeout_s=5
+        )
+        assert ok is True
+
+
+class TestShellExecute:
+    def test_shell_timeout(self):
+        r = executor.run_shell("sleep 10", timeout_s=1)
+        assert r.timed_out is True
+
+    def test_shell_captures_stdout(self):
+        r = executor.run_shell("echo hello", timeout_s=5)
+        assert r.timed_out is False
+        assert r.exit_code == 0
+        assert r.stdout.strip() == "hello"
+
+
+class TestEndToEndExecute:
+    def test_execute_command_happy_path(self, tmp_path, monkeypatch):
+        # Build a fake backend skill that reads an env var and prints JSON
+        script = tmp_path / "fake_backend.sh"
+        script.write_text("#!/usr/bin/env bash\necho '{\"payload\": {\"value\": \"'\"$FOO\"'\"}}'\n")
+        script.chmod(0o755)
+        monkeypatch.setenv("FOO", "bar")
+        command_spec = {
+            "id": "fake",
+            "shell": f"bash {script}",
+            "inputs": {},
+            "output": {
+                "format": "json",
+                "extract": {"value": "$.payload.value"},
+                "required_fields": ["value"],
+            },
+        }
+        result = executor.execute_command(
+            command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
+        )
+        assert result == {"value": "bar"}
+
+    def test_execute_command_missing_required_field_returns_none(self, tmp_path):
+        script = tmp_path / "empty.sh"
+        script.write_text("#!/usr/bin/env bash\necho '{}'\n")
+        script.chmod(0o755)
+        command_spec = {
+            "id": "empty",
+            "shell": f"bash {script}",
+            "inputs": {},
+            "output": {
+                "format": "json",
+                "extract": {"value": "$.missing"},
+                "required_fields": ["value"],
+            },
+        }
+        result = executor.execute_command(
+            command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
+        )
+        assert result is None
+
+    def test_execute_command_precondition_skip(self, tmp_path):
+        pre = tmp_path / "pre.sh"
+        pre.write_text("#!/usr/bin/env bash\nexit 1\n")
+        pre.chmod(0o755)
+        shell_script = tmp_path / "main.sh"
+        shell_script.write_text("#!/usr/bin/env bash\necho '{\"x\":\"should-not-run\"}'\n")
+        shell_script.chmod(0o755)
+        command_spec = {
+            "id": "skipped",
+            "shell": f"bash {shell_script}",
+            "inputs": {},
+            "preconditions": [{"id": "no", "script": str(pre)}],
+            "output": {"format": "json", "extract": {"x": "$.x"}, "required_fields": ["x"]},
+        }
+        result = executor.execute_command(
+            command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
+        )
+        assert result is None  # Skipped due to precondition
+```
+
+- [ ] **Step 2: Verify failure**
+
+Run: `pytest skills/ark-context-warmup/scripts/test_warmup_helpers.py -v -k "TestInputResolution or TestShellSubstitution or TestJSONPathExtract or TestPrecondition or TestShellExecute or TestEndToEndExecute"`
+Expected: FAIL (`executor.py` not found).
+
+- [ ] **Step 3: Write the implementation**
+
+Create `skills/ark-context-warmup/scripts/executor.py`:
+
+```python
+"""Contract executor: runs warmup_contract commands end-to-end.
+
+Resolves inputs (env, config JSON-path, template) → runs preconditions (D6 convention) →
+substitutes shell template → runs shell with timeout → parses JSON → extracts fields via
+simple dotted JSONPath → validates required_fields.
+"""
+import json
+import os
+import re
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+class InputResolutionError(RuntimeError):
+    pass
+
+
+class JSONPathError(RuntimeError):
+    pass
+
+
+@dataclass
+class ShellResult:
+    exit_code: int
+    stdout: str
+    stderr: str
+    timed_out: bool
+
+
+def extract_json_path(data: Any, path: str) -> Any:
+    """Simple dotted JSONPath. Supports:
+      - "$"          → the whole document
+      - "$.a.b.c"    → nested key access
+    Arrays are NOT supported (raises JSONPathError if requested with [N] syntax).
+    Missing keys return None.
+    """
+    if path == "$":
+        return data
+    if not path.startswith("$."):
+        raise JSONPathError(f"JSONPath must start with '$' or '$.': {path}")
+    if "[" in path or "]" in path:
+        raise JSONPathError(f"array indexing not supported in simple JSONPath: {path}")
+    current = data
+    for key in path[2:].split("."):
+        if not isinstance(current, dict):
+            return None
+        if key not in current:
+            return None
+        current = current[key]
+    return current
+
+
+def substitute_shell_template(template: str, vars_: dict) -> str:
+    """Substitute {{var}} placeholders. Raises KeyError if any placeholder is unresolved."""
+    def _replace(m):
+        name = m.group(1).strip()
+        if name not in vars_:
+            raise KeyError(f"unresolved shell template variable: {name}")
+        return str(vars_[name])
+    return re.sub(r"\{\{\s*([^}]+?)\s*\}\}", _replace, template)
+
+
+def _lookup_single_or_default(config: dict, json_path_template: str) -> Any:
+    """Implements the D5 lookup: if notebooks has one key, use it; if multiple,
+    require default_for_warmup to pick. Raises otherwise.
+    """
+    notebooks = config.get("notebooks", {})
+    if not notebooks:
+        raise InputResolutionError("config has no notebooks")
+    if len(notebooks) == 1:
+        key = next(iter(notebooks))
+    else:
+        key = config.get("default_for_warmup")
+        if not key or key not in notebooks:
+            raise InputResolutionError(
+                "Multi-notebook NotebookLM config without default_for_warmup — "
+                "lane skipped. Add default_for_warmup to .notebooklm/config.json "
+                "pointing at the notebook key to use."
+            )
+    # Substitute {key} in the json_path_template, then extract
+    resolved_path = json_path_template.replace("{key}", key)
+    value = extract_json_path(config, "$." + resolved_path) if not resolved_path.startswith("$") else extract_json_path(config, resolved_path)
+    if value is None:
+        raise InputResolutionError(f"config path {resolved_path} resolved to None")
+    return value
+
+
+def resolve_input(input_spec: dict, *, config: dict | None, templates: dict) -> Any:
+    """Resolve a single input per D6. `input_spec` is one entry from warmup_contract.commands[*].inputs."""
+    source = input_spec.get("from")
+    required = bool(input_spec.get("required", False))
+    if source == "env":
+        name = input_spec["env_var"]
+        val = os.environ.get(name)
+        if val is None and required:
+            raise InputResolutionError(f"required env var not set: {name}")
+        return val
+    if source == "config":
+        if config is None and required:
+            raise InputResolutionError("config required but not provided")
+        if config is None:
+            return None
+        # Two flavors: explicit json_path, or lookup rule
+        if "json_path" in input_spec:
+            return extract_json_path(config, "$." + input_spec["json_path"] if not input_spec["json_path"].startswith("$") else input_spec["json_path"])
+        if input_spec.get("lookup") == "single_or_default_for_warmup":
+            return _lookup_single_or_default(config, input_spec["json_path_template"])
+        raise InputResolutionError(f"config input needs json_path or lookup: {input_spec}")
+    if source == "template":
+        tid = input_spec["template_id"]
+        if tid not in templates:
+            raise InputResolutionError(f"unknown template id: {tid}")
+        return templates[tid]
+    raise InputResolutionError(f"unknown input source: {source}")
+
+
+def run_precondition(*, script_path: Path, env: dict, timeout_s: int = 5) -> tuple[bool, str]:
+    """Run a precondition script per D6. Returns (exit_0_bool, stderr_text)."""
+    if not Path(script_path).exists():
+        return False, f"precondition script not found: {script_path}"
+    merged_env = {**os.environ, **env}
+    try:
+        r = subprocess.run(
+            ["bash", str(script_path)],
+            env=merged_env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+        )
+        return (r.returncode == 0), r.stderr
+    except subprocess.TimeoutExpired as e:
+        return False, f"precondition timeout after {timeout_s}s"
+
+
+def run_shell(shell_cmd: str, *, timeout_s: int = 90, env: dict | None = None) -> ShellResult:
+    """Run a resolved shell command and return its result."""
+    merged_env = {**os.environ, **(env or {})}
+    try:
+        r = subprocess.run(
+            ["bash", "-c", shell_cmd],
+            env=merged_env,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+        )
+        return ShellResult(exit_code=r.returncode, stdout=r.stdout, stderr=r.stderr, timed_out=False)
+    except subprocess.TimeoutExpired as e:
+        return ShellResult(exit_code=-1, stdout=(e.stdout or "").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""),
+                           stderr=(e.stderr or "").decode() if isinstance(e.stderr, bytes) else (e.stderr or ""),
+                           timed_out=True)
+
+
+def execute_command(
+    command_spec: dict,
+    *,
+    config: dict | None,
+    templates: dict,
+    env_overrides: dict,
+    timeout_s: int = 90,
+) -> dict | None:
+    """Execute a single warmup_contract command. Returns extracted dict on success,
+    or None if the command was skipped (precondition failed) or failed validation.
+    """
+    # 1. Resolve inputs
+    resolved: dict = {}
+    for name, spec in (command_spec.get("inputs") or {}).items():
+        try:
+            resolved[name] = resolve_input(spec, config=config, templates=templates)
+        except InputResolutionError as e:
+            # Treat missing-required-input as a skip (same outcome as missing backend)
+            return None
+
+    # 2. Run preconditions (all must pass)
+    for pre in (command_spec.get("preconditions") or []):
+        script_path = Path(pre["script"])
+        ok, _stderr = run_precondition(script_path=script_path, env=env_overrides, timeout_s=5)
+        if not ok:
+            return None  # Skip — not an error
+
+    # 3. Substitute shell template
+    try:
+        shell_cmd = substitute_shell_template(command_spec["shell"], resolved)
+    except KeyError:
+        return None
+
+    # 4. Run shell
+    result = run_shell(shell_cmd, timeout_s=timeout_s, env=env_overrides)
+    if result.timed_out or result.exit_code != 0:
+        return None
+
+    # 5. Parse JSON
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    # 6. Extract fields
+    extract_spec = command_spec.get("output", {}).get("extract", {})
+    extracted: dict = {}
+    for field, path in extract_spec.items():
+        try:
+            extracted[field] = extract_json_path(data, path)
+        except JSONPathError:
+            return None
+
+    # 7. Validate required_fields
+    required = command_spec.get("output", {}).get("required_fields", [])
+    for field in required:
+        if not extracted.get(field):
+            return None  # Semantically empty — treat as degraded
+
+    return extracted
+```
+
+- [ ] **Step 4: Run tests**
+
+Run: `pytest skills/ark-context-warmup/scripts/test_warmup_helpers.py -v -k "TestInputResolution or TestShellSubstitution or TestJSONPathExtract or TestPrecondition or TestShellExecute or TestEndToEndExecute"`
+Expected: all tests pass.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add skills/ark-context-warmup/scripts/executor.py skills/ark-context-warmup/scripts/test_warmup_helpers.py
+git commit -m "feat(warmup): add contract executor (resolves inputs, preconditions, shell, JSONPath)"
+```
+
+---
+
+### Task 16: Write SKILL.md with frontmatter + routing
 
 **Files:**
 - Create: `skills/ark-context-warmup/SKILL.md`
@@ -2431,6 +2911,32 @@ Follow the plugin's context-discovery pattern (see plugin CLAUDE.md):
 2. Locate NotebookLM config: check `{vault_root}/.notebooklm/config.json` first, then `{project_root}/.notebooklm/config.json`
 3. If any required field is missing, emit `"CLAUDE.md is missing [field] — context warm-up cannot run. Proceeding without warm-up."` and EXIT 0
 
+### Resolve `ARK_SKILLS_ROOT` (required for all later script invocations)
+
+In consumer projects (e.g., ArkNode-AI, ArkNode-Poly), this plugin's scripts live at `~/.claude/plugins/cache/.../ark-skills/` — **not** at `./skills/` of the CWD. All later script invocations in this skill must use absolute paths rooted at the plugin. Resolve once at the start:
+
+```bash
+# Already set by Claude Code when invoking a plugin skill? Prefer that.
+if [ -n "${CLAUDE_PLUGIN_DIR:-}" ] && [ -d "$CLAUDE_PLUGIN_DIR" ]; then
+    ARK_SKILLS_ROOT="$CLAUDE_PLUGIN_DIR"
+# Otherwise, discover via the plugin marketplace.json anchor.
+elif [ -f "$(pwd)/.claude-plugin/marketplace.json" ]; then
+    # CWD is the ark-skills repo itself (dev/test mode)
+    ARK_SKILLS_ROOT="$(pwd)"
+else
+    # Consumer project: search installed plugins.
+    ARK_SKILLS_ROOT=$(find ~/.claude/plugins -maxdepth 6 -type d -name ark-skills 2>/dev/null | head -1)
+fi
+
+if [ -z "$ARK_SKILLS_ROOT" ] || [ ! -f "$ARK_SKILLS_ROOT/skills/ark-context-warmup/SKILL.md" ]; then
+    echo "ark-skills plugin not found — context warm-up cannot run. Proceeding without warm-up." >&2
+    exit 0
+fi
+export ARK_SKILLS_ROOT
+```
+
+**All subsequent `python3 skills/...` invocations in this skill MUST be rewritten to `python3 "$ARK_SKILLS_ROOT/skills/..."`** — including the helpers in Step 1 below, the contract executor paths passed to subagents, and the script paths referenced in `warmup_contract.preconditions`. Python modules invoked via `python3 "$ARK_SKILLS_ROOT/..."` can continue to use `Path(__file__).parent` for sibling-file resolution, so no changes inside the scripts themselves are needed.
+
 ## Workflow
 
 ### Step 1: Task intake
@@ -2440,10 +2946,10 @@ Read `.ark-workflow/current-chain.md` if present. The file should contain extend
 If any of those fields is missing (legacy chain, or file absent): prompt the user for the task text and compute the fields inline:
 
 ```bash
-CHAIN_ID=$(python3 skills/ark-context-warmup/scripts/warmup-helpers.py chain-id)
-TASK_NORMALIZED=$(python3 skills/ark-context-warmup/scripts/warmup-helpers.py normalize "$TASK_TEXT")
-TASK_SUMMARY=$(python3 skills/ark-context-warmup/scripts/warmup-helpers.py summary "$TASK_TEXT")
-TASK_HASH=$(python3 skills/ark-context-warmup/scripts/warmup-helpers.py hash "$TASK_NORMALIZED")
+CHAIN_ID=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" chain-id)
+TASK_NORMALIZED=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" normalize "$TASK_TEXT")
+TASK_SUMMARY=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" summary "$TASK_TEXT")
+TASK_HASH=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" hash "$TASK_NORMALIZED")
 ```
 
 Log: `"Legacy chain file — cache will be cold. Run updated /ark-workflow to regenerate."`
@@ -2457,6 +2963,8 @@ Run `availability.py probe(...)` per D5 rules (see pinned decisions). Record whi
 Unless `--refresh` is passed:
 ```bash
 python3 -c "
+import sys
+sys.path.insert(0, '$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts')
 from synthesize import cached_brief_if_fresh
 from pathlib import Path
 b = cached_brief_if_fresh(cache_dir=Path('.ark-workflow'), chain_id='$CHAIN_ID', task_hash='$TASK_HASH')
@@ -2466,28 +2974,24 @@ if b: print(b)
 
 If cache hit: emit the cached brief to the session and EXIT 0.
 
-### Step 4: Fan-out
+### Step 4: Fan-out (uses `executor.py` from Task 15)
+
+All shell substitution, precondition invocation, JSON parsing, and JSONPath extraction go through `executor.execute_command(...)` — the SKILL.md does NOT reimplement those. The D6 env vars (`WARMUP_TASK_TEXT`, `WARMUP_TASK_NORMALIZED`, `WARMUP_TASK_HASH`, `WARMUP_TASK_SUMMARY`, `WARMUP_SCENARIO`, `WARMUP_CHAIN_ID`, `WARMUP_VAULT_PATH`, `WARMUP_PROJECT_DOCS_PATH`, `WARMUP_PROJECT_NAME`, `WARMUP_TASK_PREFIX`, `WARMUP_TASKNOTES_PATH`) are exported before invoking either lane.
 
 **Lane 1 (parallel if available) — NotebookLM:**
-- Load `warmup_contract` from `skills/notebooklm-vault/SKILL.md` via `contract.load_contract(...)`
+- Load `warmup_contract` via `contract.load_contract(Path("$ARK_SKILLS_ROOT/skills/notebooklm-vault/SKILL.md"))`
 - Dispatch a subagent (`Agent` tool, `general-purpose` type) with these instructions:
-  - Read the contract
-  - Run the `session-continue` command's precondition script (`bash skills/notebooklm-vault/scripts/session_shape_check.sh`) with the env vars from D6
-  - If precondition exit 0 → run `session-continue` shell command with var substitution
-  - Else → run `bootstrap`
-  - Validate output against `required_fields`
-  - Return the extracted fields + citations as JSON
+  - Read the contract dict
+  - For each command (`session-continue`, then `bootstrap` as fallback): call `executor.execute_command(cmd, config=notebooklm_config, templates=contract["prompt_templates"], env_overrides={}, timeout_s=90)`. Stop at the first command that returns non-None (not skipped).
+  - Return the extracted dict as JSON
 
 **Lane 2 (serialized) — Vault-local:**
 Only run if `HAS_WIKI` or `HAS_TASKNOTES`. Dispatch one subagent that sequentially:
-1. Loads `warmup_contract` from `skills/wiki-query/SKILL.md`
-2. Picks the scenario-specific prompt template
-3. Runs `python3 skills/wiki-query/scripts/warmup_scan.py ...` (exit retry-once on error; on second failure log `Degraded coverage` and continue)
-4. Loads `warmup_contract` from `skills/ark-tasknotes/SKILL.md`
-5. Runs `python3 skills/ark-tasknotes/scripts/warmup_search.py ...` (same retry semantics)
-6. Returns combined JSON
+1. If `HAS_WIKI`: load wiki-query contract, pick the scenario's template, call `executor.execute_command(...)`. On None result, record a `Degraded coverage` candidate for the wiki lane and continue to tasknotes.
+2. If `HAS_TASKNOTES`: load tasknotes contract, call `executor.execute_command(...)`. Same `Degraded coverage` handling.
+3. Return combined JSON: `{"wiki": ..., "tasknotes": ..., "degraded_lanes": [...]}`
 
-Both lanes have a 90s timeout. If a lane times out, log it and proceed with partial results.
+Each lane has a 90s outer timeout at the subagent level (in addition to the 90s per-command timeout inside `executor.execute_command`).
 
 ### Step 5: Evidence + Synthesis
 
@@ -2504,6 +3008,7 @@ Print: `"Context warm-up complete. Proceeding to next step: {chain's step 1}"`
 
 - `scripts/warmup-helpers.py` — task_normalize, task_summary, task_hash, chain_id_new, CLI dispatch
 - `scripts/contract.py` — warmup_contract YAML parser + validator
+- `scripts/executor.py` — runtime engine: resolves inputs, runs preconditions, substitutes shell templates, extracts JSONPath fields, validates required_fields
 - `scripts/availability.py` — backend availability probe (D5-compliant multi-notebook handling)
 - `scripts/evidence.py` — deterministic evidence-candidate generator (D3 rules)
 - `scripts/synthesize.py` — brief assembly + atomic cache write + pruning
@@ -2532,7 +3037,7 @@ git commit -m "feat(warmup): add SKILL.md orchestration with frontmatter + workf
 
 ## Phase 6 — Integration Tests + MCP Concurrency Probe
 
-### Task 16: bats-core integration test for availability probe
+### Task 17: bats-core integration test for availability probe
 
 **Files:**
 - Create: `skills/ark-context-warmup/scripts/integration/test_availability.bats`
@@ -2614,7 +3119,7 @@ git commit -m "test(warmup): add bats integration tests for availability probe"
 
 ---
 
-### Task 17: MCP concurrency probe (D4 validation script)
+### Task 18: MCP concurrency probe (D4 validation script)
 
 **Files:**
 - Create: `skills/ark-context-warmup/scripts/mcp_concurrency_probe.sh`
@@ -2703,7 +3208,7 @@ git commit -m "chore(warmup): add MCP concurrency probe script (D4 validation)"
 
 ## Phase 7 — Evidence Regression Fixtures
 
-### Task 18: Write fixture library + fixture-driven tests
+### Task 19: Write fixture library + fixture-driven tests
 
 **Files:**
 - Create: `skills/ark-context-warmup/fixtures/*.yaml` (9 files)
@@ -3030,7 +3535,7 @@ git commit -m "test(warmup): add 9 evidence-candidate regression fixtures"
 
 ## Phase 8 — Chain Integration
 
-### Task 19: Prepend step 0 to all 7 chain files
+### Task 20: Prepend step 0 to all 7 chain files
 
 **Files:**
 - Modify: `skills/ark-workflow/chains/greenfield.md`
@@ -3131,7 +3636,7 @@ git commit -m "feat(ark-workflow): prepend /ark-context-warmup as step 0 of ever
 
 ---
 
-### Task 20: Chain-file integrity CI check
+### Task 21: Chain-file integrity CI check
 
 **Files:**
 - Create: `skills/ark-context-warmup/scripts/check_chain_integrity.py`
@@ -3253,7 +3758,7 @@ git commit -m "test(warmup): add chain-file integrity CI check"
 
 ---
 
-### Task 21: Contract-extension integrity CI check
+### Task 22: Contract-extension integrity CI check
 
 **Files:**
 - Create: `skills/ark-context-warmup/scripts/check_contract_extension.py`
@@ -3347,7 +3852,7 @@ git commit -m "test(warmup): add contract-extension integrity CI check"
 
 ## Phase 9 — Distribution
 
-### Task 22: Write manual smoke-test runbook
+### Task 23: Write manual smoke-test runbook
 
 **Files:**
 - Create: `skills/ark-context-warmup/scripts/smoke-test.md`
@@ -3470,7 +3975,7 @@ git commit -m "docs(warmup): add manual smoke-test runbook"
 
 ---
 
-### Task 23: Register skill in plugin manifests + update CLAUDE.md
+### Task 24: Register skill in plugin manifests + update CLAUDE.md
 
 **Files:**
 - Modify: `.claude-plugin/marketplace.json`
@@ -3529,7 +4034,7 @@ git commit -m "feat(warmup): register /ark-context-warmup in plugin manifests"
 
 ---
 
-### Task 24: Version bump + CHANGELOG entry
+### Task 25: Version bump + CHANGELOG entry
 
 **Files:**
 - Modify: `VERSION`
