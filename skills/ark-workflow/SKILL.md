@@ -215,7 +215,8 @@ Output the numbered skill chain with all conditions resolved. Include the sessio
   chain_id: {CHAIN_ID}
   task_text: |
     {TASK_TEXT — multi-line verbatim, indented 2 spaces}
-  task_summary: {TASK_SUMMARY}
+  task_summary: |-
+    {TASK_SUMMARY — single-line, indented 2 spaces; block scalar avoids YAML escaping for ':', '#', '|', quotes}
   task_normalized: {TASK_NORMALIZED}
   task_hash: {TASK_HASH}
   handoff_marker: null

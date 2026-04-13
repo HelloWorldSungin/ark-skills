@@ -861,3 +861,77 @@ class TestEndToEndExecute:
             command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
         )
         assert result is None
+
+
+class TestChainFrontmatterYamlSafety:
+    """Step 6.5 frontmatter template must produce valid YAML even when the
+    task_summary contains YAML-significant characters like ':', '#', '|', or
+    quotes (codex P1 finding). This guards against cold-cache fallback caused
+    by unparseable .ark-workflow/current-chain.md."""
+
+    _SKILL_MD_PATH = _P(__file__).parent.parent.parent / "ark-workflow" / "SKILL.md"
+
+    @staticmethod
+    def _render_chain_frontmatter(task_summary: str) -> str:
+        """Render a chain frontmatter body matching the shape /ark-workflow
+        Step 6.5 should emit after the fix (block scalar |-)."""
+        return (
+            "scenario: greenfield\n"
+            "weight: 2\n"
+            "batch: false\n"
+            "created: 2026-04-13T12:00:00Z\n"
+            "chain_id: 01HABC\n"
+            "task_text: |\n"
+            "  raw task text here\n"
+            "task_summary: |-\n"
+            f"  {task_summary}\n"
+            "task_normalized: foo bar\n"
+            "task_hash: abc123\n"
+            "handoff_marker: null\n"
+            "handoff_instructions: null\n"
+        )
+
+    def test_risky_summaries_roundtrip(self):
+        import yaml
+        risky = [
+            "Fix auth: rate limit",
+            "# starts with hash",
+            "pipe | in middle",
+            'quote "inside" it',
+            "apostrophe 'inside' it",
+            "yes: maybe",
+            "trailing-colon:",
+            "bracket {inside} it",
+        ]
+        for summary in risky:
+            body = self._render_chain_frontmatter(summary)
+            parsed = yaml.safe_load(body)
+            assert parsed is not None, f"YAML parse returned None for summary={summary!r}\nbody:\n{body}"
+            assert parsed["task_summary"].strip() == summary, (
+                f"Roundtrip failed: expected {summary!r}, got {parsed['task_summary']!r}\nbody:\n{body}"
+            )
+
+    def test_skill_md_template_uses_safe_form(self):
+        """Guardrail: SKILL.md's Step 6.5 template must use a YAML-safe form for
+        task_summary. Plain scalar `task_summary: {TASK_SUMMARY}` is NOT safe —
+        it breaks as soon as the task text contains a colon, pound, pipe, or
+        quote. Accept block scalar (|, |-, >, >-) or quoted forms."""
+        import re
+        text = self._SKILL_MD_PATH.read_text()
+        m = re.search(r"###\s+Step\s+6\.5.*?(?=\n###\s|\Z)", text, re.DOTALL | re.IGNORECASE)
+        assert m is not None, "Step 6.5 section not found in ark-workflow/SKILL.md"
+        section = m.group(0)
+        summary_match = re.search(r"^\s*task_summary:(.*?)$", section, re.MULTILINE)
+        assert summary_match is not None, "task_summary line not found in Step 6.5"
+        value_part = summary_match.group(1).strip()
+        safe = (
+            value_part in ("|", "|-", ">", ">-")
+            or value_part.startswith('"')
+            or value_part.startswith("'")
+        )
+        assert safe, (
+            f"task_summary in Step 6.5 uses unsafe plain scalar form: {value_part!r}. "
+            f"Use block scalar `|-` (followed by indented value on the next line) "
+            f"or a quoted scalar to protect against YAML-significant characters "
+            f"in the task text."
+        )
