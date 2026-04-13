@@ -43,9 +43,32 @@ def _validate_contract(d: dict) -> bool:
     return True
 
 
+def _resolve_precondition_paths(contract_dict: dict, skill_dir: Path) -> None:
+    """Rewrite relative preconditions[*].script entries to absolute paths
+    anchored at skill_dir. Mutates in place. Absolute paths are left untouched
+    so callers can opt into external scripts (e.g. `$ARK_SKILLS_ROOT/...`
+    after shell expansion) without surprise rewriting.
+    """
+    for cmd in contract_dict.get("commands", []) or []:
+        for pre in cmd.get("preconditions", []) or []:
+            script = pre.get("script")
+            if not isinstance(script, str) or not script:
+                continue
+            p = Path(script)
+            if p.is_absolute():
+                continue
+            pre["script"] = str((skill_dir / p).resolve())
+
+
 def load_contract(skill_md: Path) -> dict | None:
     """Load and validate the warmup_contract block from a SKILL.md file.
     Returns the warmup_contract dict (unwrapped), or None if missing/invalid.
+
+    Relative precondition script paths are resolved against the SKILL.md's
+    parent directory so /ark-context-warmup can execute them regardless of cwd
+    (fix for the codex P1 finding: contracts declare e.g.
+    'scripts/session_shape_check.sh', and that must resolve to the path under
+    the backend skill, not the project root).
     """
     try:
         text = skill_md.read_text(encoding="utf-8")
@@ -59,6 +82,8 @@ def load_contract(skill_md: Path) -> dict | None:
         except yaml.YAMLError:
             return None
         if _validate_contract(d):
-            return d["warmup_contract"]
+            wc = d["warmup_contract"]
+            _resolve_precondition_paths(wc, skill_md.parent)
+            return wc
         return None
     return None

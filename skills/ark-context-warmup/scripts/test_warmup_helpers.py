@@ -213,6 +213,91 @@ warmup_contract:
         skill_md.write_text("## Warmup Contract\n\n```yaml\nnot: valid: yaml\n```\n")
         assert contract.load_contract(skill_md) is None
 
+    def test_precondition_script_resolved_against_skill_dir(self, tmp_path):
+        """Codex follow-up P1: the contract declares precondition scripts with
+        paths relative to the backend skill (e.g. 'scripts/session_shape_check.sh').
+        load_contract must resolve those to absolute paths anchored at the SKILL.md's
+        directory so /ark-context-warmup can execute them from any cwd."""
+        skill_dir = tmp_path / "my-skill"
+        scripts_dir = skill_dir / "scripts"
+        scripts_dir.mkdir(parents=True)
+        script_file = scripts_dir / "guard.sh"
+        script_file.write_text("#!/usr/bin/env bash\nexit 0\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "## Warmup Contract\n\n"
+            "```yaml\n"
+            "warmup_contract:\n"
+            "  version: 1\n"
+            "  commands:\n"
+            "    - id: with-pre\n"
+            "      shell: 'echo {{x}}'\n"
+            "      inputs:\n"
+            "        x: {from: env, env_var: X, required: true}\n"
+            "      preconditions:\n"
+            "        - id: guard\n"
+            "          script: scripts/guard.sh\n"
+            "      output:\n"
+            "        format: json\n"
+            "        extract: {x: '$.x'}\n"
+            "        required_fields: [x]\n"
+            "```\n"
+        )
+        c = contract.load_contract(skill_md)
+        assert c is not None
+        pre_script = c["commands"][0]["preconditions"][0]["script"]
+        # Must be absolute and point at the resolved file under skill_dir
+        assert Path(pre_script).is_absolute(), (
+            f"precondition script should be absolute, got {pre_script!r}"
+        )
+        assert Path(pre_script).resolve() == script_file.resolve(), (
+            f"precondition script should resolve to {script_file}, got {pre_script}"
+        )
+
+    def test_absolute_precondition_script_preserved(self, tmp_path):
+        """Absolute paths (or $-prefixed paths that a caller has pre-expanded)
+        must pass through load_contract unchanged."""
+        abs_script = tmp_path / "external" / "pre.sh"
+        abs_script.parent.mkdir()
+        abs_script.write_text("#!/usr/bin/env bash\nexit 0\n")
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text(
+            "## Warmup Contract\n\n"
+            "```yaml\n"
+            "warmup_contract:\n"
+            "  version: 1\n"
+            "  commands:\n"
+            "    - id: abs-pre\n"
+            "      shell: 'echo x'\n"
+            "      inputs: {}\n"
+            f"      preconditions:\n"
+            f"        - id: guard\n"
+            f"          script: {abs_script}\n"
+            "      output:\n"
+            "        format: json\n"
+            "        extract: {}\n"
+            "        required_fields: []\n"
+            "```\n"
+        )
+        c = contract.load_contract(skill_md)
+        assert c is not None
+        assert c["commands"][0]["preconditions"][0]["script"] == str(abs_script)
+
+    def test_notebooklm_contract_precondition_is_absolute(self):
+        """End-to-end: the real notebooklm-vault contract must, after load,
+        have an absolute precondition path that points at the committed
+        session_shape_check.sh file."""
+        skill_md = _P(__file__).parent.parent.parent / "notebooklm-vault" / "SKILL.md"
+        c = contract.load_contract(skill_md)
+        assert c is not None
+        expected = skill_md.parent / "scripts" / "session_shape_check.sh"
+        assert expected.exists(), f"fixture check: {expected} must exist"
+        pres = c["commands"][0].get("preconditions", [])
+        assert pres, "session-continue must have at least one precondition"
+        resolved = Path(pres[0]["script"])
+        assert resolved.is_absolute()
+        assert resolved.resolve() == expected.resolve()
+
     def test_validates_required_shell(self, tmp_path):
         bad = """## Warmup Contract
 
