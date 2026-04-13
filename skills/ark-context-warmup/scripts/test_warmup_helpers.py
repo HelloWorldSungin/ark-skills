@@ -538,3 +538,131 @@ class TestEvidenceCandidates:
         assert "tasknotes" in details
         assert "notebooklm" in details
         assert "wiki" in details
+
+
+_SYN_PATH = _P(__file__).parent / "synthesize.py"
+_spec_s = _ilu.spec_from_file_location("synthesize", _SYN_PATH)
+synthesize = _ilu.module_from_spec(_spec_s)
+_spec_s.loader.exec_module(synthesize)
+
+
+class TestSynthesize:
+    def test_brief_structure(self):
+        brief = synthesize.assemble_brief(
+            chain_id="CID123",
+            task_hash="hash1234abcd5678",
+            task_summary="Add rate limiting",
+            scenario="greenfield",
+            notebooklm_out="Recent sessions: S042...",
+            wiki_out="Found: rate-limiting.md",
+            tasknotes_out="3 in-progress, 1 open",
+            evidence=[{"type": "Possible duplicate", "confidence": "high", "id": "X-01",
+                       "detail": "rate limiting", "reason": "component match"}],
+        )
+        assert "## Context Brief" in brief
+        assert "### Where We Left Off" in brief
+        assert "### Recent Project Activity" in brief
+        assert "### Vault Knowledge Relevant to This Task" in brief
+        assert "### Related Tasks & In-flight Work" in brief
+        assert "### Evidence" in brief
+        assert "Possible duplicate" in brief
+
+    def test_empty_evidence_reads_none(self):
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="", evidence=[],
+        )
+        assert "### Evidence\nNone" in brief
+
+    def test_frontmatter_fields(self):
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="bugfix", notebooklm_out="", wiki_out="", tasknotes_out="", evidence=[],
+        )
+        assert brief.startswith("---\n")
+        assert "chain_id: CID123" in brief
+        assert "task_hash: hash1234abcd5678" in brief
+
+    def test_atomic_write_and_prune(self, tmp_path):
+        cache_dir = tmp_path / ".ark-workflow"
+        cache_dir.mkdir()
+        # Pre-populate with a stale brief
+        stale = cache_dir / "context-brief-OLD-00000000.md"
+        stale.write_text("stale")
+        import os, time
+        old_time = time.time() - (25 * 3600)  # 25h ago
+        os.utime(stale, (old_time, old_time))
+        brief = "## Context Brief\nhello"
+        written = synthesize.write_brief_atomic(
+            cache_dir=cache_dir, chain_id="NEW",
+            task_hash="abcdef1234567890", brief_text=brief,
+        )
+        assert written.exists()
+        assert written.name == "context-brief-NEW-abcdef12.md"
+        # 24h pruning happened
+        assert not stale.exists()
+
+    def test_cache_freshness_check(self, tmp_path):
+        cache_dir = tmp_path / ".ark-workflow"
+        cache_dir.mkdir()
+        brief = synthesize.assemble_brief(
+            chain_id="CID", task_hash="abcdef1234567890", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="", evidence=[],
+        )
+        synthesize.write_brief_atomic(cache_dir=cache_dir, chain_id="CID",
+                                      task_hash="abcdef1234567890", brief_text=brief)
+        assert synthesize.cached_brief_if_fresh(
+            cache_dir=cache_dir, chain_id="CID", task_hash="abcdef1234567890"
+        ) is not None
+        # Mismatched hash → cache miss
+        assert synthesize.cached_brief_if_fresh(
+            cache_dir=cache_dir, chain_id="CID", task_hash="DIFFERENT12345678"
+        ) is None
+
+    def test_cache_rejects_wrong_frontmatter(self, tmp_path):
+        """Deferred finding: cached_brief_if_fresh must parse frontmatter, not substring.
+        If a file at the expected path has wrong frontmatter values, reject it."""
+        cache_dir = tmp_path / ".ark-workflow"
+        cache_dir.mkdir()
+        target = cache_dir / "context-brief-MYCID-abcdef12.md"
+        # Write a file whose body happens to mention a chain_id that differs from frontmatter.
+        # Frontmatter chain_id = WRONG, but body mentions "chain_id: MYCID".
+        target.write_text(
+            "---\nchain_id: WRONG\ntask_hash: 00000000abcdef12\n---\n"
+            "## Body\nFor reference, chain_id: MYCID was the previous chain.\n"
+        )
+        # Request chain_id=MYCID, task_hash=abcdef1234567890 (truncates to abcdef12).
+        # A correct frontmatter parse MUST reject this (frontmatter chain_id is WRONG).
+        result = synthesize.cached_brief_if_fresh(
+            cache_dir=cache_dir, chain_id="MYCID", task_hash="abcdef1234567890"
+        )
+        assert result is None
+
+    def test_tmp_filename_unique_per_call(self, tmp_path, monkeypatch):
+        """Deferred finding: tmp file must be unique per process to prevent concurrent-write clobber.
+        The implementation should use PID + random suffix on the tmp file."""
+        cache_dir = tmp_path / ".ark-workflow"
+        cache_dir.mkdir()
+        # Capture tmp filenames via monkeypatching Path.write_text to record the path
+        captured_tmp_paths = []
+        original_write_text = type(tmp_path).write_text
+
+        def recording_write_text(self, *args, **kwargs):
+            if self.name.endswith(".tmp") or ".tmp." in self.name:
+                captured_tmp_paths.append(self.name)
+            return original_write_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(type(tmp_path), "write_text", recording_write_text)
+
+        # Write twice with same chain_id+hash — tmp filenames must differ
+        synthesize.write_brief_atomic(
+            cache_dir=cache_dir, chain_id="CID", task_hash="abcdef1234567890",
+            brief_text="a",
+        )
+        synthesize.write_brief_atomic(
+            cache_dir=cache_dir, chain_id="CID", task_hash="abcdef1234567890",
+            brief_text="b",
+        )
+        assert len(captured_tmp_paths) >= 2
+        # At least two distinct tmp names (ensures uniqueness)
+        assert len(set(captured_tmp_paths)) == len(captured_tmp_paths)
