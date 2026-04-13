@@ -73,11 +73,15 @@ def probe(
     else:
         result["wiki"] = True
 
-    # TaskNotes
-    counter = tasknotes_path / "meta" / f"{task_prefix}counter"
-    if not counter.exists():
+    # TaskNotes — warmup_search.py only reads {tasknotes_path}/Tasks/*.md. The
+    # counter file is only used when CREATING new tasks, not when searching,
+    # so availability must key off the Tasks/ directory existence. Imported or
+    # read-only vaults have a populated Tasks/ but no counter, and the lane
+    # should remain available there (codex P2 finding).
+    tasks_dir = tasknotes_path / "Tasks"
+    if not tasks_dir.is_dir():
         result["tasknotes"] = False
-        result["tasknotes_skip_reason"] = f"counter file missing at {counter}"
+        result["tasknotes_skip_reason"] = f"Tasks directory missing at {tasks_dir}"
     else:
         result["tasknotes"] = True
 

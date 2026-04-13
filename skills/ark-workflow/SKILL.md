@@ -195,10 +195,16 @@ Output the numbered skill chain with all conditions resolved. Include the sessio
 
 ### Step 6.5: Activate Continuity
 - Create TodoWrite tasks for each step in the resolved chain
-- Compute task fields for `/ark-context-warmup` (step 0 of every chain). `/ark-workflow` needs the same `ARK_SKILLS_ROOT` resolution as the warm-up skill — see `/ark-context-warmup` SKILL.md's Project Discovery section for the canonical snippet. Reuse it here:
+- Compute task fields for `/ark-context-warmup` (step 0 of every chain). `/ark-workflow` needs the same `ARK_SKILLS_ROOT` resolution as the warm-up skill — mirror `/ark-context-warmup` SKILL.md's Project Discovery section verbatim so dev-mode runs inside the ark-skills worktree resolve helpers from the branch under test rather than a stale installed copy:
   ```bash
-  # Resolve ARK_SKILLS_ROOT (see /ark-context-warmup/SKILL.md for full logic)
-  ARK_SKILLS_ROOT="${CLAUDE_PLUGIN_DIR:-$(find ~/.claude/plugins -maxdepth 6 -type d -name ark-skills 2>/dev/null | head -1)}"
+  if [ -n "${CLAUDE_PLUGIN_DIR:-}" ] && [ -d "$CLAUDE_PLUGIN_DIR" ]; then
+      ARK_SKILLS_ROOT="$CLAUDE_PLUGIN_DIR"
+  elif [ -f "$(pwd)/.claude-plugin/marketplace.json" ]; then
+      # CWD is the ark-skills repo itself (dev/test mode)
+      ARK_SKILLS_ROOT="$(pwd)"
+  else
+      ARK_SKILLS_ROOT=$(find ~/.claude/plugins -maxdepth 6 -type d -name ark-skills 2>/dev/null | head -1)
+  fi
   TASK_TEXT="<verbatim user request>"
   TASK_NORMALIZED=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" normalize "$TASK_TEXT")
   TASK_SUMMARY=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" summary "$TASK_TEXT")

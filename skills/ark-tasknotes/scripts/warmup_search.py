@@ -25,16 +25,22 @@ def _parse_frontmatter(path: Path) -> dict:
     return result
 
 
-def _extract_component(task_normalized: str) -> str:
-    """Very conservative component extractor.
-    Looks for the first token ≥4 chars — a reasonable proxy for component name.
-    Spec D3 says: first '[A-Z][a-zA-Z0-9]+' run in task_summary OR None. But task_normalized
-    is already lowercased; so we use its first meaningful token instead.
-    """
-    for tok in task_normalized.split():
-        if len(tok) >= 4:
-            return tok
-    return ""
+_COMPONENT_RE = re.compile(r"[A-Z][a-zA-Z0-9]+")
+
+
+def _extract_component(task_summary: str) -> str:
+    """Per spec D3: component is the first '[A-Z][a-zA-Z0-9]+' run in
+    task_summary, or empty string if none. Returned lowercased so the caller
+    can do case-insensitive comparisons against frontmatter component fields.
+
+    Codex P2: an earlier version scanned task_normalized (already lowercased)
+    with a '≥4 chars' heuristic, which emitted a component for every task and
+    produced false-positive high-confidence duplicate flags on lowercase
+    noun-led requests like 'cache invalidation fix'."""
+    if not task_summary:
+        return ""
+    m = _COMPONENT_RE.search(task_summary)
+    return m.group(0).lower() if m else ""
 
 
 def _token_overlap(a: str, b: str) -> float:
@@ -47,11 +53,11 @@ def _token_overlap(a: str, b: str) -> float:
     return len(shared) / smaller
 
 
-def search(tasknotes_path: Path, prefix: str, task_normalized: str, scenario: str) -> dict:
+def search(tasknotes_path: Path, prefix: str, task_normalized: str, task_summary: str, scenario: str) -> dict:
     tasks_dir = tasknotes_path / "Tasks"
     results = []
     status_counter = Counter()
-    component = _extract_component(task_normalized)
+    component = _extract_component(task_summary)
     if not tasks_dir.is_dir():
         return {
             "matches": [],
@@ -94,10 +100,12 @@ def main():
     parser.add_argument("--tasknotes", required=True, type=Path)
     parser.add_argument("--prefix", required=True, help="Task prefix including trailing dash, e.g. Arkskill-")
     parser.add_argument("--task-normalized", required=True)
+    parser.add_argument("--task-summary", required=True,
+                        help="Original case-preserving task summary; component extraction uses this per spec D3.")
     parser.add_argument("--scenario", required=True)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    out = search(args.tasknotes, args.prefix, args.task_normalized, args.scenario)
+    out = search(args.tasknotes, args.prefix, args.task_normalized, args.task_summary, args.scenario)
     print(json.dumps(out, indent=2))
     return 0
 

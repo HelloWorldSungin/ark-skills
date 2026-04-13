@@ -385,10 +385,12 @@ class TestAvailabilityProbe:
         assert p["wiki"] is False
         assert "index.md" in p["wiki_skip_reason"]
 
-    def test_tasknotes_detected(self, tmp_path):
+    def test_tasknotes_detected_from_tasks_dir(self, tmp_path):
+        """Codex P2: warmup_search.py only reads Tasks/*.md, never the counter
+        file. Availability must key off the searchable content, not the
+        task-creation counter."""
         tn = tmp_path / "tn"
-        (tn / "meta").mkdir(parents=True)
-        (tn / "meta" / "X-counter").write_text("1\n")
+        (tn / "Tasks").mkdir(parents=True)
         p = avail.probe(
             project_repo=tmp_path,
             vault_path=tmp_path / "nope",
@@ -397,6 +399,34 @@ class TestAvailabilityProbe:
             notebooklm_cli_path=None,
         )
         assert p["tasknotes"] is True
+
+    def test_tasknotes_available_without_counter_file(self, tmp_path):
+        """Imported or read-only vaults may have TaskNotes but no counter
+        file yet. The search backend still works; availability must agree."""
+        tn = tmp_path / "tn"
+        (tn / "Tasks").mkdir(parents=True)
+        (tn / "Tasks" / "X-01.md").write_text("---\ntitle: sample\n---\n")
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=tmp_path / "nope",
+            tasknotes_path=tn,
+            task_prefix="X-",
+            notebooklm_cli_path=None,
+        )
+        assert p["tasknotes"] is True
+
+    def test_tasknotes_unavailable_without_tasks_dir(self, tmp_path):
+        tn = tmp_path / "tn"
+        tn.mkdir()
+        # No Tasks/ subdir — nothing for warmup_search to read.
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=tmp_path / "nope",
+            tasknotes_path=tn,
+            task_prefix="X-",
+            notebooklm_cli_path=None,
+        )
+        assert p["tasknotes"] is False
 
     def test_notebooklm_detected_with_valid_config(self, tmp_path):
         (tmp_path / ".notebooklm").mkdir()
