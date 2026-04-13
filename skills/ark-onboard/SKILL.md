@@ -457,17 +457,76 @@ If not a git repo, offer `git init`. If working tree is dirty, warn user and ask
 
 > **You are at Step 1 of 18 — Gathering project info.**
 
-Ask the user for the 4 required fields:
+Ask the user for 4 fields, with the new centralized-vault defaulting behavior:
 
-1. **Project name** — e.g., `my-new-project`
-2. **Task prefix** — e.g., `ArkNew-` (must end with `-`)
-3. **Vault path** — where to create the vault (default: `./vault/`)
-4. **Vault layout** — `standalone` (flat, docs at vault root) or `monorepo` (project subdirectory under vault root)
+**Prompt 1 — Project name:**
+```
+Project name? (e.g., my-new-project)
+```
 
-Validate:
-- Task prefix must end with exactly one `-`
-- Vault path must not already exist (if it does, redirect to Migration or Repair path)
-- Project name should be lowercase-kebab-case (warn if not, but allow)
+**Prompt 2 — Task prefix:**
+```
+Task prefix? (e.g., ArkNew-) — must end with `-`
+```
+
+**Prompt 3 — Vault layout:**
+```
+Vault layout?
+  [S] Standalone — flat, project docs at vault root
+  [M] Monorepo   — project docs in a subdirectory under vault root
+Choose [S/M]:
+```
+
+**Prompt 4 — Centralized vault location:**
+
+Compute the default by detecting whether `$HOME/.superset` exists:
+```bash
+if [ -d "$HOME/.superset" ]; then
+  DEFAULT_PATH="\$HOME/.superset/vaults/<project>"
+else
+  DEFAULT_PATH="\$HOME/Vaults/<project>"
+fi
+```
+
+Substitute `<project>` with the project name from Prompt 1. Show the literal `$HOME/` form (not expanded) as the default:
+```
+Where should the centralized vault live?
+Default: $DEFAULT_PATH
+[press Enter to accept, or type a $HOME-prefixed path]
+```
+
+**Prompt 5 — Escape hatch (rare):**
+```
+Use embedded vault inside the project repo instead? [y/N]
+The centralized layout lets multiple worktrees and the Obsidian app share
+one source of truth. Pick embedded only if you explicitly want the vault
+committed to the project repo.
+```
+
+**Validate each answer before proceeding:**
+
+- **Task prefix:** Must end with exactly one `-`. Reject `ArkNew` (no dash) or `ArkNew--` (double dash).
+- **Project name:** Lowercase-kebab-case recommended. Warn but allow otherwise.
+- **Vault path (if user accepted centralized):**
+  - Must start with `$HOME/` or `~/` (normalize `~/` to `$HOME/`). Reject any other absolute path:
+    ```bash
+    case "$USER_PATH" in
+      '$HOME/'*) ;;  # OK
+      '~/'*) USER_PATH="\$HOME/${USER_PATH#~/}" ;;  # normalize
+      *)
+        echo "ERROR: Vault path must be under \$HOME so tracked metadata stays portable."
+        echo "To use an external drive, symlink it: ln -s /Volumes/Drive/vaults \$HOME/Vaults"
+        echo "Then point the wizard at the \$HOME path."
+        # Re-prompt
+        ;;
+    esac
+    ```
+  - The resolved absolute path (`eval echo "$USER_PATH"`) must not already exist, OR must exist and be empty. If it exists with content from a different project, refuse (see Edge Cases).
+- **Vault path (if user picked embedded):** Default to `./vault/` inside the project repo. Still reject if the path already exists.
+
+**If user picked embedded:** Branch to the "Embedded escape hatch" sub-flow (Task 7). The wizard skips centralized-vault steps (2a-2d) and proceeds with the legacy `./vault/` setup.
+
+**Otherwise:** Continue to Step 2 (Python check), then Steps 2a-2d (centralized setup).
 
 ### Greenfield Step 2: Verify Python 3.10+
 
