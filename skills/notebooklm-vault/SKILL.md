@@ -27,6 +27,15 @@ A single NotebookLM notebook holds the vault content:
 
 Config lives in `.notebooklm/config.json` (project repo, tracked). Sync state lives in `vault/.notebooklm/sync-state.json` (vault repo, tracked, shared across environments). The vault also has its own `.notebooklm/config.json` with `vault_root: "."`.
 
+### Centralized Vault Awareness
+
+When the project's `vault` is a symlink (centralized-vault pattern), this skill:
+- Reads `.notebooklm/config.json` from the project root first (expected `vault_root: "vault"`), falls back to `<vault>/.notebooklm/config.json` (expected `vault_root: "."`). Both resolve to the same directory.
+- Locates `sync-state.json` exclusively inside the vault repo: `<vault>/.notebooklm/sync-state.json`. Never writes sync-state to the project repo.
+- Bootstraps missing `sync-state.json` with empty state `{"last_sync": null, "files": {}}` on first sync.
+
+Detect via `test -L vault`. When vault is NOT a symlink (embedded layout), sync-state remains in the project repo's `.notebooklm/` directory — backward compatible.
+
 ## Prerequisites
 
 - `notebooklm` CLI installed globally via pipx (v0.3.3+)

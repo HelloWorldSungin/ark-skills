@@ -5,7 +5,7 @@ description: Diagnostic check for Ark ecosystem health — plugins, CLAUDE.md, v
 
 # Ark Health Check
 
-Run all 19 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions.
+Run all 20 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions.
 
 ## Context-Discovery Exemption
 
@@ -13,9 +13,9 @@ This skill is exempt from normal context-discovery. It must work when CLAUDE.md 
 
 - Checks 1–3 (Plugins) run normally
 - Checks 4–6 (Project Configuration) report **fail** with explanation
-- Checks 7–19 report "cannot check — CLAUDE.md missing" instead of failing silently
+- Checks 7–20 report "cannot check — CLAUDE.md missing" instead of failing silently
 
-Never abort early. Run all 19 checks regardless of earlier failures.
+Never abort early. Run all 20 checks regardless of earlier failures.
 
 ## Vault Path Terminology
 
@@ -96,7 +96,7 @@ Detection: Read the `system-reminder` skill list in your current session context
 
 ### Project Configuration (Checks 4–6)
 
-Read CLAUDE.md before running these checks. If CLAUDE.md does not exist, checks 4–6 all fail and checks 7–19 report "cannot check — CLAUDE.md missing".
+Read CLAUDE.md before running these checks. If CLAUDE.md does not exist, checks 4–6 all fail and checks 7–20 report "cannot check — CLAUDE.md missing".
 
 ```bash
 # Attempt to read CLAUDE.md from current working directory
@@ -271,7 +271,7 @@ echo "$COUNTER_VALUE" | grep -qE '^[0-9]+$' && echo "PASS: counter = $COUNTER_VA
 
 ---
 
-### Integrations (Checks 12–19)
+### Integrations (Checks 12–20)
 
 **Check 12 — Obsidian vault plugins** | Tier: Standard
 
@@ -466,11 +466,71 @@ notebooklm auth check --test 2>/dev/null && echo "PASS: authenticated" || echo "
 
 ---
 
+**Check 20 — Vault externalized** | Tier: Standard (warn-only, never fails)
+
+Detection logic: examine three inputs — `vault` artifact (symlink / real dir / missing), `scripts/setup-vault-symlink.sh` (present / absent), and `CLAUDE.md` `Vault layout` row (opt-out present / absent).
+
+```bash
+# Inputs
+IS_SYMLINK=false; SYMLINK_OK=false; SYMLINK_BROKEN=false; SYMLINK_DRIFT=false
+SCRIPT_OK=false; REAL_DIR=false; MISSING=false; OPTOUT=false
+
+if [ -L vault ]; then
+  IS_SYMLINK=true
+  if [ -e vault ]; then
+    SYMLINK_OK=true
+  else
+    SYMLINK_BROKEN=true
+  fi
+elif [ -d vault ]; then
+  REAL_DIR=true
+else
+  MISSING=true
+fi
+
+if [ -f scripts/setup-vault-symlink.sh ]; then
+  SCRIPT_OK=true
+  if [ "$SYMLINK_OK" = "true" ]; then
+    SCRIPT_TARGET=$(grep -E '^VAULT_TARGET="[^"]*"\s*$' scripts/setup-vault-symlink.sh | head -1 | sed -E 's/^VAULT_TARGET="([^"]+)".*$/\1/')
+    EXPANDED=$(eval "echo $SCRIPT_TARGET")
+    [ "$(readlink vault)" != "$EXPANDED" ] && SYMLINK_DRIFT=true
+  fi
+fi
+
+if [ -f CLAUDE.md ] && grep -iqE '^\|\s*\*\*Vault layout\*\*\s*\|[^|]*embedded' CLAUDE.md; then
+  OPTOUT=true
+fi
+
+# Decision matrix — see table below
+```
+
+**Status table (exhaustive):**
+
+| Observed state | Status | Message |
+|----------------|--------|---------|
+| Symlink, target resolves, matches script VAULT_TARGET (`SYMLINK_OK && SCRIPT_OK && !SYMLINK_DRIFT`) | `pass` | — |
+| Real directory + opt-out present (`REAL_DIR && OPTOUT`) | `pass` | — |
+| Missing entirely + opt-out present + no script (`MISSING && OPTOUT && !SCRIPT_OK`) | `pass` | Opt-out declares embedded; check 7 (vault-dir-exists) handles the missing vault as Critical fail. |
+| Real directory, no opt-out (`REAL_DIR && !OPTOUT`) | `warn` | "Vault is embedded inside the project repo. Run `/ark-onboard` to externalize, or set `Vault layout: embedded` in CLAUDE.md if this is intentional." |
+| Symlink, target missing (`SYMLINK_BROKEN`) | `warn` | "Vault symlink is broken. Run `/ark-onboard` Repair." |
+| Symlink, target mismatch (`SYMLINK_DRIFT`) | `warn` | "Vault symlink target disagrees with `scripts/setup-vault-symlink.sh` VAULT_TARGET. Run `/ark-onboard` Repair." |
+| Symlink present but script missing (`IS_SYMLINK && !SCRIPT_OK`) | `warn` | "Vault symlink exists but canonical script `scripts/setup-vault-symlink.sh` is missing. Run `/ark-onboard` Repair to backfill." |
+| Missing entirely + script present (`MISSING && SCRIPT_OK`) | `warn` | "Canonical vault script exists but no `vault` artifact. Run `/ark-onboard` Repair to create the symlink." |
+| Missing entirely + no script + no opt-out (`MISSING && !SCRIPT_OK && !OPTOUT`) | `warn` | "No vault configured. Run `/ark-onboard` Greenfield." |
+
+Check #20 **never returns `fail`**. All negative states are `warn`. State detection independently classifies these conditions as Partial Ark for routing purposes.
+
+- **Pass:** One of the pass conditions above holds.
+- **Warn:** Any of the warn conditions above holds. Non-blocking — does NOT demote tier.
+- **Fail:** Never.
+
+---
+
 ## Workflow
 
-### Step 1: Run All 19 Checks
+### Step 1: Run All 20 Checks
 
-Run checks in sequence. Do not abort on failure — complete all 19. Track results as you go:
+Run checks in sequence. Do not abort on failure — complete all 20. Track results as you go:
 
 ```
 results = {
@@ -493,10 +553,11 @@ results = {
   17: pass|fail|upgrade,
   18: pass|fail|upgrade|skip,
   19: pass|fail|upgrade|skip,
+  20: pass|warn,
 }
 ```
 
-For checks 7–19: if CLAUDE.md was missing (check 4 = fail), record `skip` with message "cannot check — CLAUDE.md missing".
+For checks 7–20: if CLAUDE.md was missing (check 4 = fail), record `skip` with message "cannot check — CLAUDE.md missing".
 
 For checks 15, 16, 18, 19: if their prerequisite check failed, record `skip` with message "requires check N".
 
@@ -508,17 +569,19 @@ Each check gets one of four outcomes:
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking issue (used for check 10 staleness and check 16 hook-state drift) |
+| `~~` | Warning | Non-blocking issue (used for check 10 staleness, check 16 hook-state drift, and check 20 vault-externalized) |
 | `--` | Available upgrade | Feature not installed but optional; above user's current tier |
 
 **Tier assignment:**
 
-Determine the user's implicit tier from the highest tier that is fully passing:
+Determine the user's implicit tier from the highest tier where no Critical or Standard check returns `fail`. Warn and skip outcomes do NOT block tier classification.
 
-- **Minimal tier:** Checks 1–9 all pass, checks 10–11 skip (no vault)
-- **Quick tier:** Checks 1–11 all pass (vault present, no integrations)
-- **Standard tier:** Checks 1–13 all pass (TaskNotes MCP configured)
-- **Full tier:** Checks 1–19 all pass (MemPalace + history hook + NotebookLM)
+- **Minimal tier:** No fail in checks 1–9, checks 10–11 skip (no vault)
+- **Quick tier:** No fail in checks 1–11 (vault present, no integrations)
+- **Standard tier:** No fail in checks 1–13 (TaskNotes MCP configured)
+- **Full tier:** No fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
+
+Warn-returning checks (10 index staleness, 20 vault externalized) are advisory — they surface in the scorecard but don't demote the tier.
 
 Use this tier label in the summary line.
 
@@ -549,6 +612,10 @@ Vault Structure
   ~~  Index stale ({N} pages modified since last generation)
       Refresh: cd {vault_root} && python3 _meta/generate-index.py
   OK  Python {version} available
+  OK  Vault externalized (symlink -> $HOME/.superset/vaults/{project})
+  -- or warn variant --
+  ~~  Vault embedded inside project repo (no opt-out)
+      Fix: Run /ark-onboard to externalize, or set `Vault layout: embedded` in CLAUDE.md
 
 Integrations
   OK  Obsidian vault plugins installed
@@ -584,6 +651,6 @@ Run /ark-onboard to fix or upgrade
 - **Always points to `/ark-onboard`** for remediation at the end of every run.
 - **Index staleness is a warning, not a failure.** A stale index does not block any workflow.
 - **Tier vocabulary** gives the user a name for their current setup level (Minimal / Quick / Standard / Full).
-- **This skill is authoritative** for all 19 check definitions. If `/ark-onboard`'s copy of a check drifts from this file, this file is the source of truth.
+- **This skill is authoritative** for all 20 check definitions. If `/ark-onboard`'s copy of a check drifts from this file, this file is the source of truth.
 - **Plugin detection is session-based**, not filesystem-based. Plugins are detected by whether their skills appear in the current session — not by inspecting `~/.claude/plugins/`.
 - **Graceful degradation:** Never abort on CLAUDE.md absence. Report clearly and continue.

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.11.0] - 2026-04-12
+## [1.12.0] - 2026-04-13
 
 ### Added
 
@@ -16,9 +16,46 @@ All notable changes to this project will be documented in this file.
 
 - All seven chain files (`skills/ark-workflow/chains/*.md`) prepend `0. /ark-context-warmup` as step 0 in every weight-class section; handoff markers preserved (still reference original step numbers — see the plan's Task 20 notes).
 
+### Fixed
+
+Post-implementation hardening from successive codex review passes (committed on this branch before ship):
+
+- **YAML safety.** `task_summary` is now emitted as a block scalar (`|-`) in both the chain-file frontmatter (`/ark-workflow` Step 6.5) and the cache-brief frontmatter (`synthesize.assemble_brief`). Task text containing `:`, `#`, `|`, or quotes no longer invalidates the frontmatter and forces cold-cache every run.
+- **NotebookLM lane works end-to-end.** Added `json_path_template` to both `notebook_id` input specs (was raising `KeyError` silently and returning None). Template inputs now interpolate `{UPPERCASE_VAR}` placeholders from the environment (was asking NotebookLM about the literal string `"{WARMUP_TASK_TEXT}"`). Interpolation iterates until fixed-point to resolve wiki-query's two-layer `scenario_query` → scenario template indirection. Precondition script paths are now resolved at contract-load time against the backend skill directory rather than CWD.
+- **Shell safety.** `substitute_shell_template` now passes every substituted value through `shlex.quote`, and the three backend `shell:` templates drop their surrounding quotes. Task text with `"`, backticks, or `$(...)` lands as a literal string in the backend rather than breaking the command or triggering host-side shell substitution.
+- **Availability probes.** Wiki lane availability only requires `index.md` (schema check dropped — `warmup_scan` never reads it). TaskNotes lane availability keys off `Tasks/` directory existence instead of the task-creation counter file (imports and read-only clones register as available now). NotebookLM config lookup falls through to the project-repo config when the vault-side config is malformed.
+- **Evidence pipeline.** Empty-but-present required fields (`[]`, `{}`, `False`) are accepted as valid backend output rather than demoting to Degraded coverage. Component extraction follows spec D3 (first `[A-Z][a-zA-Z0-9]+` run in `task_summary`) instead of a lowercase-first-token heuristic that emitted false-positive high-confidence duplicates on lowercase noun-led requests. Rejection triggers normalize apostrophes on both sides so "won't do" matches.
+- **Table-form index parser.** `warmup_scan` recognises both bullet (`- [[Page]]`) and table (`| [[Page.md\|Title]] |`) forms in `index.md`. Generated Ark vault indices use the table form, so the wiki lane was returning empty matches on every real vault.
+- **Python 3.9 compatibility.** Added `from __future__ import annotations` to 4 of 5 affected script files; `executor.py` uses `typing.Optional[X]` (with a documented exception for the Python 3.14 `@dataclass` + `spec_from_file_location` interaction).
+- Chains `bugfix.md` Heavy pivot-to-Greenfield now anchors at step 0 so the mandatory warm-up still runs on redesign branches.
+- Step 6.5's `ARK_SKILLS_ROOT` snippet matches the canonical three-case resolution in `/ark-context-warmup` (adds the `./.claude-plugin/marketplace.json` repo-local case).
+
 ### Migration notes
 
-Chains produced by `/ark-workflow` before 1.11.0 (legacy chain files) still work — `/ark-context-warmup` detects missing extended-contract fields, prompts for task text inline, and logs a warning that cache will be cold. Re-run `/ark-workflow` to regenerate `.ark-workflow/current-chain.md` with the new fields.
+Chains produced by `/ark-workflow` before 1.12.0 (legacy chain files) still work — `/ark-context-warmup` detects missing extended-contract fields, prompts for task text inline, and logs a warning that cache will be cold. Re-run `/ark-workflow` to regenerate `.ark-workflow/current-chain.md` with the new fields.
+
+## [1.11.0] - 2026-04-12
+
+### Added
+
+- **`/ark-onboard` centralized-vault recommendation.** Greenfield now defaults to an externalized vault at `~/.superset/vaults/<project>/` (or `~/Vaults/<project>/` for non-superset users) with a `vault` symlink into the project repo. Mirrors ArkNode-Poly's production pattern. Includes:
+  - New Greenfield Steps 2a-2d (vault repo init, symlink, automation install, GitHub remote offer).
+  - Explicit embedded-vault escape hatch via `| **Vault layout** | embedded (not symlinked) |` row in CLAUDE.md.
+  - `$HOME/`-portable `VAULT_TARGET` in the tracked `scripts/setup-vault-symlink.sh` — collaborators' clones are not poisoned with machine-specific paths.
+  - Path constraint: vault paths must be under `$HOME` (users with external drives symlink-in).
+- **Externalization path.** Projects with an embedded `vault/` directory + no opt-out now route through a plan-file generator that emits `docs/superpowers/plans/YYYY-MM-DD-externalize-vault.md`. The plan has Phase 0 preflight (including `git diff --no-index` sibling comparison + empty-dir shape check), Phase 1 destructive main-repo steps, Phase 2 per-sibling worktree conversion, Phase 3 manual follow-ups.
+- **Repair additions.** Centralized-vault-specific repairs for broken symlink, symlink-drift (readlink vs script VAULT_TARGET), missing canonical script (with backfill from readlink), and missing post-checkout hook.
+- **Check #20 — vault-externalized (warn-only, Standard tier).** Exhaustive status matrix across symlink/real-dir/missing × script-present/absent × opt-out. Never fails — embedded vaults still qualify as Healthy when opt-out is explicit.
+- Downstream skill notes in `/notebooklm-vault` (sync-state location), `/wiki-update` (hostname-prefixed session logs), `/codebase-maintenance` (vault-repo commit target), `/ark-workflow` (advisory surfacing).
+
+### Changed
+
+- **Healthy-classification rule relaxed** in both `/ark-onboard` and `/ark-health`: was "all Critical + Standard pass," now "no Critical or Standard fail (warn is OK)." Allows warn-returning checks (10 index staleness, 20 vault-externalized) to surface as advisory without demoting tier.
+- **Total diagnostic checks: 19 → 20.**
+
+### Design notes
+
+Spec: `docs/superpowers/specs/2026-04-12-ark-onboard-centralized-vault-design.md` (commit `dd80baa`, revision 4, codex round-4 PASS).
 
 ## [1.10.1] - 2026-04-12
 

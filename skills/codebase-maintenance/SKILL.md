@@ -128,6 +128,23 @@ After cleanup execution completes:
 - Cleanup checklist: `references/cleanup-checklist.md`
 </references>
 
+### Centralized Vault — Commit Targets
+
+When the project's `vault` is a symlink, vault content lives in a separate git repo. Commit and push operations must target the **vault repo**, not the project repo:
+
+```bash
+if [ -L vault ]; then
+  cd "$(readlink vault)"
+  git add . && git commit -m "vault: {reason}" && git push
+  cd -
+else
+  # Embedded layout — vault is part of the project repo
+  git add vault/ && git commit -m "vault: {reason}"
+fi
+```
+
+Do not `git add vault/` in the project repo when `vault` is a symlink — it's in `.gitignore` anyway, but the error message is confusing.
+
 <success_criteria>
 <criterion>Correct workflow selected based on argument or user choice</criterion>
 <criterion>Planning mode activated before destructive operations (code cleanup)</criterion>
