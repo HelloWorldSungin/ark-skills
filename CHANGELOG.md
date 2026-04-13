@@ -2,6 +2,55 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.0] - 2026-04-12
+
+### Fixed
+- **`/notebooklm-vault` sync no longer accumulates ghost source registrations.**
+  `notebooklm-py`'s `add_file()` is a 3-step pipeline (register → start-upload →
+  stream); if step 2 or 3 fails, a ghost source is registered on the server but
+  not tracked locally, so the next run re-registers it. This caused
+  `linear-updater`'s notebooks to hit the 300-source cap with ~332 duplicates
+  between them. The same bug class applied to the plugin's
+  `skills/notebooklm-vault/scripts/notebooklm-vault-sync.sh` (verified by direct
+  code reading). Ported the fix from `linear-updater`:
+  - **Notebook-authoritative existence.** Each incremental run lists remote
+    sources once per notebook and builds a title→id map; existence is checked
+    against the remote, not against local state. `sync-state.json` is now a
+    hash cache only.
+  - **Dedupe-and-heal pass on every incremental run.** Groups sources by title;
+    keeps survivor (READY > PROCESSING > ERROR, tiebreak oldest `created_at`),
+    deletes the rest. Orphan-prunes `.md` titles not present in the vault
+    (preserves non-`.md` sources like manually-added PDFs).
+  - **Ghost registration recovery.** Snapshots per-title source IDs before each
+    `notebooklm source add`. On any failure, re-lists and diffs against the
+    snapshot; if exactly one new source appeared, claims it instead of retrying
+    (which would create a duplicate).
+  - **Collision detection (fail-loud).** Two vault files with the same basename
+    routed to the same notebook would silently overwrite each other (NotebookLM
+    titles by basename only). Script now fails with a clear error listing the
+    conflicting paths.
+  - **State-delete verification.** The state-driven deletion pass now verifies
+    a source is actually gone (re-list check) before clearing local state on
+    delete failure, preventing orphan leaks.
+  - **Per-vault concurrency lock.** `mkdir`-based lock at
+    `/tmp/notebooklm-vault-sync.<vault>.lock` serializes concurrent runs. Stale
+    locks from crashed runs are detected via PID and removed automatically.
+    Portable (no `flock` dependency — works on macOS out of the box).
+  - **Cleanup trap surfaces flush failures** instead of silencing them.
+- Latent exclusion bug: `TaskNotes/` and `_meta/` now included in the default
+  excludes list for standalone vaults (previously only filtered for wrapped
+  vaults via subdir discovery). TaskNotes were never meant to sync to NotebookLM.
+- Empty notebook id in `.notebooklm/config.json` now fails with a clear
+  "Run '/notebooklm-vault setup'" message instead of an opaque
+  `notebooklm source list` error.
+
+### Changed
+- `/notebooklm-vault` SKILL.md: new `## Sync Behavior` section documenting the
+  four modes (incremental, `--sessions-only`, `--file`, `--full`), ghost
+  recovery, and troubleshooting. Updated the "Periodic sync is owned by the
+  scheduled sync service" warning — local runs are now safe, since the script
+  self-heals drift rather than creating duplicates.
+
 ## [1.8.0] - 2026-04-10
 
 ### Changed

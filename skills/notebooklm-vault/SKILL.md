@@ -295,7 +295,25 @@ Read `.notebooklm/config.json` to determine notebook structure:
 ## Important Notes
 
 - **Always use `--notebook <id>` explicitly** — never rely on `notebooklm use` context, which can be overwritten by parallel agent sessions.
-- **The sync script is the source of truth** for file->source mapping. Don't manually add sources outside of it.
+- **NotebookLM is the source of truth for existence, sync-state is a hash cache** (since plugin v1.9.0). Every incremental sync lists remote sources, dedupes by title, prunes orphans, and only then uploads new/changed files. Running the sync script locally is now safe — it self-heals any drift rather than creating duplicates.
 - **Config is tracked, sync-state is in vault repo** — config stays in the project repo's `.notebooklm/config.json`. Sync state lives in the vault repo at `vault/.notebooklm/sync-state.json` and is shared across environments.
 - **This skill complements the global `notebooklm` skill** — use this one for vault-specific operations, use the global one for general NotebookLM tasks.
-- **Periodic sync is owned by the scheduled sync service.** Do not run the sync script locally except during `setup` (one-time `--full` bootstrap). Local runs diverge `sync-state.json` and cause duplicate sources hitting the 300-source-per-notebook cap.
+- **Concurrent runs fail loudly.** A mkdir-based per-vault lock at `/tmp/notebooklm-vault-sync.<vault>.lock` serializes syncs. If two runs race, the second exits with `Another sync is already running`.
+
+## Sync Behavior
+
+The sync script (`scripts/notebooklm-vault-sync.sh`) has three operational modes:
+
+| Mode | When to use | What it does |
+|------|-------------|--------------|
+| Incremental (default) | Normal runs, end-of-session, `/wiki-update` | Lists remote sources → dedupes & prunes orphans → uploads new/changed files. Self-heals any accumulated drift on every run. |
+| `--sessions-only` | Quick refresh of just session logs | Same as incremental, scoped to `Session-Logs/` only. |
+| `--file PATH` | Single-file sync (fast path) | Fetches target notebook's sources, syncs just that file. Skips dedupe/heal for speed. |
+| `--full` | **Emergency recovery only** | Nukes all sources in the notebook and re-uploads. Use only if a notebook hits the 300-source cap or state has drifted beyond what incremental can heal. |
+
+**Ghost-registration recovery (built in).** `notebooklm source add` is a 3-step pipeline (register → start-upload → stream). If step 2 or 3 fails, a ghost source remains on the server. The script snapshots per-title source IDs before each add; on failure, re-lists and claims the ghost instead of creating a duplicate on retry.
+
+**Troubleshooting:**
+- *"Another sync is already running"* — wait for the other run, or inspect `/tmp/notebooklm-vault-sync.<vault>.lock/pid`. Stale locks (from crashed runs) are detected and removed automatically on the next run.
+- *"FATAL: Filename collisions detected"* — NotebookLM titles sources by basename only. Two vault files with the same basename routed to the same notebook would silently overwrite each other. Rename one or move it to an excluded directory.
+- *Notebook hit 300-source cap* — run `--full` once to nuke + rebuild. Going forward, the dedupe pass prevents recurrence.
