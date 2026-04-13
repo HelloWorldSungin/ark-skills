@@ -1640,13 +1640,30 @@ git config user.name 2>/dev/null || echo "WARNING: git user.name not set. Run: g
 git config user.email 2>/dev/null || echo "WARNING: git user.email not set. Run: git config user.email 'you@example.com'"
 ```
 
-Commit:
+**Centralized vault (default):** the initial commit of vault content happens in the **vault repo**, not the project repo. The project repo only commits project-level metadata and the tracked script.
+
 ```bash
-git add {vault_path}/ CLAUDE.md .mcp.json .claude/settings.json .notebooklm/ 2>/dev/null
+# 1. Commit initial vault state inside the centralized vault repo
+cd "$VAULT_REPO_PATH_EXPANDED"
+git add .
 git commit -m "feat: initialize {project_name} vault with Ark structure"
+
+# 2. Commit project-repo metadata (symlink is gitignored; script + .gitignore + CLAUDE.md + configs are tracked)
+cd "<project_repo>"
+git add scripts/setup-vault-symlink.sh .gitignore CLAUDE.md
+git add .mcp.json .claude/settings.json .notebooklm/config.json 2>/dev/null
+if [ -f .superset/config.json ]; then git add .superset/config.json; fi
+git commit -m "feat: wire {project_name} project to centralized vault"
 ```
 
-If `.mcp.json` or `.claude/settings.json` was modified (Standard+ tier), include them in the commit.
+**Embedded vault (escape hatch):** the legacy single-commit flow applies. `vault/` is a real directory inside the project repo.
+
+```bash
+git add {vault_path}/ CLAUDE.md .mcp.json .claude/settings.json .notebooklm/ 2>/dev/null
+git commit -m "feat: initialize {project_name} vault with Ark structure (embedded)"
+```
+
+If `.mcp.json` or `.claude/settings.json` was modified (Standard+ tier), include them in the commit. The post-checkout hook is NOT tracked in either case — it's installed per-clone by `/ark-onboard`.
 
 ### Greenfield Step 18: Final diagnostic + reminders
 
