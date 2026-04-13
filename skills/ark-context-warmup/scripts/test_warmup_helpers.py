@@ -91,3 +91,28 @@ class TestTaskHash:
 
     def test_empty_sentinel_hashed(self):
         assert wh.task_hash("__empty__") == hashlib.sha256(b"__empty__").hexdigest()[:16]
+
+
+import re
+
+
+class TestChainId:
+    def test_is_ulid_like_format(self):
+        cid = wh.chain_id_new()
+        # ULID: 26 characters, Crockford base32
+        assert re.match(r"^[0-9A-HJKMNP-TV-Z]{26}$", cid)
+
+    def test_two_calls_produce_different_ids(self):
+        assert wh.chain_id_new() != wh.chain_id_new()
+
+    def test_timestamp_prefix_non_decreasing_across_ms(self):
+        # ULID timestamp prefix (first 10 chars) is non-decreasing across calls
+        # separated by ≥1 ms. Within the same ms, the random tail may not sort — that
+        # is acceptable for our use (chain_id is a coarse ordering, not a sequence).
+        import time as _t
+        cids = []
+        for _ in range(10):
+            cids.append(wh.chain_id_new())
+            _t.sleep(0.002)  # ensure >= 1 ms between calls
+        prefixes = [c[:10] for c in cids]
+        assert prefixes == sorted(prefixes)

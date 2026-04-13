@@ -45,3 +45,27 @@ def task_summary(task_text: str, limit: int = 120) -> str:
 def task_hash(task_normalized: str) -> str:
     """Stable 16-hex-char hash over an already-normalized string."""
     return hashlib.sha256(task_normalized.encode("utf-8")).hexdigest()[:16]
+
+
+import time
+import secrets
+
+# Crockford base32 alphabet (excludes I, L, O, U)
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def _encode_crockford(n: int, length: int) -> str:
+    out = []
+    for _ in range(length):
+        out.append(_CROCKFORD[n & 0x1F])
+        n >>= 5
+    return "".join(reversed(out))
+
+
+def chain_id_new() -> str:
+    """Generate a ULID. 48-bit timestamp (ms) + 80-bit randomness, Crockford base32."""
+    timestamp_ms = int(time.time() * 1000)
+    random_bits = secrets.randbits(80)
+    ts_part = _encode_crockford(timestamp_ms, 10)
+    rand_part = _encode_crockford(random_bits, 16)
+    return ts_part + rand_part
