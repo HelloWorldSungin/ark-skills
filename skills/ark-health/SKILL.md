@@ -513,12 +513,14 @@ Each check gets one of four outcomes:
 
 **Tier assignment:**
 
-Determine the user's implicit tier from the highest tier that is fully passing:
+Determine the user's implicit tier from the highest tier where no Critical or Standard check returns `fail`. Warn and skip outcomes do NOT block tier classification.
 
-- **Minimal tier:** Checks 1–9 all pass, checks 10–11 skip (no vault)
-- **Quick tier:** Checks 1–11 all pass (vault present, no integrations)
-- **Standard tier:** Checks 1–13 all pass (TaskNotes MCP configured)
-- **Full tier:** Checks 1–19 all pass (MemPalace + history hook + NotebookLM)
+- **Minimal tier:** No fail in checks 1–9, checks 10–11 skip (no vault)
+- **Quick tier:** No fail in checks 1–11 (vault present, no integrations)
+- **Standard tier:** No fail in checks 1–13 (TaskNotes MCP configured)
+- **Full tier:** No fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
+
+Warn-returning checks (10 index staleness, 20 vault externalized) are advisory — they surface in the scorecard but don't demote the tier.
 
 Use this tier label in the summary line.
 

@@ -2586,10 +2586,12 @@ Use this exact format for all scorecard output:
 
 | Tier | Condition |
 |------|-----------|
-| Quick | Checks 1-11 all pass |
-| Standard | Checks 1-13 all pass |
-| Full | Checks 1-19 all pass |
+| Quick | No Critical or Standard fail in checks 1-11 (warn is OK) |
+| Standard | No Critical or Standard fail in checks 1-13 (warn is OK) |
+| Full | No Critical or Standard fail in checks 1-20 (warn is OK) |
 | Below Quick | Any critical check (1, 4-9) failing |
+
+**Warn checks do not block tier classification.** Checks 10 (index staleness) and 20 (vault externalized) return `warn`, which counts as "no fail" for tier purposes. They still surface in the scorecard as warnings.
 
 Note: `/ark-health` defines a "Minimal" tier (checks 1-9 pass, 10-11 skip). The wizard does not use Minimal because it always creates the vault — after `/ark-onboard` runs, the result is always Quick or higher.
 
