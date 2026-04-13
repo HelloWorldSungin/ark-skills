@@ -58,15 +58,12 @@ def probe(
                         "Add default_for_warmup to .notebooklm/config.json pointing at the notebook key to use."
                     )
 
-    # Wiki
+    # Wiki — the T4 scan only reads index.md. Do not require _meta/vault-schema.md;
+    # minimal / pre-restructured vaults still have a working wiki lane without it.
     index = vault_path / "index.md"
-    schema = vault_path / "_meta" / "vault-schema.md"
     if not index.exists():
         result["wiki"] = False
         result["wiki_skip_reason"] = f"index.md missing at {index}"
-    elif not schema.exists():
-        result["wiki"] = False
-        result["wiki_skip_reason"] = f"vault schema missing at {schema}"
     else:
         result["wiki"] = True
 

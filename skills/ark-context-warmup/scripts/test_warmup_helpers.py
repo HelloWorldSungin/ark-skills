@@ -266,11 +266,30 @@ class TestAvailabilityProbe:
         )
         assert p["wiki"] is True
 
-    def test_wiki_missing_schema(self, tmp_path):
+    def test_wiki_available_when_index_exists_without_schema(self, tmp_path):
+        """Codex P2: minimal / pre-restructured vaults have index.md but may
+        not have _meta/vault-schema.md. warmup_scan.py only reads index.md, so
+        the wiki lane is functional — availability must not require the
+        schema file or T4 gets incorrectly marked Degraded."""
         vault = tmp_path / "vault"
         vault.mkdir()
         (vault / "index.md").write_text("# Index\n")
-        # No _meta/vault-schema.md
+        # No _meta/vault-schema.md — that's fine for availability purposes.
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=vault,
+            tasknotes_path=tmp_path / "nope",
+            task_prefix="X-",
+            notebooklm_cli_path=None,
+        )
+        assert p["wiki"] is True
+
+    def test_wiki_unavailable_when_index_missing(self, tmp_path):
+        """The only hard requirement for the wiki lane is that index.md exists
+        so warmup_scan.py has something to parse."""
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        # No index.md
         p = avail.probe(
             project_repo=tmp_path,
             vault_path=vault,
@@ -279,6 +298,7 @@ class TestAvailabilityProbe:
             notebooklm_cli_path=None,
         )
         assert p["wiki"] is False
+        assert "index.md" in p["wiki_skip_reason"]
 
     def test_tasknotes_detected(self, tmp_path):
         tn = tmp_path / "tn"
