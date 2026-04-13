@@ -8,6 +8,8 @@ Strengthened beyond the plan's initial version (per controller deferred-findings
  2. Checks the Step 6.5 section contains a bash invocation of warmup-helpers.py —
     without it, /ark-workflow doesn't actually compute chain_id/task_hash.
 """
+from __future__ import annotations
+
 import argparse
 import re
 import sys

@@ -1,4 +1,6 @@
 """Availability probe for /ark-context-warmup backends."""
+from __future__ import annotations
+
 import json
 from pathlib import Path
 

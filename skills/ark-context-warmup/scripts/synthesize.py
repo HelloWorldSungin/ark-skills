@@ -1,4 +1,6 @@
 """Synthesizer: assembles the Context Brief + handles atomic cache writes + 24h pruning."""
+from __future__ import annotations
+
 import os
 import re
 import secrets

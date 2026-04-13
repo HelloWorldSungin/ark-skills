@@ -1,4 +1,6 @@
 """Parse and validate warmup_contract blocks from backend SKILL.md files."""
+from __future__ import annotations
+
 import re
 from pathlib import Path
 

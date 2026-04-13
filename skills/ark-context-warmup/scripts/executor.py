@@ -3,6 +3,11 @@
 Resolves inputs (env, config JSON-path, template) → runs preconditions (D6 convention) →
 substitutes shell template → runs shell with timeout → parses JSON → extracts fields via
 simple dotted JSONPath → validates required_fields.
+
+Note: this module deliberately does NOT use `from __future__ import annotations`.
+Combining that with @dataclass breaks under Python 3.14 when the module is loaded
+via spec_from_file_location without being registered in sys.modules (as the test
+harness does). The file uses Optional[X] from typing instead for py3.9 compat.
 """
 import json
 import os
@@ -10,7 +15,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 
 class InputResolutionError(RuntimeError):
@@ -106,7 +111,7 @@ def _lookup_single_or_default(config: dict, json_path_template: str) -> Any:
     return value
 
 
-def resolve_input(input_spec: dict, *, config: dict | None, templates: dict) -> Any:
+def resolve_input(input_spec: dict, *, config: Optional[dict], templates: dict) -> Any:
     """Resolve a single input per D6. `input_spec` is one entry from warmup_contract.commands[*].inputs."""
     source = input_spec.get("from")
     required = bool(input_spec.get("required", False))
@@ -153,7 +158,7 @@ def run_precondition(*, script_path: Path, env: dict, timeout_s: int = 5) -> tup
         return False, f"precondition timeout after {timeout_s}s"
 
 
-def run_shell(shell_cmd: str, *, timeout_s: int = 90, env: dict | None = None) -> ShellResult:
+def run_shell(shell_cmd: str, *, timeout_s: int = 90, env: Optional[dict] = None) -> ShellResult:
     """Run a resolved shell command and return its result."""
     merged_env = {**os.environ, **(env or {})}
     try:
@@ -178,11 +183,11 @@ def run_shell(shell_cmd: str, *, timeout_s: int = 90, env: dict | None = None) -
 def execute_command(
     command_spec: dict,
     *,
-    config: dict | None,
+    config: Optional[dict],
     templates: dict,
     env_overrides: dict,
     timeout_s: int = 90,
-) -> dict | None:
+) -> Optional[dict]:
     """Execute a single warmup_contract command. Returns extracted dict on success,
     or None if the command was skipped (precondition failed) or failed validation.
     """
