@@ -1522,13 +1522,26 @@ Critical failures (must fix):
 Standard failures (recommended):
   !! Check 11: Task counter file not found
   !! Check 13: TaskNotes MCP not configured
+  !! Check 16: History auto-index hook not registered (mempalace installed but hook dormant)
+
+Warnings (non-blocking, review interactively):
+  ~~ Check 16: Wing-mismatch — expected -my-project, found -my-project-subdir
+  ~~ Check 16: Threshold-lock — baseline stuck at 4319 drawers
 
 Available upgrades:
   -- Check 14: MemPalace not installed
   -- Check 17: NotebookLM not installed
 
-Fix critical issues now? [y/n]
+Fix critical + standard issues now? [y/n]
 ```
+
+**Check 16 classification logic.** Check 16 is special — where it lands depends on adjacent state:
+
+| Condition | Classification |
+|-----------|----------------|
+| MemPalace installed (Check 14 pass) AND vault wing has drawers (Check 15 pass) AND hook NOT registered | **Standard failure** — the hook is the missing glue that makes an installed mempalace actually mine sessions. Auto-fix in Step 3. |
+| MemPalace NOT installed | **Available upgrade** — hook depends on mempalace; present as Full-tier upgrade. |
+| Hook registered but sub-warnings (wing-mismatch / threshold-staleness / threshold-lock) fire | **Warning** — surface in the new interactive review subsection of Step 3. Do NOT auto-fix. |
 
 ### Repair Step 3: Fix each failing check
 
@@ -1549,11 +1562,35 @@ Fix checks in order (Critical first, then Standard). For each fix:
 - Check 8 (vault structure): Create missing subdirectories
 - Check 9 (Python): Cannot auto-fix — tell user to install, PAUSE
 
-**Standard fixes (checks 10-13):**
+**Standard fixes (checks 10-13, 16):**
 - Check 10 (index): Regenerate with `python3 _meta/generate-index.py`
 - Check 11 (counter): Create counter file: `echo "1" > {path}`
 - Check 12 (plugins): Download from GitHub releases (see Greenfield Step 11). If download fails, fall back to reference vault copy, then manual install as last resort
 - Check 13 (MCP): Add tasknotes HTTP transport to `.mcp.json`: `{"mcpServers":{"tasknotes":{"type":"http","url":"http://localhost:{apiPort}/mcp"}}}` (or run `claude mcp add --transport http --scope project tasknotes http://localhost:{apiPort}/mcp`)
+- Check 16 (hook registration): Only reclassified as Standard when mempalace + wing are present. Fix: `bash skills/claude-history-ingest/hooks/install-hook.sh` from the project root (use project-local `.claude/settings.json` scope so it shadows global correctly).
+
+### Repair Step 3b: Warnings (interactive review)
+
+> **You are at Step 3b — Reviewing warnings.**
+
+Check 16's sub-warnings (wing-mismatch, threshold-staleness, threshold-lock) need human judgment
+because the "right" answer depends on intent. Present each warning individually and ask the user
+to choose: fix now, skip, or explain.
+
+**Wing-mismatch (example: `-ArkNode-AI` expected, `-ArkNode-AI-projects-trading-signal-ai` found):**
+- Fix now → Run `bash skills/shared/mine-vault.sh` from the current CWD to index the current project as its own wing.
+- Skip → The subproject is the intended wing (e.g., monorepo or active subproject).
+- Explain → "Wing is derived from CWD. If you usually run Claude from a subproject root, that subproject will be the wing root. Sessions run from the parent would not accumulate into this wing."
+
+**Threshold-staleness (new_drawers >= 200):**
+- Fix now → Run `/claude-history-ingest compile` to clear the backlog and reset the baseline.
+- Skip → You plan to compile manually later.
+- Explain → "The Stop hook appends to drawer count but only triggers compile when new_drawers >= 50. If compile has never fired despite a large backlog, something prevented it (hook error, session-end abort). Compiling manually restores the invariant."
+
+**Threshold-lock (current == baseline, baseline > 500):**
+- Fix now → Reset baseline: `jq '."<wing>".drawers_at_last_compile = 0' ~/.mempalace/hook_state/compile_threshold.json > /tmp/t && mv /tmp/t ~/.mempalace/hook_state/compile_threshold.json`
+- Skip → Let natural drawer accumulation unstick it (may take several sessions).
+- Explain → "After a successful compile, the hook stores current drawer count as the new baseline. If no new sessions get indexed, current stays equal to baseline and new_drawers stays at 0, so compile never re-fires. Resetting baseline to 0 makes the next 50 drawers trigger compile; otherwise natural use unsticks it."
 
 ### Repair Step 4: Offer tier upgrade
 

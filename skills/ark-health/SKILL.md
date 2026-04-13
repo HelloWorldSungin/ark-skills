@@ -344,20 +344,63 @@ mempalace status 2>/dev/null | grep -q "$WING" && echo "PASS: wing found" || ech
 
 **Check 16 — History auto-index hook** | Tier: Full
 
-Two conditions must both be true:
-1. Hook script exists at `~/.claude/hooks/ark-history-hook.sh`
-2. Hook is registered as a Stop hook in project-local `.claude/settings.json`
+Five conditions. Conditions 1–2 determine pass/fail. Conditions 3–5 are warnings (hook is
+installed, but its effect is silently compromised).
+
+1. Hook script exists at `~/.claude/hooks/ark-history-hook.sh` **(required)**
+2. Hook registered as a Stop hook in project-local `.claude/settings.json` **(required)**
+3. Wing-match: `mempalace status` has a wing matching the expected key for `$PWD` **(warn)**
+4. Threshold-staleness: new drawers since last compile is `< 50 * 4` (not absurdly over-due) **(warn)**
+5. Threshold-lock: `current_drawers == drawers_at_last_compile` AND baseline > 500 **(warn)**
 
 ```bash
-# Condition 1: hook script exists
+# --- Conditions 1 and 2: pass/fail ---
 ls ~/.claude/hooks/ark-history-hook.sh 2>/dev/null && echo "hook script: OK" || echo "hook script: MISSING"
-
-# Condition 2: hook registered in project-local settings.json
 grep -q "ark-history-hook" .claude/settings.json 2>/dev/null && echo "hook registered: OK" || echo "hook registered: MISSING"
+
+# --- Condition 3: wing-match (warn) ---
+# Use the same derivation as skills/shared/mine-vault.sh:61-72
+# NOTE: always pass `--` to grep so that wing keys starting with `-` are not parsed as flags
+EXPECTED_WING=$(echo "$PWD" | sed 's|[/.]|-|g')
+ACTUAL_WINGS=$(mempalace status 2>/dev/null | grep -oE 'WING:[[:space:]]*[^[:space:]]+' | awk '{print $2}')
+if echo "$ACTUAL_WINGS" | grep -Fxq -- "$EXPECTED_WING"; then
+  echo "wing-match: OK ($EXPECTED_WING)"
+else
+  # Find the closest actual wing (substring match) for the fix hint
+  CLOSEST=$(echo "$ACTUAL_WINGS" | grep -F -- "$EXPECTED_WING" | head -1)
+  CLOSEST=${CLOSEST:-none}
+  echo "wing-match: WARN (expected $EXPECTED_WING, found $CLOSEST)"
+fi
+
+# --- Conditions 4 and 5: threshold state (warn) ---
+THRESH_FILE="$HOME/.mempalace/hook_state/compile_threshold.json"
+DRAWER_FILE="$HOME/.mempalace/hook_state/${EXPECTED_WING}_drawer_count"
+if [ -f "$THRESH_FILE" ] && [ -f "$DRAWER_FILE" ]; then
+  BASELINE=$(python3 -c "import json,sys;d=json.load(open('$THRESH_FILE'));print(d.get('$EXPECTED_WING',{}).get('drawers_at_last_compile',0))")
+  CURRENT=$(cat "$DRAWER_FILE")
+  NEW=$((CURRENT - BASELINE))
+  # Condition 4: threshold-staleness — way overdue for compile
+  if [ "$NEW" -ge 200 ]; then
+    echo "threshold-staleness: WARN ($NEW new drawers >= 200 but compile never fired)"
+  else
+    echo "threshold-staleness: OK ($NEW new drawers since last compile)"
+  fi
+  # Condition 5: threshold-lock — baseline frozen at current large count
+  if [ "$CURRENT" = "$BASELINE" ] && [ "$BASELINE" -gt 500 ]; then
+    echo "threshold-lock: WARN (baseline locked at $BASELINE, no new drawers)"
+  else
+    echo "threshold-lock: OK"
+  fi
+fi
 ```
 
-- **Pass:** Both conditions are true
+- **Pass:** Conditions 1 and 2 are true AND no warnings from 3–5
+- **Warn:** Conditions 1 and 2 true, but one or more of 3–5 triggers
 - **Fail / Available upgrade action:** `bash skills/claude-history-ingest/hooks/install-hook.sh`
+- **Warn fixes:**
+  - Wing-match: If you recently moved the project, re-run `bash skills/shared/mine-vault.sh`. If the project has a subproject wing by design (e.g., monorepo), this is cosmetic — skip.
+  - Threshold-staleness: Run `/claude-history-ingest compile` manually to clear the backlog.
+  - Threshold-lock: Accumulate ≥50 new drawers naturally (run more sessions) or reset baseline via `jq '."<wing>".drawers_at_last_compile = 0' ~/.mempalace/hook_state/compile_threshold.json > /tmp/t && mv /tmp/t ~/.mempalace/hook_state/compile_threshold.json`
 - **Requires:** Check 14 (MemPalace installed)
 - **Unlocks:** Auto-index Claude sessions into MemPalace on session exit (zero LLM tokens per session)
 
@@ -440,7 +483,7 @@ results = {
   13: pass|fail|skip,
   14: pass|fail|upgrade,
   15: pass|fail|upgrade|skip,
-  16: pass|fail|upgrade|skip,
+  16: pass|fail|warn|upgrade|skip,
   17: pass|fail|upgrade,
   18: pass|fail|upgrade|skip,
   19: pass|fail|upgrade|skip,
@@ -459,7 +502,7 @@ Each check gets one of four outcomes:
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking issue (used for check 10 staleness only) |
+| `~~` | Warning | Non-blocking issue (used for check 10 staleness and check 16 hook-state drift) |
 | `--` | Available upgrade | Feature not installed but optional; above user's current tier |
 
 **Tier assignment:**
@@ -523,7 +566,7 @@ Run /ark-onboard to fix or upgrade
 - Always show all 4 section headers (Plugins, Project Configuration, Vault Structure, Integrations)
 - Never omit a check from the output — skipped checks show as `--  {check name} -- cannot check (CLAUDE.md missing)` with `--` symbol
 - For `!!` entries: always follow with an indented `Fix:` line
-- For `~~` entries: always follow with an indented `Refresh:` or `Note:` line
+- For `~~` entries: always follow with an indented `Refresh:`, `Note:`, `Fix:`, or `Reset:` line (Check 16 hook-state drift uses `Fix:` or `Reset:` depending on the sub-warning)
 - For `--` entries: always follow with an indented `Unlock:` line and an indented `Install:` or `Check:` line
 - Summary line format: `Score: {tier} tier | {fails} fix, {warns} warning, {upgrades} upgrades available`
 - Use singular (`1 fix`, not `1 fixes`) when count is 1

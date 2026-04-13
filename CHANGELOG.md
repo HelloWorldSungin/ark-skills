@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.0] - 2026-04-12
+
+### Fixed
+- **MemPalace auto-hook now detects silent-failure modes in `/ark-health` Check 16.**
+  The hook was installed globally (`~/.claude/settings.json`) but project-local
+  `.claude/settings.json` files shadow the global for that project, so projects
+  like `ArkNode-AI/projects/trading-signal-ai` and `ArkNode-Poly` were silently
+  running without session auto-indexing or the 50-drawer auto-compile trigger.
+  Check 16 previously only verified that the hook was registered; it now catches
+  three additional drift modes as WARNs:
+  - **Wing-mismatch** — `mempalace status` has no wing matching the PWD-derived key.
+  - **Threshold-staleness** — `new_drawers >= 200` (way past the 50-threshold) but no compile has fired.
+  - **Threshold-lock** — `current_drawers == drawers_at_last_compile` and baseline > 500 (stuck state).
+  Wing-match uses `grep -Fxq --` to avoid treating wing keys (which start with `-`) as flag arguments.
+
+### Changed
+- **`/ark-onboard` repair mode reclassifies Check 16 as Standard failure** when
+  mempalace + vault wing are present but the hook is unregistered — this is the
+  missing-glue case, and it's now auto-fixed in Step 3 rather than being hidden
+  under "Available upgrades". Added a new **Step 3b: Warnings (interactive review)**
+  that presents Check 16's three WARN sub-conditions with fix-now / skip / explain
+  options (threshold-lock and wing-mismatch need human judgment, so they are
+  never auto-applied).
+- **`/wiki-update`** now documents its relationship to the 50-drawer auto-compile
+  trigger — clarifies that `compile_threshold.json` is owned by `/claude-history-ingest compile`,
+  and that manual `/wiki-update` runs after a compile do not affect the next auto-fire.
+
+### Context
+Discovered while debugging why `ArkNode-AI/trading-signal-ai` and `ArkNode-Poly`
+were not firing the 50-conversation auto-hook despite the global hook being
+installed. Root cause: project-local `settings.json` shadows global, and neither
+project registered the Stop hook. Both projects were fixed by running
+`install-hook.sh` from each CWD; ark-health/ark-onboard were hardened so this
+silent-failure class is detected and repair-able going forward.
+
 ## [1.9.0] - 2026-04-12
 
 ### Fixed

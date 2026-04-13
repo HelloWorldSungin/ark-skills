@@ -9,6 +9,23 @@ End-of-session workflow for the current project's Obsidian vault. Creates or upd
 
 This is the single entry point for end-of-session vault maintenance. Replaces the deprecated `/notebooklm-vault session-handoff` sub-command.
 
+## Auto-Trigger Relationship
+
+This skill can be invoked manually or indirectly via the Stop hook installed by
+`/claude-history-ingest`. The relationship:
+
+- On session end, `~/.claude/hooks/ark-history-hook.sh` mines the conversation into MemPalace.
+- After every ~50 new drawers, the hook blocks session exit and asks Claude to run
+  `/claude-history-ingest compile`. That skill owns `~/.mempalace/hook_state/compile_threshold.json`
+  — `/wiki-update` does not touch it.
+- `/claude-history-ingest compile` may call `/wiki-update` internally to regenerate the index
+  after writing compiled insight pages.
+- Running `/wiki-update` manually after a compile is safe — the threshold baseline is already
+  set by the compile, so re-running wiki-update does not affect the next auto-compile fire.
+
+If the auto-hook is not firing for your project, run `/ark-health` — Check 16 diagnoses hook
+registration and threshold state.
+
 ## Project Discovery
 
 Per the plugin's context-discovery pattern (see plugin `CLAUDE.md`):
