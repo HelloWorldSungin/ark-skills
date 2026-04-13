@@ -42,7 +42,7 @@ Before any chain executes, automatically gather the most recent and relevant pro
 - **Path:** `skills/ark-context-warmup/SKILL.md`
 - **Siblings:** lives alongside other Ark skills in this plugin repo
 - **Internal structure:** single SKILL.md for orchestration; a small helpers script at `scripts/warmup-helpers.sh` (or `.py`) for unit-testable logic (smart-pick, scenario-to-query mapping, flag detection, cache freshness, synthesis)
-- **Optional subdirs:** `scripts/` for helpers + tests, `fixtures/` for flag-regression test inputs
+- **Subdirs (required by the testing strategy):** `scripts/` for helpers + their tests, `fixtures/` for flag-regression test inputs
 
 ### Integration into chains
 
@@ -137,7 +137,7 @@ Scans results for warning patterns and adds them to `Flags`. This is the highest
 
 | Flag | Trigger |
 |------|---------|
-| `DUPLICATE TASK` | TaskNotes related search found an open task whose title/summary has >50% keyword overlap with user's task description |
+| `DUPLICATE TASK` | TaskNotes related search found an open task whose title/summary has >50% keyword overlap with user's task description (overlap = shared content-word tokens / tokens-in-smaller-set, after stop-word removal and lowercasing). Exact tokenizer pinned during implementation. |
 | `CONFLICTS WITH PAST DECISION` | NotebookLM result contains keywords "decided against", "tried and failed", or "rejected" in a sentence referencing a similar approach |
 | `IN-FLIGHT WORK COLLISION` | TaskNotes status shows another in-progress task touching the same module/area |
 | `STALE CONTEXT` | Last session log is >14 days old (warm-up surface is degraded) |
@@ -321,6 +321,6 @@ None remaining after brainstorming.
 11. Add chain-file integrity CI check.
 12. Add a smoke-test runbook at `scripts/smoke-test.md`.
 13. Update `skills/ark-workflow/SKILL.md` File Map if needed to mention the new first-step expectation.
-14. Register `/ark-context-warmup` in plugin `marketplace.json` + `plugin.json`.
+14. Register `/ark-context-warmup` in `.claude-plugin/marketplace.json` + `.claude-plugin/plugin.json`.
 15. Bump `VERSION` and add `CHANGELOG` entry per the project's "always bump version" convention.
 16. Write the user-facing announcement explaining the new step 0 behavior.
