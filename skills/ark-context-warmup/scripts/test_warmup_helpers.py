@@ -852,6 +852,36 @@ class TestInputResolution:
         )
         assert result == "Project bar task foo"
 
+    def test_template_input_resolves_two_layer_indirection(self, monkeypatch):
+        """Codex P1 (latest): wiki-query's scenario_query template contains
+        {WARMUP_SCENARIO_QUERY_TEMPLATE} which expands to e.g.
+        'Has anything like {WARMUP_TASK_TEXT} been built before?' — the inner
+        {WARMUP_TASK_TEXT} must also expand. Interpolation must iterate until
+        no further substitution is possible."""
+        monkeypatch.setenv(
+            "WARMUP_SCENARIO_QUERY_TEMPLATE",
+            "Has anything like {WARMUP_TASK_TEXT} been built before?",
+        )
+        monkeypatch.setenv("WARMUP_TASK_TEXT", "rate limiting")
+        input_spec = {"from": "template", "template_id": "p"}
+        result = executor.resolve_input(
+            input_spec, config=None,
+            templates={"p": "{WARMUP_SCENARIO_QUERY_TEMPLATE}"},
+        )
+        assert result == "Has anything like rate limiting been built before?"
+
+    def test_template_input_self_reference_terminates(self, monkeypatch):
+        """Iterative interpolation must not loop if an env var self-references
+        its own placeholder. The value reaches a fixed point and we stop."""
+        monkeypatch.setenv("WARMUP_LOOP", "{WARMUP_LOOP}")
+        input_spec = {"from": "template", "template_id": "p"}
+        result = executor.resolve_input(
+            input_spec, config=None,
+            templates={"p": "{WARMUP_LOOP}"},
+        )
+        # Fixed point: the substitution keeps emitting {WARMUP_LOOP} itself.
+        assert result == "{WARMUP_LOOP}"
+
 
 class TestShellSubstitution:
     def test_substitute_plain_values_pass_through(self):
@@ -923,6 +953,34 @@ class TestShellSubstitution:
         r = executor.run_shell(subbed)
         assert r.exit_code == 0
         assert r.stdout.strip() == "42"
+
+
+class TestBackendContractTemplatePlaceholders:
+    """Guardrail: prompt_templates in backend contracts must use the
+    single-brace `{UPPERCASE_VAR}` form that _interpolate_template recognises.
+    `${VAR}` / `$VAR` was once used and silently left the literal string in
+    the resolved input — codex P1 (latest). Scan every template for a bare
+    `$` and fail loudly if one appears."""
+
+    _SKILLS = [
+        _P(__file__).parent.parent.parent / "notebooklm-vault" / "SKILL.md",
+        _P(__file__).parent.parent.parent / "wiki-query" / "SKILL.md",
+        _P(__file__).parent.parent.parent / "ark-tasknotes" / "SKILL.md",
+    ]
+
+    def test_no_dollar_placeholders_in_prompt_templates(self):
+        import re
+        for skill_md in self._SKILLS:
+            c = contract.load_contract(skill_md)
+            assert c is not None, f"contract failed to load for {skill_md}"
+            templates = c.get("prompt_templates") or {}
+            for tid, body in templates.items():
+                assert "$" not in body, (
+                    f"{skill_md.name} prompt_templates[{tid!r}] contains a '$' — "
+                    f"the executor's _interpolate_template matches single-brace "
+                    f"{{UPPERCASE}} placeholders, not shell-style ${{VAR}}. "
+                    f"Body: {body!r}"
+                )
 
 
 class TestBackendContractShellTemplates:

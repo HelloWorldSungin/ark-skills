@@ -100,7 +100,7 @@ All shell substitution, precondition invocation, JSON parsing, and JSONPath extr
 
 **Lane 2 (serialized) — Vault-local:**
 Only run if `HAS_WIKI` or `HAS_TASKNOTES`. Dispatch one subagent that sequentially:
-1. If `HAS_WIKI`: load wiki-query contract, pick the scenario's template, call `executor.execute_command(...)`. On None result, record a `Degraded coverage` candidate for the wiki lane and continue to tasknotes.
+1. If `HAS_WIKI`: load wiki-query contract, export `WARMUP_SCENARIO_QUERY_TEMPLATE=<contract["scenario_templates"][scenario]>` into the subagent's env (this is what the contract's `scenario_query` prompt template references), then call `executor.execute_command(...)`. On None result, record a `Degraded coverage` candidate for the wiki lane and continue to tasknotes.
 2. If `HAS_TASKNOTES`: load tasknotes contract, call `executor.execute_command(...)`. Same `Degraded coverage` handling.
 3. Return combined JSON: `{"wiki": ..., "tasknotes": ..., "degraded_lanes": [...]}`
 

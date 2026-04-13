@@ -85,14 +85,25 @@ def _normalize_json_path(path: str) -> str:
 # expands these from the environment at resolve time. Unknown placeholders pass
 # through literally so a misnamed placeholder surfaces as garbage in the backend
 # response rather than crashing resolve_input.
+#
+# Interpolation iterates until a fixed point so two-layer indirection resolves:
+# wiki-query's scenario_query template expands to WARMUP_SCENARIO_QUERY_TEMPLATE,
+# which itself contains {WARMUP_TASK_TEXT}. A small iteration cap prevents
+# runaway loops if a value self-references (e.g. FOO='{FOO}').
 _TEMPLATE_VAR_RE = re.compile(r"\{([A-Z][A-Z0-9_]*)\}")
+_TEMPLATE_MAX_ITERATIONS = 4
 
 
 def _interpolate_template(body: str, env: dict) -> str:
     def _replace(m: "re.Match[str]") -> str:
         name = m.group(1)
         return env.get(name, m.group(0))
-    return _TEMPLATE_VAR_RE.sub(_replace, body)
+    for _ in range(_TEMPLATE_MAX_ITERATIONS):
+        expanded = _TEMPLATE_VAR_RE.sub(_replace, body)
+        if expanded == body:
+            return expanded
+        body = expanded
+    return body
 
 
 def _lookup_single_or_default(config: dict, json_path_template: str) -> Any:

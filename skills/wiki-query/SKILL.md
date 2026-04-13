@@ -159,8 +159,15 @@ warmup_contract:
           tier_used: '$.tier'             # always "T4" for warmup
         required_fields: [matches]
   prompt_templates:
+    # Two-layer indirection: /ark-context-warmup sets WARMUP_SCENARIO_QUERY_TEMPLATE
+    # to the appropriate scenario_templates entry below before dispatching the
+    # wiki lane. The executor's _interpolate_template iterates until a fixed
+    # point, so the outer {WARMUP_SCENARIO_QUERY_TEMPLATE} expansion plus the
+    # inner {WARMUP_TASK_TEXT} in the scenario template both resolve in one
+    # resolve_input call. Use single-brace — shell-style ${VAR} is not a
+    # supported placeholder form.
     scenario_query: |
-      ${WARMUP_SCENARIO_QUERY_TEMPLATE}
+      {WARMUP_SCENARIO_QUERY_TEMPLATE}
   scenario_templates:
     # Picked by warm-up based on WARMUP_SCENARIO env var; template substituted into scenario_query above.
     greenfield: 'Has anything like {WARMUP_TASK_TEXT} been built before? Existing components or prior design decisions?'
