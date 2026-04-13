@@ -268,3 +268,21 @@ See `references/routing-template.md` for the copy-paste block to add to project 
 - `continuity.md` — batch/resume/handoff/stale/compaction protocols (trigger: pay-per-use branches of Step 6.5)
 - `troubleshooting.md` — re-triage, handoff details, failure recovery (trigger: mid-flight events)
 - `routing-template.md` — CLAUDE.md copy-paste block (trigger: never runtime)
+
+### Centralized-Vault Suggestion
+
+During triage, check the vault layout. If `vault` is a real directory (not a symlink) AND no `embedded` opt-out is present in CLAUDE.md, surface the externalization recommendation:
+
+```bash
+if [ -d vault ] && [ ! -L vault ]; then
+  if ! grep -iqE '^\|\s*\*\*Vault layout\*\*\s*\|[^|]*embedded' CLAUDE.md 2>/dev/null; then
+    echo ""
+    echo "ℹ️  Heads-up: your vault is embedded inside the project repo."
+    echo "   For worktree/Obsidian-app consistency, consider running:"
+    echo "   /ark-onboard  (will generate an externalization plan)"
+    echo ""
+  fi
+fi
+```
+
+This is advisory only — does not block workflow routing.
