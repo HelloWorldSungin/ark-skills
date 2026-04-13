@@ -1539,9 +1539,9 @@ Fix critical + standard issues now? [y/n]
 
 | Condition | Classification |
 |-----------|----------------|
-| MemPalace installed (Check 14 pass) AND vault wing has drawers (Check 15 pass) AND hook NOT registered | **Standard failure** — the hook is the missing glue that makes an installed mempalace actually mine sessions. Auto-fix in Step 3. |
+| MemPalace installed (Check 14 pass) AND vault wing has drawers (Check 15 pass) AND hook NOT registered in project-local settings | **Standard failure** — defensive coverage: project-local registration ensures the hook fires even if the user ever unsets their global `~/.claude/settings.json`. Note: Claude Code merges hook arrays from global + project-local, so in most cases the global hook is already firing and this is cosmetic. Auto-fix in Step 3 is still worthwhile for defense-in-depth. |
 | MemPalace NOT installed | **Available upgrade** — hook depends on mempalace; present as Full-tier upgrade. |
-| Hook registered but sub-warnings (wing-mismatch / threshold-staleness / threshold-lock) fire | **Warning** — surface in the new interactive review subsection of Step 3. Do NOT auto-fix. |
+| Hook registered but sub-warnings (wing-mismatch / threshold-staleness / threshold-lock) fire | **Warning** — surface in the new interactive review subsection of Step 3. Do NOT auto-fix. `threshold-lock` is the high-signal one — it's the failure mode that looks like "the hook isn't running" but is actually a stuck baseline. |
 
 ### Repair Step 3: Fix each failing check
 
@@ -1567,7 +1567,7 @@ Fix checks in order (Critical first, then Standard). For each fix:
 - Check 11 (counter): Create counter file: `echo "1" > {path}`
 - Check 12 (plugins): Download from GitHub releases (see Greenfield Step 11). If download fails, fall back to reference vault copy, then manual install as last resort
 - Check 13 (MCP): Add tasknotes HTTP transport to `.mcp.json`: `{"mcpServers":{"tasknotes":{"type":"http","url":"http://localhost:{apiPort}/mcp"}}}` (or run `claude mcp add --transport http --scope project tasknotes http://localhost:{apiPort}/mcp`)
-- Check 16 (hook registration): Only reclassified as Standard when mempalace + wing are present. Fix: `bash skills/claude-history-ingest/hooks/install-hook.sh` from the project root (use project-local `.claude/settings.json` scope so it shadows global correctly).
+- Check 16 (hook registration): Only reclassified as Standard when mempalace + wing are present. Fix: `bash skills/claude-history-ingest/hooks/install-hook.sh` from the project root. This adds a project-local entry; Claude Code will merge it with the global registration and the shared hook lock de-duplicates the actual mine call, so the practical effect is defensive rather than functional in most setups.
 
 ### Repair Step 3b: Warnings (interactive review)
 

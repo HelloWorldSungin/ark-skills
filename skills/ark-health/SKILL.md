@@ -347,11 +347,17 @@ mempalace status 2>/dev/null | grep -q "$WING" && echo "PASS: wing found" || ech
 Five conditions. Conditions 1–2 determine pass/fail. Conditions 3–5 are warnings (hook is
 installed, but its effect is silently compromised).
 
+Note on condition 2: Claude Code merges hook arrays from global `~/.claude/settings.json`
+and project-local `.claude/settings.json`. If the hook is registered globally, it fires even
+when project-local has no Stop hook. Checking project-local registration is therefore
+defensive coverage rather than a strict correctness check — but it's still the cleanest way
+to prove the hook is set up for this project without having to parse global settings.
+
 1. Hook script exists at `~/.claude/hooks/ark-history-hook.sh` **(required)**
-2. Hook registered as a Stop hook in project-local `.claude/settings.json` **(required)**
+2. Hook registered as a Stop hook in project-local `.claude/settings.json` **(required — defensive)**
 3. Wing-match: `mempalace status` has a wing matching the expected key for `$PWD` **(warn)**
 4. Threshold-staleness: new drawers since last compile is `< 50 * 4` (not absurdly over-due) **(warn)**
-5. Threshold-lock: `current_drawers == drawers_at_last_compile` AND baseline > 500 **(warn)**
+5. Threshold-lock: `current_drawers == drawers_at_last_compile` AND baseline > 500 **(warn — high signal, catches "stuck compile baseline" which looks like "hook not running")**
 
 ```bash
 # --- Conditions 1 and 2: pass/fail ---

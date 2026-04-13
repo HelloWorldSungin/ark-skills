@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.1] - 2026-04-12
+
+### Corrected
+
+v1.10.0's framing overstated the hook-registration problem. Correction:
+
+- **Claude Code merges hook arrays from global `~/.claude/settings.json` and project-local
+  `.claude/settings.json`** — it does NOT shadow. The Stop hook registered in `~/.claude/settings.json`
+  was firing for `ArkNode-AI/projects/trading-signal-ai`, `ArkNode-Poly`, and `ark-skills` the
+  entire time, despite each project's local `settings.json` containing only `PostToolUse`.
+  Evidence: `~/.mempalace/hook_state/mine.log` showed hundreds of hook fires per day for all
+  three wings — including fires that happened **before** v1.10.0's `install-hook.sh` runs
+  added the project-local registration.
+- **The project-local hook installs in v1.10.0 were cosmetic, not functional.** The three
+  projects already had the hook firing via the global registration. The installs added
+  redundant entries that don't change observable behavior.
+- **What v1.10.0 DID correctly fix:** the `threshold-lock` WARN in `/ark-health` Check 16
+  caught Poly's real bug — `compile_threshold.json` baseline stuck at 4319 == current, so
+  `new_drawers = 0` forever, and auto-compile never fired. That WARN is still valuable and
+  unchanged.
+- **Why Poly's baseline got stuck** (root cause, previously unexplained in v1.10.0):
+  `mempalace mine` dedupes by filename. Claude Code session transcripts are monotonically
+  appended (session_id is the filename, content grows over the session lifecycle). Modified
+  transcripts get skipped by mine as "already filed", so the drawer count doesn't grow when
+  sessions are continued rather than newly started. Poly had mostly continuation sessions,
+  so the 4319 baseline went stale. Filed [mempalace#645](https://github.com/MemPalace/mempalace/issues/645#issuecomment-4233459673)
+  with the Claude Code repro (existing issue — author already filed a markdown-vault variant).
+
+### Changed
+
+- `/ark-onboard` repair mode: the Check 16 reclassification remains, but the "missing
+  project-local registration" scenario is now understood as cosmetic in most cases (hook
+  fires via global). The reclassification is still useful for the narrower case where
+  neither global nor project-local has the hook — rare but real.
+- `/wiki-update` auto-trigger documentation: unchanged. Still accurate.
+
+### What to know going forward
+
+1. If `/ark-health` Check 16 WARNs on `threshold-lock`, that's a **real** bug — the auto-compile
+   will never fire until the baseline moves. Fix: run `/claude-history-ingest compile` to
+   re-anchor, or lower the baseline manually.
+2. If Check 16 FAILs on "hook registered" but mempalace is firing (check `mine.log`),
+   investigate whether you actually need project-local registration. Usually the global
+   registration is sufficient.
+3. Long-running Claude sessions don't add drawers via `mempalace mine` until new session
+   files are created. Start fresh sessions periodically, or wait for `mempalace --refresh`
+   (tracked upstream at [#645](https://github.com/MemPalace/mempalace/issues/645)).
+
 ## [1.10.0] - 2026-04-12
 
 ### Fixed
