@@ -218,7 +218,7 @@ Derived values:
 | 10 | Index status | Standard | `index.md` exists (staleness is warning, not fail) |
 | 11 | Task counter | Standard | Counter file exists and contains valid integer |
 
-### Integrations (Checks 12-19)
+### Integrations (Checks 12-20)
 
 | # | Check | Tier | Pass Condition |
 |---|-------|------|----------------|
@@ -230,17 +230,22 @@ Derived values:
 | 17 | NotebookLM CLI installed | Full | `notebooklm` CLI on PATH |
 | 18 | NotebookLM config | Full | `.notebooklm/config.json` exists (project root or vault root) with non-empty notebook ID |
 | 19 | NotebookLM authenticated | Full | `notebooklm auth check --test` exits 0 |
+| 20 | Vault externalized | Standard (warn-only) | Symlink matches script VAULT_TARGET, OR CLAUDE.md `Vault layout` opt-out row present |
 
 ### Running Diagnostics
 
-Run all 19 checks in sequence. Never abort on failure. Track results:
+Run all 20 checks in sequence. Never abort on failure. Track results:
 
 ```
-results = { 1..19: pass | fail | warn | skip | upgrade }
+results = {
+  1..19: pass|fail|warn|skip|upgrade,
+  20: pass|warn,
+}
 ```
 
-- Checks 7-19 with CLAUDE.md missing (check 4 = fail): record `skip` — "cannot check — CLAUDE.md missing"
+- Checks 7-20 with CLAUDE.md missing (check 4 = fail): record `skip` — "cannot check — CLAUDE.md missing"
 - Check 10 staleness: record `warn` (not fail)
+- Check 20 vault-externalized: record `warn` (not fail, never fails)
 - Checks 15, 16: if check 14 failed, record `skip` — "requires MemPalace (check 14)"
 - Checks 18, 19: if check 17 failed, record `skip` — "requires NotebookLM CLI (check 17)"
 - Full-tier checks (14-19) when user is below Full tier: record `upgrade`
