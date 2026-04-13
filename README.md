@@ -1,6 +1,6 @@
 # Ark Skills Plugin
 
-Claude Code plugin providing 17 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
+Claude Code plugin providing 18 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
 
 ## Installation
 
@@ -49,6 +49,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 | Skill | Category | Description | Source |
 |-------|----------|-------------|--------|
 | `/ark-workflow` | Workflow Orchestration | Task triage and skill chain orchestration | New |
+| `/ark-context-warmup` | Workflow Orchestration | Automatic context loader; runs as step 0 of every chain | New |
 | `/ark-code-review` | Core | Multi-agent code review with fan-out architecture | Generalized |
 | `/codebase-maintenance` | Core | Repo cleanup, vault sync, skill health | Generalized |
 | `/notebooklm-vault` | Core | NotebookLM vault context and sync | Generalized |
@@ -71,6 +72,8 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 ### Workflow Orchestration
 
 **`/ark-workflow`** — Task triage and skill chain orchestration. Detects scenario across 7 types (greenfield, bugfix, ship, knowledge capture, hygiene, migration, performance), classifies weight (light/medium/heavy) via risk-primary triage with decision-density escalation, and outputs an ordered skill chain with project-specific conditions resolved. Handles multi-item batches with per-item classification, root cause consolidation, and dependency grouping. Includes cross-session continuity via `.ark-workflow/current-chain.md` state file and TodoWrite rehydration. Entry point for all non-trivial work.
+
+**`/ark-context-warmup`** — Automatic context loader; runs as step 0 of every `/ark-workflow` chain. Queries `/notebooklm-vault`, `/wiki-query`, and `/ark-tasknotes` backends in a partial-parallel fan-out, synthesizes a single Context Brief, and surfaces possible duplicates, prior rejections, and in-flight collisions as Evidence candidates. Cache keyed on `chain_id + task_hash`, 2-hour TTL, 24-hour pruning. Backends participate via a `warmup_contract` YAML block in their SKILL.md (see `skills/notebooklm-vault/SKILL.md`, `skills/wiki-query/SKILL.md`, `skills/ark-tasknotes/SKILL.md`).
 
 ### Core Skills
 
@@ -102,7 +105,7 @@ Key operations: `/wiki-lint` audits vault health (broken links, missing frontmat
 
 **`/ark-onboard`** — Interactive setup wizard and single entry point for new Ark projects. Detects project state (greenfield, non-Ark vault, partial Ark, healthy) and guides setup through Quick, Standard, or Full tiers. Absorbs `/wiki-setup` functionality. Handles vault creation, CLAUDE.md configuration, Obsidian plugin setup, TaskNotes MCP, MemPalace, history hook, and NotebookLM.
 
-**`/ark-health`** — Diagnostic check that runs 19 checks across plugins, project configuration, vault structure, and integrations. Produces a scored scorecard with actionable fix and upgrade instructions. No auto-fix — always points to `/ark-onboard` for remediation.
+**`/ark-health`** — Diagnostic check that runs 20 checks across plugins, project configuration, vault structure, and integrations. Produces a scored scorecard with actionable fix and upgrade instructions. No auto-fix — always points to `/ark-onboard` for remediation.
 
 ## Context-Discovery Pattern
 
@@ -123,7 +126,7 @@ ark-skills (Claude Code plugin)
 ├── .claude-plugin/
 │   ├── plugin.json           # Plugin metadata (ark-skills v1.4.0)
 │   └── marketplace.json      # Repo-level plugin registry
-└── skills/                   # 17 shared skills
+└── skills/                   # 18 shared skills
       ↓ context-discovery
 Project CLAUDE.md → vault path, task prefix, deployment targets
       ↓
@@ -142,7 +145,7 @@ For manual setup, see [docs/onboarding-guide.md](docs/onboarding-guide.md).
 | Directory | Purpose |
 |-----------|---------|
 | `.claude-plugin/` | Plugin manifest (plugin.json, marketplace.json) |
-| `skills/` | 16 shared skill definitions (SKILL.md files) |
+| `skills/` | 18 shared skill definitions (SKILL.md files) |
 | `docs/` | Design specs, plans, onboarding guide |
 | `ArkNode-AI/` | Submodule: AI trading project (skill source for generalization) |
 | `ArkNode-Poly/` | Submodule: Polymarket project (skill source for generalization) |
@@ -167,8 +170,8 @@ For manual setup, see [docs/onboarding-guide.md](docs/onboarding-guide.md).
 ### Verification Checks
 
 ```bash
-# All 16 skills exist
-find skills -name SKILL.md | wc -l  # → 16
+# All 18 skills exist
+find skills -name SKILL.md | wc -l  # → 18
 
 # Zero hardcoded project references
 grep -rn "ArkPoly\|ArkSignal\|trading-signal-ai\|arknode-poly" skills/
