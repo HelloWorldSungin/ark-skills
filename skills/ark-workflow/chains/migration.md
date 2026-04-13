@@ -4,6 +4,7 @@
 
 *patch/minor version bumps, non-breaking dependency updates*
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. Read migration/upgrade guide for the dependency
 2. Implement upgrade
 3. Run tests — verify nothing broke
@@ -16,6 +17,7 @@
 
 *major version bumps, API changes required*
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/investigate` — audit current usage of the thing being migrated
 2. Read migration guide, identify breaking changes
 3. `/test-driven-development` — write tests for new API surface before migrating
@@ -32,6 +34,7 @@
 *framework migrations, platform changes, database migrations*
 
 *Session 1 — Planning:*
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/investigate` — audit all usage, map blast radius
 2. `/brainstorming` — migration strategy (big bang vs incremental, feature flags, rollback plan)
 3. `/codex` — review the migration plan

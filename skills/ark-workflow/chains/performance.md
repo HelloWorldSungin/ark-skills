@@ -4,6 +4,7 @@
 
 *single hotspot fix, obvious optimization*
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/investigate` — profile and identify the bottleneck
 2. Fix the hotspot
 3. Verify improvement (before/after timing or metric)
@@ -15,6 +16,7 @@
 
 *multiple hotspots, caching layer, query optimization*
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/investigate` — profile and identify bottlenecks
 2. `/benchmark` — establish baseline metrics (if available)
 3. `/test-driven-development` — write performance regression tests
@@ -32,6 +34,7 @@
 *architecture-level optimization, data layer redesign*
 
 *Session 1 — Analysis & Planning:*
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/investigate` — deep profiling, identify systemic bottlenecks
 2. `/benchmark` — comprehensive baseline
 3. `/brainstorming` — optimization strategy (caching architecture, query redesign, etc.)

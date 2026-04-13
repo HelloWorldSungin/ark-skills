@@ -4,6 +4,7 @@
 
 *for "audit", "review", "assess" requests with no remediation expected*
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/codebase-maintenance` — audit (or `/cso` if security audit)
 2. Present findings report to the user
 3. `/wiki-update` (if vault — to record findings)
@@ -11,6 +12,7 @@
 
 ## Light
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/codebase-maintenance` — audit
 2. `/investigate` (if any item involves broken/unexpected behavior)
 3. Implement cleanup
@@ -21,6 +23,7 @@
 
 ## Medium
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/codebase-maintenance` — audit
 2. `/investigate` (if any item involves broken/unexpected behavior)
 3. `/cso` (if security-relevant AND `/cso` not already run as mandatory step 1)
@@ -33,6 +36,7 @@
 
 ## Heavy
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/codebase-maintenance` — audit
 2. `/investigate` (if any item involves broken/unexpected behavior)
 3. **If audit + investigation reveals systemic issues requiring rewrite: escalate to Heavy Greenfield. `/checkpoint` findings, end session, start fresh with design phase.**
