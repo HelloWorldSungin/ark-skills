@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/sunginkim/.claude/hooks/ark-history-hook.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
