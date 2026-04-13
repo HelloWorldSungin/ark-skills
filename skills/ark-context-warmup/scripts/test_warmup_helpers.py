@@ -712,13 +712,40 @@ class TestInputResolution:
         with pytest.raises(executor.InputResolutionError, match="default_for_warmup"):
             executor.resolve_input(input_spec, config=cfg, templates={})
 
-    def test_template_input(self):
+    def test_template_input_leaves_unknown_placeholder_literal(self, monkeypatch):
+        """When a {VAR} placeholder has no matching env var, the placeholder
+        passes through literally — matching the pre-interpolation behavior for
+        unknown vars. (Used to document the expected 'fail soft' policy.)"""
+        monkeypatch.delenv("WARMUP_TASK_TEXT", raising=False)
         input_spec = {"from": "template", "template_id": "my_prompt"}
         result = executor.resolve_input(
             input_spec, config=None,
             templates={"my_prompt": "Hello, {WARMUP_TASK_TEXT}!"},
         )
         assert result == "Hello, {WARMUP_TASK_TEXT}!"
+
+    def test_template_input_interpolates_env_placeholder(self, monkeypatch):
+        """Templates use {WARMUP_TASK_TEXT} / {WARMUP_PROJECT_NAME} placeholders
+        which must be replaced with env values before the shell executes.
+        Codex P1: without interpolation, NotebookLM gets asked about the
+        literal string "{WARMUP_TASK_TEXT}" instead of the user's task."""
+        monkeypatch.setenv("WARMUP_TASK_TEXT", "rate limit the login route")
+        input_spec = {"from": "template", "template_id": "my_prompt"}
+        result = executor.resolve_input(
+            input_spec, config=None,
+            templates={"my_prompt": "What is: {WARMUP_TASK_TEXT}?"},
+        )
+        assert result == "What is: rate limit the login route?"
+
+    def test_template_input_interpolates_multiple_placeholders(self, monkeypatch):
+        monkeypatch.setenv("WARMUP_TASK_TEXT", "foo")
+        monkeypatch.setenv("WARMUP_PROJECT_NAME", "bar")
+        input_spec = {"from": "template", "template_id": "p"}
+        result = executor.resolve_input(
+            input_spec, config=None,
+            templates={"p": "Project {WARMUP_PROJECT_NAME} task {WARMUP_TASK_TEXT}"},
+        )
+        assert result == "Project bar task foo"
 
 
 class TestShellSubstitution:
@@ -842,6 +869,37 @@ class TestEndToEndExecute:
             command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
         )
         assert result is None
+
+    def test_execute_command_interpolates_template_env_before_shell(self, tmp_path, monkeypatch):
+        """End-to-end: a template input containing {FOO} must be interpolated
+        from the environment so the shell actually receives the expanded value
+        via {{prompt}} substitution. Codex P1: without this, NotebookLM gets
+        asked about the literal string '{WARMUP_TASK_TEXT}'."""
+        monkeypatch.setenv("FOO", "resolved-value")
+        # echo the substituted prompt so we can observe what the shell saw
+        script = tmp_path / "echo_backend.sh"
+        script.write_text("#!/usr/bin/env bash\nprintf '{\"seen\":\"%s\"}\\n' \"$1\"\n")
+        script.chmod(0o755)
+        command_spec = {
+            "id": "tmpl-interp",
+            "shell": f"bash {script} '{{{{prompt}}}}'",
+            "inputs": {
+                "prompt": {"from": "template", "template_id": "p"},
+            },
+            "output": {
+                "format": "json",
+                "extract": {"seen": "$.seen"},
+                "required_fields": ["seen"],
+            },
+        }
+        result = executor.execute_command(
+            command_spec,
+            config=None,
+            templates={"p": "hello {FOO}"},
+            env_overrides={},
+            timeout_s=5,
+        )
+        assert result == {"seen": "hello resolved-value"}
 
     def test_execute_command_precondition_skip(self, tmp_path):
         pre = tmp_path / "pre.sh"

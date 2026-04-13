@@ -358,6 +358,13 @@ warmup_contract:
           citations: '$.citations'
         required_fields: [recent_sessions, current_state]
   prompt_templates:
+    # Single-brace placeholders like {WARMUP_TASK_TEXT} and {WARMUP_PROJECT_NAME}
+    # are interpolated by the executor from the environment at resolve time
+    # (see executor._interpolate_template). Unknown placeholders pass through
+    # literally so a typo surfaces as garbage in the backend response rather
+    # than crashing the lane. Double-brace (`{{prompt}}`, `{{notebook_id}}`)
+    # is a separate, later substitution applied against the `shell:` template
+    # by substitute_shell_template — do not mix the two forms.
     session_continue_prompt: |
       What sessions are related to: {WARMUP_TASK_TEXT}? Include session numbers,
       outcomes, and any gotchas. Structure the answer with these exact headings:

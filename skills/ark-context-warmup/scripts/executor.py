@@ -67,6 +67,21 @@ def _normalize_json_path(path: str) -> str:
     return path if path.startswith("$") else "$." + path
 
 
+# Template bodies (from: template in a warmup_contract) may contain single-brace
+# placeholders like {WARMUP_TASK_TEXT} or {WARMUP_PROJECT_NAME}. The executor
+# expands these from the environment at resolve time. Unknown placeholders pass
+# through literally so a misnamed placeholder surfaces as garbage in the backend
+# response rather than crashing resolve_input.
+_TEMPLATE_VAR_RE = re.compile(r"\{([A-Z][A-Z0-9_]*)\}")
+
+
+def _interpolate_template(body: str, env: dict) -> str:
+    def _replace(m: "re.Match[str]") -> str:
+        name = m.group(1)
+        return env.get(name, m.group(0))
+    return _TEMPLATE_VAR_RE.sub(_replace, body)
+
+
 def _lookup_single_or_default(config: dict, json_path_template: str) -> Any:
     """Implements the D5 lookup: if notebooks has one key, use it; if multiple,
     require default_for_warmup to pick. Raises otherwise.
@@ -115,7 +130,7 @@ def resolve_input(input_spec: dict, *, config: dict | None, templates: dict) -> 
         tid = input_spec["template_id"]
         if tid not in templates:
             raise InputResolutionError(f"unknown template id: {tid}")
-        return templates[tid]
+        return _interpolate_template(templates[tid], os.environ)
     raise InputResolutionError(f"unknown input source: {source}")
 
 
