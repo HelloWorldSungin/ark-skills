@@ -190,7 +190,7 @@ Derived values:
 
 ## Shared Diagnostic Checklist
 
-> **Sync note:** `/ark-health` is the authoritative source for all 19 check definitions. If this copy drifts from `/ark-health`, that skill is correct. This copy exists so `/ark-onboard` can run diagnostics without invoking a separate skill.
+> **Sync note:** `/ark-health` is the authoritative source for all 20 check definitions. If this copy drifts from `/ark-health`, that skill is correct. This copy exists so `/ark-onboard` can run diagnostics without invoking a separate skill.
 
 ### Plugins (Checks 1-3)
 
@@ -425,7 +425,7 @@ User runs /ark-onboard
     State = Healthy?          --> Show scorecard, surface Full tier upgrades --> Execute Healthy path
     |
     v
-[5] Run full 19-check diagnostic
+[5] Run full 20-check diagnostic
     |
     v
 [6] Show before/after scorecard
@@ -517,7 +517,7 @@ committed to the project repo.
     ```bash
     case "$USER_PATH" in
       '$HOME/'*) ;;  # OK
-      '~/'*) USER_PATH="\$HOME/${USER_PATH#~/}" ;;  # normalize
+      '~/'*) USER_PATH="\$HOME/${USER_PATH#'~/'}" ;;  # normalize
       *)
         echo "ERROR: Vault path must be under \$HOME so tracked metadata stays portable."
         echo "To use an external drive, symlink it: ln -s /Volumes/Drive/vaults \$HOME/Vaults"
@@ -1686,7 +1686,7 @@ If `.mcp.json` or `.claude/settings.json` was modified (Standard+ tier), include
 
 > **You are at Step 18 of 18 — Final verification.**
 
-Run the full 19-check diagnostic (see Shared Diagnostic Checklist above). Show the scorecard (see Scorecard Output Format below).
+Run the full 20-check diagnostic (see Shared Diagnostic Checklist above). Show the scorecard (see Scorecard Output Format below).
 
 Then show follow-up reminders:
 
@@ -1712,7 +1712,7 @@ Adjust reminders based on what was actually set up:
 
 This path handles two distinct operations:
 
-1. **Ark scaffolding** (inline, safe) — add `_meta/`, `_Templates/`, `TaskNotes/`, etc. to an existing vault that doesn't have Ark structure yet. Runs the 14-step flow below, same as the prior "Migration" behavior. Non-destructive: never deletes or overwrites existing content. Frontmatter changes are explicit and reversible (separate commits).
+1. **Ark scaffolding** (inline, safe) — add `_meta/`, `_Templates/`, `TaskNotes/`, etc. to an existing vault that doesn't have Ark structure yet. Runs the 15-step flow below (the last step is the externalization offer), same as the prior "Migration" behavior. Non-destructive: never deletes or overwrites existing content. Frontmatter changes are explicit and reversible (separate commits).
 
 2. **Externalization** (destructive, plan file only) — if the scaffolded vault is still a real directory inside the project repo (i.e., `vault/` is not a symlink), the wizard also generates a plan file for moving the vault out into its own git repo and creating the symlink. The plan file is NOT executed; the user reviews and runs it via `/executing-plans` (see "Path: Externalization Plan Generation" below).
 
@@ -1943,7 +1943,7 @@ cd {vault_path} && python3 _meta/generate-index.py
 
 > **You are at Step 13 of 14 — Diagnostic check.**
 
-Run the full 19-check diagnostic. Show scorecard.
+Run the full 20-check diagnostic. Show scorecard.
 
 ### Migration Step 14: Final commit + reminders
 
@@ -2001,7 +2001,7 @@ USER_PATH="${USER_PATH:-$DEFAULT_PATH}"
 # Path constraint (same as Greenfield)
 case "$USER_PATH" in
   '$HOME/'*) ;;
-  '~/'*) USER_PATH="\$HOME/${USER_PATH#~/}" ;;
+  '~/'*) USER_PATH="\$HOME/${USER_PATH#'~/'}" ;;
   *) echo "ERROR: path must start with \$HOME/ or ~/"; exit 1 ;;
 esac
 
@@ -2376,7 +2376,7 @@ After centralized-vault repairs complete, fall through to the generic 5-step rep
 
 > **You are at Step 1 — Diagnostic scan.**
 
-Run all 19 checks. Record which checks fail.
+Run all 20 checks. Record which checks fail.
 
 ### Repair Step 2: Show failures
 
@@ -2487,7 +2487,7 @@ If user accepts, execute Greenfield Steps 13-15 (MemPalace + hook + NotebookLM).
 
 > **You are at Step 5 — Before/after comparison.**
 
-Run all 19 checks again. Show before/after scorecard:
+Run all 20 checks again. Show before/after scorecard:
 
 ```
 Ark Health — Repair Complete
@@ -2508,7 +2508,7 @@ For projects where all Critical + Standard checks pass.
 
 > **You are at Step 1 — Diagnostic scan.**
 
-Run all 19 checks. All Critical and Standard checks should pass.
+Run all 20 checks. All Critical and Standard checks should pass.
 
 ### Healthy Step 2: Show scorecard
 
@@ -2543,7 +2543,7 @@ If user accepts, execute Greenfield Steps 13-15. Then re-run diagnostic and show
 
 If already at Full tier:
 ```
-All 19 checks pass. Full tier active.
+All 20 checks pass. Full tier active.
 No upgrades available. Run /ark-health anytime to verify.
 ```
 

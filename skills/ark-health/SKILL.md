@@ -5,7 +5,7 @@ description: Diagnostic check for Ark ecosystem health — plugins, CLAUDE.md, v
 
 # Ark Health Check
 
-Run all 19 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions.
+Run all 20 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions.
 
 ## Context-Discovery Exemption
 
@@ -13,9 +13,9 @@ This skill is exempt from normal context-discovery. It must work when CLAUDE.md 
 
 - Checks 1–3 (Plugins) run normally
 - Checks 4–6 (Project Configuration) report **fail** with explanation
-- Checks 7–19 report "cannot check — CLAUDE.md missing" instead of failing silently
+- Checks 7–20 report "cannot check — CLAUDE.md missing" instead of failing silently
 
-Never abort early. Run all 19 checks regardless of earlier failures.
+Never abort early. Run all 20 checks regardless of earlier failures.
 
 ## Vault Path Terminology
 
@@ -96,7 +96,7 @@ Detection: Read the `system-reminder` skill list in your current session context
 
 ### Project Configuration (Checks 4–6)
 
-Read CLAUDE.md before running these checks. If CLAUDE.md does not exist, checks 4–6 all fail and checks 7–19 report "cannot check — CLAUDE.md missing".
+Read CLAUDE.md before running these checks. If CLAUDE.md does not exist, checks 4–6 all fail and checks 7–20 report "cannot check — CLAUDE.md missing".
 
 ```bash
 # Attempt to read CLAUDE.md from current working directory
@@ -271,7 +271,7 @@ echo "$COUNTER_VALUE" | grep -qE '^[0-9]+$' && echo "PASS: counter = $COUNTER_VA
 
 ---
 
-### Integrations (Checks 12–19)
+### Integrations (Checks 12–20)
 
 **Check 12 — Obsidian vault plugins** | Tier: Standard
 
