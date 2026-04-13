@@ -231,3 +231,107 @@ warmup_contract:
         skill_md = tmp_path / "SKILL.md"
         skill_md.write_text(bad)
         assert contract.load_contract(skill_md) is None
+
+
+_AVAIL_PATH = _P(__file__).parent / "availability.py"
+_spec_a = _ilu.spec_from_file_location("availability", _AVAIL_PATH)
+avail = _ilu.module_from_spec(_spec_a)
+_spec_a.loader.exec_module(avail)
+
+
+class TestAvailabilityProbe:
+    def test_all_unavailable(self, tmp_path):
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=tmp_path / "nonexistent",
+            tasknotes_path=tmp_path / "nope",
+            task_prefix="X-",
+            notebooklm_cli_path=None,  # not on PATH
+        )
+        assert p["notebooklm"] is False
+        assert p["wiki"] is False
+        assert p["tasknotes"] is False
+
+    def test_wiki_detected(self, tmp_path):
+        vault = tmp_path / "vault"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "index.md").write_text("# Index\n")
+        (vault / "_meta" / "vault-schema.md").write_text("# Schema\n")
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=vault,
+            tasknotes_path=tmp_path / "nope",
+            task_prefix="X-",
+            notebooklm_cli_path=None,
+        )
+        assert p["wiki"] is True
+
+    def test_wiki_missing_schema(self, tmp_path):
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        (vault / "index.md").write_text("# Index\n")
+        # No _meta/vault-schema.md
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=vault,
+            tasknotes_path=tmp_path / "nope",
+            task_prefix="X-",
+            notebooklm_cli_path=None,
+        )
+        assert p["wiki"] is False
+
+    def test_tasknotes_detected(self, tmp_path):
+        tn = tmp_path / "tn"
+        (tn / "meta").mkdir(parents=True)
+        (tn / "meta" / "X-counter").write_text("1\n")
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=tmp_path / "nope",
+            tasknotes_path=tn,
+            task_prefix="X-",
+            notebooklm_cli_path=None,
+        )
+        assert p["tasknotes"] is True
+
+    def test_notebooklm_detected_with_valid_config(self, tmp_path):
+        (tmp_path / ".notebooklm").mkdir()
+        (tmp_path / ".notebooklm" / "config.json").write_text(
+            '{"notebooks": {"main": {"id": "abc"}}}'
+        )
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope",
+            task_prefix="X-",
+            notebooklm_cli_path="/usr/bin/echo",  # stand-in for "CLI exists"
+        )
+        assert p["notebooklm"] is True
+
+    def test_notebooklm_multi_notebook_without_default_skipped(self, tmp_path):
+        (tmp_path / ".notebooklm").mkdir()
+        (tmp_path / ".notebooklm" / "config.json").write_text(
+            '{"notebooks": {"main": {"id": "a"}, "infra": {"id": "b"}}}'
+        )
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope",
+            task_prefix="X-",
+            notebooklm_cli_path="/usr/bin/echo",
+        )
+        assert p["notebooklm"] is False
+        assert "default_for_warmup" in p["notebooklm_skip_reason"]
+
+    def test_notebooklm_multi_notebook_with_default(self, tmp_path):
+        (tmp_path / ".notebooklm").mkdir()
+        (tmp_path / ".notebooklm" / "config.json").write_text(
+            '{"notebooks": {"main": {"id": "a"}, "infra": {"id": "b"}}, "default_for_warmup": "main"}'
+        )
+        p = avail.probe(
+            project_repo=tmp_path,
+            vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope",
+            task_prefix="X-",
+            notebooklm_cli_path="/usr/bin/echo",
+        )
+        assert p["notebooklm"] is True
