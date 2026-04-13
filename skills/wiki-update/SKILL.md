@@ -159,6 +159,21 @@ last-updated: YYYY-MM-DD
 [Actionable items for the next session, ordered by priority]
 ```
 
+**Cross-environment collision prevention:**
+
+When `vault` is a symlink (centralized-vault pattern), multiple environments (Mac, CT110, other machines) may write session logs into the same vault. To prevent filename collisions, prefix session log filenames with the environment:
+
+```bash
+if [ -L vault ]; then
+  ENV_PREFIX=$(hostname -s | tr '[:upper:]' '[:lower:]')
+  SESSION_FILE="Session-Logs/${ENV_PREFIX}-$(date +%Y-%m-%d-%H%M)-${SESSION_TITLE_SLUG}.md"
+else
+  SESSION_FILE="Session-Logs/$(date +%Y-%m-%d-%H%M)-${SESSION_TITLE_SLUG}.md"
+fi
+```
+
+Short hostnames like `mac`, `ct110` keep the prefix concise. For embedded vaults (no symlink), keep the legacy naming.
+
 **Continuation format** (append to existing log, bump `last-updated`):
 
 ```markdown

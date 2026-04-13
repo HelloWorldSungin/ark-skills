@@ -4,13 +4,15 @@ type: compiled-insight
 tags:
   - compiled-insight
   - skill
-summary: "Three shell scripting pitfalls caught by code review: TMPDIR env collision causes subprocess failures, pipefail+tail swallows errors, and missing EXIT traps leak temp dirs. All patterns apply to future bash scripts in skills/shared/."
+  - bash
+summary: "Four shell scripting pitfalls caught by code review: TMPDIR env collision, pipefail+tail swallowing, missing EXIT traps, and unquoted-tilde parameter stripping. All patterns survived spec review in plans and were only caught by code quality review."
 source-sessions:
   - "[[S002-Vault-Retrieval-Tiers-Phase1]]"
+  - "[[S005-Ark-Onboard-Centralized-Vault]]"
 source-tasks:
   - "[[Arkskill-001-vault-retrieval-tiers]]"
 created: 2026-04-08
-last-updated: 2026-04-08
+last-updated: 2026-04-12
 ---
 
 # Shell Script Safety Patterns — Lessons from mine-vault.sh Review
@@ -54,16 +56,34 @@ trap cleanup EXIT
 
 Set the trap immediately after creating the temp dir. The explicit cleanup at the end of the script becomes redundant but harmless.
 
+### Unquoted Tilde in Parameter-Stripping Patterns
+
+Bash performs tilde expansion on the unquoted `~/` in the pattern position of `${var#pattern}` **before** parameter substitution runs. So `${USER_PATH#~/}` with `USER_PATH="~/Vaults/test"` doesn't strip the literal `~/` — the pattern becomes `/Users/sunginkim/` which doesn't match `~/Vaults/test`, so the expansion returns the string unchanged.
+
+```bash
+$ USER_PATH="~/Vaults/test"
+$ echo "${USER_PATH#~/}"        # broken — returns "~/Vaults/test"
+$ echo "${USER_PATH#'~/'}"      # correct — returns "Vaults/test"
+$ echo "${USER_PATH:2}"         # also correct — skip 2 chars
+```
+
+This bug was in `/ark-onboard`'s approved spec (codex round-4 PASS, revision 4) and propagated through two task bodies before the cross-task code reviewer caught it. Users who typed `~/Vaults/myproject` at the wizard prompt would have gotten `VAULT_TARGET="$HOME/~/Vaults/myproject"` written to the tracked setup script — a broken path the symlink creation would silently fail on. Fix landed in commit `ab62949` via `${USER_PATH#'~/'}`.
+
+Rule: **always quote the tilde inside `${var#pattern}` and `${var%pattern}` patterns**. Bash's tilde-expansion-before-pattern-match behavior is a well-known footgun that spec review cannot catch (codex doesn't execute code; approvals reflect "matches the spec," not "the spec is correct bash").
+
 ## Evidence
 
 - mine-vault.sh code quality review (Session S002, commit 50ab675)
 - TMPDIR collision: would cause mempalace subprocess failures on any system
 - pipefail swallowing: `printf '\n\n\n\n\n' | mempalace init "$TMPDIR" 2>&1 | tail -5` — init failure invisible
-- All three bugs were in the plan's verbatim script, not introduced by the implementer
+- ark-onboard tilde-expansion bug (Session S005, commit ab62949) — survived codex round-4 PASS in the approved spec
+- All four bugs were in plan-verbatim scripts, not introduced by implementers
 
 ## Implications
 
-- Future bash scripts in `skills/shared/` should follow these patterns from the start
+- Future bash scripts in `skills/shared/` and inline wizard bash blocks should follow these patterns from the start
 - Code quality review catches classes of bugs that spec compliance review cannot — spec review asks "did you build what was asked?" but not "is what was asked safe?"
+- Codex-approved specs still contain executable bugs. "Approved by external model" is not the same as "behaviorally verified." Always execute representative test cases on shipping code.
+- Per-task review is necessary but not sufficient for multi-task features. A final cross-task code review pass surfaces issues per-task reviewers miss (stale cross-references, dual-write config gaps, verbatim-inherited bugs).
 - The plan's verbatim scripts should not be trusted as production-ready — they define requirements, not implementations
-- Two-stage review (spec then quality) justified its cost on the first task
+- Two-stage review (spec then quality) has justified its cost on every multi-task feature where it's been applied
