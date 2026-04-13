@@ -602,6 +602,37 @@ class TestEvidenceCandidates:
         dups = [c for c in out if c["type"] == "Possible duplicate"]
         assert dups == []
 
+    def test_duplicate_component_match_includes_backlog(self):
+        """Pre-landing review finding: /ark-tasknotes creates new tasks with
+        default status: backlog (see ark-tasknotes/SKILL.md:83). The component
+        duplicate detector must treat backlog as active — otherwise fresh
+        not-yet-started tasks in the same component are silently missed."""
+        out = evidence.derive_candidates(
+            task_normalized="rate limiting api",
+            scenario="greenfield",
+            tasknotes={
+                "extracted_component": "ratelimit",
+                "matches": [
+                    {
+                        "id": "ARK-123",
+                        "title": "Add rate limiting to API",
+                        "status": "backlog",
+                        "component": "ratelimit",
+                        "work-type": "story",
+                        "matched_field": "component",
+                        "title_overlap": 0.9,
+                    }
+                ],
+            },
+            notebooklm=None,
+            wiki=None,
+        )
+        dup = [c for c in out if c["type"] == "Possible duplicate"]
+        assert any(c["id"] == "ARK-123" and c["confidence"] == "high" for c in dup), (
+            "backlog-status TaskNote with component match must surface as "
+            f"high-confidence duplicate; got {dup}"
+        )
+
     def test_prior_rejection_apostrophe_variants(self):
         """Codex P2: tokenization strips apostrophes from citation text, so
         the configured trigger 'won't do' must match the natural spelling

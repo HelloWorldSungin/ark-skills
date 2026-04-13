@@ -61,7 +61,12 @@ def derive_candidates(*, task_normalized, scenario, tasknotes, notebooklm, wiki)
             # Duplicate
             dup_conf = None
             matched = m.get("matched_field") or ""
-            if matched == "component" and m.get("status") in ("in-progress", "open", "planned"):
+            # Active statuses include "backlog" — /ark-tasknotes creates new
+            # tasks with default status: backlog (see ark-tasknotes/SKILL.md:83),
+            # and a fresh not-yet-started task in the same component is still a
+            # duplicate signal. Codex pre-landing review: excluding it silently
+            # missed the normal case.
+            if matched == "component" and m.get("status") in ("in-progress", "open", "planned", "backlog"):
                 dup_conf = "high"
             elif matched and matched.startswith("title_overlap="):
                 overlap = float(matched.split("=", 1)[1])
