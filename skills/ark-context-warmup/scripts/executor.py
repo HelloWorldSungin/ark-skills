@@ -12,6 +12,7 @@ harness does). The file uses Optional[X] from typing instead for py3.9 compat.
 import json
 import os
 import re
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,12 +59,19 @@ def extract_json_path(data: Any, path: str) -> Any:
 
 
 def substitute_shell_template(template: str, vars_: dict) -> str:
-    """Substitute {{var}} placeholders. Raises KeyError if any placeholder is unresolved."""
+    """Substitute {{var}} placeholders. Raises KeyError if any placeholder is unresolved.
+
+    Every substituted value is passed through shlex.quote so the resulting
+    string is safe to run via `bash -c`, regardless of what shell-significant
+    characters the value contains. Backend shell templates MUST NOT wrap
+    {{placeholders}} in their own quotes — e.g. write `ask {{prompt}}`, never
+    `ask "{{prompt}}"`. TestBackendContractShellTemplates enforces this.
+    """
     def _replace(m):
         name = m.group(1).strip()
         if name not in vars_:
             raise KeyError(f"unresolved shell template variable: {name}")
-        return str(vars_[name])
+        return shlex.quote(str(vars_[name]))
     return re.sub(r"\{\{\s*([^}]+?)\s*\}\}", _replace, template)
 
 

@@ -854,7 +854,9 @@ class TestInputResolution:
 
 
 class TestShellSubstitution:
-    def test_substitute(self):
+    def test_substitute_plain_values_pass_through(self):
+        """Bare-word values are idempotent under shlex.quote so the simple
+        substitution case reads identically to the pre-quoting behavior."""
         result = executor.substitute_shell_template(
             "run {{cmd}} with id {{id}}", {"cmd": "do-thing", "id": "xyz"}
         )
@@ -864,6 +866,96 @@ class TestShellSubstitution:
         import pytest
         with pytest.raises(KeyError):
             executor.substitute_shell_template("run {{missing}}", {})
+
+    def test_values_with_spaces_are_quoted(self):
+        """A value with whitespace must be quoted so it stays as a single
+        argument when bash -c parses the resulting command."""
+        result = executor.substitute_shell_template(
+            "run {{x}}", {"x": "hello world"}
+        )
+        # After bash -c parses the result, argv[1] must be 'hello world' (one arg).
+        # shlex.quote produces 'hello world' with surrounding single quotes.
+        r = executor.run_shell(
+            f"bash -c 'echo \"[$1]\"' -- {executor.substitute_shell_template('{{x}}', {'x': 'hello world'})}"
+        )
+        assert r.stdout.strip() == "[hello world]"
+
+    def test_values_with_double_quotes_are_safe(self):
+        """Codex P1: task text like 'Fix the \"auth\" bug' would have broken
+        the `notebooklm ask \"{{prompt}}\" ...` command and swallowed the
+        inner quotes."""
+        dangerous = 'Fix the "auth" bug'
+        subbed = executor.substitute_shell_template("printf '%s' {{x}}", {"x": dangerous})
+        r = executor.run_shell(subbed)
+        assert r.exit_code == 0
+        assert r.stdout == dangerous
+
+    def test_values_with_dollar_substitution_are_neutralized(self):
+        """Codex P1: a crafted task text like '$(...)' must NOT run on the
+        host. printf is idempotent on its arg so equality with the literal
+        input proves no command substitution ran — if $() fired, we'd see
+        'MARKER-FIRED' here instead."""
+        dangerous = "$(printf MARKER-FIRED)"
+        subbed = executor.substitute_shell_template("printf %s {{x}}", {"x": dangerous})
+        r = executor.run_shell(subbed)
+        assert r.exit_code == 0
+        # Exactly the literal input; not the 11-char substitution result.
+        assert r.stdout == dangerous
+
+    def test_values_with_backticks_are_neutralized(self):
+        """Same premise as the $(...) test but for the older backtick form."""
+        dangerous = "`printf MARKER-FIRED`"
+        subbed = executor.substitute_shell_template("printf %s {{x}}", {"x": dangerous})
+        r = executor.run_shell(subbed)
+        assert r.exit_code == 0
+        assert r.stdout == dangerous
+
+    def test_values_with_single_quote_are_escaped(self):
+        dangerous = "can't stop"
+        subbed = executor.substitute_shell_template("printf '%s' {{x}}", {"x": dangerous})
+        r = executor.run_shell(subbed)
+        assert r.exit_code == 0
+        assert r.stdout == dangerous
+
+    def test_numeric_values_stringify_and_quote(self):
+        """Non-string values (e.g. ints) must not blow up shlex.quote."""
+        subbed = executor.substitute_shell_template("echo {{n}}", {"n": 42})
+        r = executor.run_shell(subbed)
+        assert r.exit_code == 0
+        assert r.stdout.strip() == "42"
+
+
+class TestBackendContractShellTemplates:
+    """Guardrail: backend warmup_contract `shell:` templates must NOT wrap
+    {{placeholder}} substitutions in surrounding shell quotes. The executor
+    shlex-quotes every substituted value, so templates that write
+    `"{{prompt}}"` end up with doubled quotes after substitution (breaking
+    parsing). Every double-brace substitution site in a shell template must
+    appear bare."""
+
+    _SKILLS = [
+        _P(__file__).parent.parent.parent / "notebooklm-vault" / "SKILL.md",
+        _P(__file__).parent.parent.parent / "wiki-query" / "SKILL.md",
+        _P(__file__).parent.parent.parent / "ark-tasknotes" / "SKILL.md",
+    ]
+
+    def test_no_quoted_placeholders_in_backend_shells(self):
+        import re
+        for skill_md in self._SKILLS:
+            c = contract.load_contract(skill_md)
+            assert c is not None, f"contract failed to load for {skill_md}"
+            for cmd in c["commands"]:
+                shell = cmd["shell"]
+                # Find all {{placeholder}} positions and their immediate neighbors
+                for m in re.finditer(r"\{\{[^}]+\}\}", shell):
+                    start, end = m.span()
+                    before = shell[start - 1] if start > 0 else ""
+                    after = shell[end] if end < len(shell) else ""
+                    assert not (before in ("'", '"') and before == after), (
+                        f"{skill_md.name} command {cmd['id']!r}: placeholder "
+                        f"{m.group(0)} is wrapped in {before!r} quotes — remove "
+                        f"the quotes; the executor shlex-quotes substituted values."
+                    )
 
 
 class TestJSONPathExtract:
@@ -1030,7 +1122,9 @@ class TestEndToEndExecute:
         """End-to-end: a template input containing {FOO} must be interpolated
         from the environment so the shell actually receives the expanded value
         via {{prompt}} substitution. Codex P1: without this, NotebookLM gets
-        asked about the literal string '{WARMUP_TASK_TEXT}'."""
+        asked about the literal string '{WARMUP_TASK_TEXT}'. The {{prompt}} is
+        used bare (no surrounding shell quotes) — substitute_shell_template
+        shlex-quotes the value for us."""
         monkeypatch.setenv("FOO", "resolved-value")
         # echo the substituted prompt so we can observe what the shell saw
         script = tmp_path / "echo_backend.sh"
@@ -1038,7 +1132,7 @@ class TestEndToEndExecute:
         script.chmod(0o755)
         command_spec = {
             "id": "tmpl-interp",
-            "shell": f"bash {script} '{{{{prompt}}}}'",
+            "shell": f"bash {script} {{{{prompt}}}}",
             "inputs": {
                 "prompt": {"from": "template", "template_id": "p"},
             },
@@ -1056,6 +1150,38 @@ class TestEndToEndExecute:
             timeout_s=5,
         )
         assert result == {"seen": "hello resolved-value"}
+
+    def test_execute_command_safely_handles_shell_dangerous_prompt(self, tmp_path, monkeypatch):
+        """End-to-end shell-escaping: a task text containing dollar-substitution
+        and quotes must land in the backend as its literal string — not as a
+        command executed on the host. Uses a Python-backed fake-backend so
+        JSON escaping is handled by python -c rather than by the shell."""
+        dangerous = 'Fix "auth": $(printf MARKER-FIRED)'
+        monkeypatch.setenv("WARMUP_TASK_TEXT", dangerous)
+        script = tmp_path / "echo_backend.py"
+        script.write_text(
+            "#!/usr/bin/env python3\nimport json, sys\n"
+            "print(json.dumps({'seen': sys.argv[1]}))\n"
+        )
+        script.chmod(0o755)
+        command_spec = {
+            "id": "tmpl-dangerous",
+            "shell": f"python3 {script} {{{{prompt}}}}",
+            "inputs": {"prompt": {"from": "template", "template_id": "p"}},
+            "output": {
+                "format": "json",
+                "extract": {"seen": "$.seen"},
+                "required_fields": ["seen"],
+            },
+        }
+        result = executor.execute_command(
+            command_spec,
+            config=None,
+            templates={"p": "{WARMUP_TASK_TEXT}"},
+            env_overrides={},
+            timeout_s=5,
+        )
+        assert result == {"seen": dangerous}
 
     def test_execute_command_precondition_skip(self, tmp_path):
         pre = tmp_path / "pre.sh"

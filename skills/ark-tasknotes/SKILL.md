@@ -304,7 +304,7 @@ warmup_contract:
   version: 1
   commands:
     - id: status-and-search
-      shell: 'python3 "$ARK_SKILLS_ROOT/skills/ark-tasknotes/scripts/warmup_search.py" --tasknotes "{{tasknotes_path}}" --prefix "{{task_prefix}}" --task-normalized "{{task_normalized}}" --scenario "{{scenario}}" --json'
+      shell: 'python3 "$ARK_SKILLS_ROOT/skills/ark-tasknotes/scripts/warmup_search.py" --tasknotes {{tasknotes_path}} --prefix {{task_prefix}} --task-normalized {{task_normalized}} --scenario {{scenario}} --json'
       inputs:
         tasknotes_path:
           from: env

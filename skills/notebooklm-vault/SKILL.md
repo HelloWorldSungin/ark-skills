@@ -301,7 +301,7 @@ warmup_contract:
   version: 1
   commands:
     - id: session-continue
-      shell: 'notebooklm ask "{{prompt}}" --notebook {{notebook_id}} --json --timeout 60'
+      shell: 'notebooklm ask {{prompt}} --notebook {{notebook_id}} --json --timeout 60'
       inputs:
         notebook_id:
           from: config
@@ -332,7 +332,7 @@ warmup_contract:
           citations: '$.citations'
         required_fields: [where_we_left_off, immediate_next_steps]
     - id: bootstrap
-      shell: 'notebooklm ask "{{prompt}}" --notebook {{notebook_id}} --json --timeout 60'
+      shell: 'notebooklm ask {{prompt}} --notebook {{notebook_id}} --json --timeout 60'
       inputs:
         notebook_id:
           from: config

@@ -143,7 +143,7 @@ warmup_contract:
     - id: scenario-query
       # Warm-up invokes wiki-query inline via its T4 scan path (index.md + summaries).
       # For the warm-up's purposes, we only need the top-3 most relevant summaries, not the full T1/T2/T3 routing.
-      shell: 'python3 "$ARK_SKILLS_ROOT/skills/wiki-query/scripts/warmup_scan.py" --vault "{{vault_path}}" --query "{{query}}" --top 3 --json'
+      shell: 'python3 "$ARK_SKILLS_ROOT/skills/wiki-query/scripts/warmup_scan.py" --vault {{vault_path}} --query {{query}} --top 3 --json'
       inputs:
         vault_path:
           from: env
