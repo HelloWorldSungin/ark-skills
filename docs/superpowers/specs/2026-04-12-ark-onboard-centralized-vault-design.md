@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-12
 **Branch:** vault-symlink
-**Status:** Draft (revision 3 — post-codex round 2)
+**Status:** Draft (revision 4 — post-codex round 3)
 
 ## Problem
 
