@@ -870,6 +870,57 @@ class TestEndToEndExecute:
         )
         assert result is None
 
+    def test_execute_command_accepts_empty_required_list(self, tmp_path):
+        """Codex P2: an empty list/dict is a legitimate result from a healthy
+        backend (e.g. 'no matching sessions found'). The required_fields check
+        must only reject missing-or-None, not any falsy value. Otherwise the
+        empty-but-valid case gets misclassified as Degraded coverage."""
+        script = tmp_path / "empty_valid.sh"
+        script.write_text(
+            "#!/usr/bin/env bash\n"
+            "echo '{\"matches\": [], \"status_summary\": {}, \"flag\": false}'\n"
+        )
+        script.chmod(0o755)
+        command_spec = {
+            "id": "empty-valid",
+            "shell": f"bash {script}",
+            "inputs": {},
+            "output": {
+                "format": "json",
+                "extract": {
+                    "matches": "$.matches",
+                    "status_summary": "$.status_summary",
+                    "flag": "$.flag",
+                },
+                "required_fields": ["matches", "status_summary", "flag"],
+            },
+        }
+        result = executor.execute_command(
+            command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
+        )
+        assert result == {"matches": [], "status_summary": {}, "flag": False}
+
+    def test_execute_command_still_rejects_null_required_field(self, tmp_path):
+        """Guard against over-correction: explicit null in the JSON payload for
+        a required field must still skip the lane."""
+        script = tmp_path / "null_field.sh"
+        script.write_text("#!/usr/bin/env bash\necho '{\"matches\": null}'\n")
+        script.chmod(0o755)
+        command_spec = {
+            "id": "null-field",
+            "shell": f"bash {script}",
+            "inputs": {},
+            "output": {
+                "format": "json",
+                "extract": {"matches": "$.matches"},
+                "required_fields": ["matches"],
+            },
+        }
+        result = executor.execute_command(
+            command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
+        )
+        assert result is None
+
     def test_execute_command_interpolates_template_env_before_shell(self, tmp_path, monkeypatch):
         """End-to-end: a template input containing {FOO} must be interpolated
         from the environment so the shell actually receives the expanded value

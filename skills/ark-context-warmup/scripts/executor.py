@@ -227,10 +227,13 @@ def execute_command(
         except JSONPathError:
             return None
 
-    # 7. Validate required_fields
+    # 7. Validate required_fields — only reject missing or explicit-null.
+    # Empty containers ([], {}, "") and False are legitimate results from a
+    # healthy backend ("no sessions found") and must not be demoted to
+    # Degraded coverage (mirrors the Task 13 semantic fix in evidence.py).
     required = command_spec.get("output", {}).get("required_fields", [])
     for field in required:
-        if not extracted.get(field):
-            return None  # Semantically empty → treat as degraded
+        if field not in extracted or extracted[field] is None:
+            return None
 
     return extracted
