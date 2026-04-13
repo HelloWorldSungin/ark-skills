@@ -1968,6 +1968,278 @@ This is a pointer only — it does NOT generate the plan inline. The externaliza
 
 ---
 
+## Path: Externalization Plan Generation
+
+**Triggered when:** State detection finds `vault/` is a real directory with Ark artifacts (`STATE=partial_ark` from artifact count OR from a prior Ark-scaffolded embedded vault), AND `EMBEDDED_OPTOUT=false`.
+
+**Behavior:** No filesystem changes except creating the plan file. User reviews and executes via `/executing-plans`.
+
+### Externalization Step 1: Prompt user for target path + remote
+
+> **You are at Step 1 of 2 — Gathering externalization parameters.**
+
+```bash
+# Compute default path (same logic as Greenfield)
+if [ -d "$HOME/.superset" ]; then
+  DEFAULT_PATH="\$HOME/.superset/vaults/<project>"
+else
+  DEFAULT_PATH="\$HOME/Vaults/<project>"
+fi
+
+echo "Detected: vault/ is committed to this repo as a real directory."
+echo "The Ark convention is to externalize it. I'll generate a plan file"
+echo "(no destructive actions). You can review and run it via /executing-plans."
+echo ""
+read -rp "Centralized location for the extracted vault [default: $DEFAULT_PATH]: " USER_PATH
+USER_PATH="${USER_PATH:-$DEFAULT_PATH}"
+
+# Path constraint (same as Greenfield)
+case "$USER_PATH" in
+  '$HOME/'*) ;;
+  '~/'*) USER_PATH="\$HOME/${USER_PATH#~/}" ;;
+  *) echo "ERROR: path must start with \$HOME/ or ~/"; exit 1 ;;
+esac
+
+read -rp "Create a GitHub repo for the vault now? [y/N] " WANT_GH
+case "$WANT_GH" in y|Y) WANT_GH=true ;; *) WANT_GH=false ;; esac
+```
+
+### Externalization Step 2: Generate the plan file
+
+> **You are at Step 2 of 2 — Writing plan file.**
+
+Discover sibling worktrees for inclusion in the plan's Phase 2:
+```bash
+SIBLINGS=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep -v "^$(git rev-parse --show-toplevel)$")
+```
+
+Write `docs/superpowers/plans/$(date +%Y-%m-%d)-externalize-vault.md`. Substitute at generation time:
+- `<PROJECT>` → project name (from CLAUDE.md)
+- `<VAULT_REPO_PATH_PORTABLE>` → user's chosen path (e.g., `$HOME/.superset/vaults/my-project`)
+- `<VAULT_REPO_PATH_EXPANDED>` → `eval "echo $USER_PATH"`
+- `<SIBLINGS>` → newline-separated list; inject one Phase 2 sub-step per sibling
+- `<WANT_GH>` → true/false; only include Phase 1 step 12 if true
+
+**Plan file template:**
+
+````markdown
+# Externalize Vault for <PROJECT>
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to execute this plan step-by-step, stopping for review between phases.
+
+**Goal:** Move the currently-embedded `vault/` directory out of the project repo into its own git repo at `<VAULT_REPO_PATH_PORTABLE>` and replace `vault/` with a symlink.
+
+**Safety model:** Phase 0 is preflight (no mutation). Phase 1 operates on the main repo + vault target atomically. Phase 2 operates on sibling worktrees one at a time, with explicit confirmation each. Phase 3 is manual follow-up.
+
+---
+
+## Phase 0 — Preflight (no mutation)
+
+### Step 0.1: Discover sibling worktrees
+- [ ] Run: `git worktree list --porcelain | awk '/^worktree /{print $2}'`
+- [ ] Record the list. The main repo is the first entry. Siblings are the rest.
+- [ ] For this execution, siblings are: `<SIBLINGS>`
+
+### Step 0.2: Confirm every sibling has a real `vault/` directory (not symlinks)
+- [ ] For each sibling `S`, run: `[ -d "$S/vault" ] && [ ! -L "$S/vault" ] && echo "$S: OK" || echo "$S: ABORT ($S/vault is missing or a symlink)"`
+- [ ] If any sibling reports ABORT, stop the plan. Resolve manually and re-run `/ark-onboard` to regenerate the plan.
+
+### Step 0.3: Pairwise compare sibling vault contents (git diff)
+- [ ] Pick the main repo as baseline. For every other sibling `S`, run:
+```bash
+git -c core.safecrlf=false diff --no-index --stat -- <MAIN>/vault "$S/vault"
+```
+- [ ] Non-zero exit OR non-empty output means divergence. **Abort on divergence.** Print the full diff for each divergent pair.
+
+### Step 0.4: Supplementary empty-directory comparison
+Git does not track empty dirs; compare their shape explicitly:
+- [ ] For each sibling pair (baseline, `S`):
+```bash
+diff <(cd <MAIN>/vault && find . -type d -empty | sort) <(cd "$S/vault" && find . -type d -empty | sort)
+```
+- [ ] If non-empty output, treat as divergence and abort.
+
+### Step 0.5: Check for uncommitted / untracked content under `vault/`
+- [ ] For each sibling `S`:
+```bash
+(cd "$S" && git status --porcelain vault/)
+```
+- [ ] If any output, abort with instructions to commit or discard first.
+
+### Step 0.6: Confirm target path is empty or absent
+- [ ] `ls -la <VAULT_REPO_PATH_EXPANDED> 2>/dev/null || echo "not present (OK)"`
+- [ ] If the directory exists and has content, abort. If empty or absent, proceed.
+
+**Phase 0 gate:** All steps above must succeed. If anything aborts, stop the plan, resolve manually, and regenerate the plan via `/ark-onboard`.
+
+---
+
+## Phase 1 — Externalize (destructive; main repo + vault target only)
+
+### Step 1.1: Initialize the centralized vault repo
+- [ ] `mkdir -p <VAULT_REPO_PATH_EXPANDED>`
+- [ ] `cd <VAULT_REPO_PATH_EXPANDED> && git init`
+
+### Step 1.2: Copy vault contents
+- [ ] From the main project repo root:
+```bash
+cp -a vault/. <VAULT_REPO_PATH_EXPANDED>/
+```
+- [ ] Verify: `diff -qr vault/ <VAULT_REPO_PATH_EXPANDED>/ | head` should report only the `.git/` difference (the vault repo has its own `.git/` from Step 1.1).
+
+### Step 1.3: Move NotebookLM config into the vault
+- [ ] If `<MAIN>/.notebooklm/config.json` exists:
+```bash
+mkdir -p <VAULT_REPO_PATH_EXPANDED>/.notebooklm
+cp <MAIN>/.notebooklm/config.json <VAULT_REPO_PATH_EXPANDED>/.notebooklm/config.json
+# Update vault_root to "."
+python3 -c "
+import json, pathlib
+p = pathlib.Path('<VAULT_REPO_PATH_EXPANDED>/.notebooklm/config.json')
+c = json.loads(p.read_text())
+c['vault_root'] = '.'
+p.write_text(json.dumps(c, indent=2) + '\n')
+"
+```
+- [ ] The project's `<MAIN>/.notebooklm/config.json` keeps `vault_root: "vault"` (resolves via the forthcoming symlink).
+
+### Step 1.4: Move NotebookLM sync-state
+- [ ] If `<MAIN>/.notebooklm/sync-state.json` exists, move it:
+```bash
+mv <MAIN>/.notebooklm/sync-state.json <VAULT_REPO_PATH_EXPANDED>/.notebooklm/sync-state.json
+```
+- [ ] Otherwise, create empty state:
+```bash
+echo '{"last_sync": null, "files": {}}' > <VAULT_REPO_PATH_EXPANDED>/.notebooklm/sync-state.json
+```
+
+### Step 1.5: Write vault repo `.gitignore`
+- [ ] Write `<VAULT_REPO_PATH_EXPANDED>/.gitignore` with Obsidian per-user files only (`sync-state.json` is NOT ignored):
+```
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/graph.json
+.obsidian/themes/
+.obsidian/plugins/*/data.json
+```
+
+### Step 1.6: Initial commit in the vault repo
+- [ ] `cd <VAULT_REPO_PATH_EXPANDED> && git add . && git commit -m "Initial externalized vault"`
+
+### Step 1.7 (optional): Create GitHub remote
+- [ ] If user requested a remote AND `gh` is authenticated:
+```bash
+cd <VAULT_REPO_PATH_EXPANDED> && gh repo create --private <PROJECT>-vault --source=. --push
+```
+- [ ] On failure, keep the local repo. Print manual-create instructions. Do NOT roll back.
+
+### Step 1.8: Remove `vault/` from project repo tracking
+- [ ] `cd <MAIN> && git rm -r --cached vault/`
+
+### Step 1.9: Add `vault` to `.gitignore`
+- [ ] `grep -qxF 'vault' <MAIN>/.gitignore || echo 'vault' >> <MAIN>/.gitignore`
+
+### Step 1.10: Replace real dir with symlink
+- [ ] `cd <MAIN> && rm -rf vault && ln -s <VAULT_REPO_PATH_EXPANDED> vault`
+- [ ] Verify: `test -L vault && test -e vault && echo "symlink OK -> $(readlink vault)"`
+
+### Step 1.11: Write the canonical script + install the post-checkout hook
+- [ ] Write `<MAIN>/scripts/setup-vault-symlink.sh` using the template from `skills/ark-onboard/SKILL.md`. Set `VAULT_TARGET="<VAULT_REPO_PATH_PORTABLE>"` (literal `$HOME/...` form).
+- [ ] `chmod +x <MAIN>/scripts/setup-vault-symlink.sh`
+- [ ] Install the post-checkout hook:
+```bash
+HOOK_PATH="$(git rev-parse --git-common-dir)/hooks/post-checkout"
+cat > "$HOOK_PATH" <<'HOOK_EOF'
+#!/usr/bin/env bash
+[ "$3" != "1" ] && exit 0
+exec "$(git rev-parse --show-toplevel)/scripts/setup-vault-symlink.sh"
+HOOK_EOF
+chmod +x "$HOOK_PATH"
+```
+- [ ] If `<MAIN>/.superset/config.json` exists, append setup/teardown entries (see Greenfield Step 2c).
+
+### Step 1.12: Update CLAUDE.md "Obsidian Vault" row
+- [ ] Edit `<MAIN>/CLAUDE.md`: change the `| **Obsidian Vault** |` row value to note the symlink, e.g.:
+```
+| **Obsidian Vault** | `vault/` (symlink to `<VAULT_REPO_PATH_PORTABLE>`) |
+```
+
+### Step 1.13: Commit the project-repo changes
+- [ ] `cd <MAIN> && git add scripts/setup-vault-symlink.sh .gitignore CLAUDE.md .notebooklm/config.json`
+- [ ] If `.superset/config.json` changed: `git add .superset/config.json`
+- [ ] `git commit -m "Externalize vault: symlink vault/ to <VAULT_REPO_PATH_PORTABLE>"`
+
+**Phase 1 gate:** Main repo has a working `vault` symlink. `git status` is clean. Vault repo has its initial commit. Do NOT proceed to Phase 2 until verified.
+
+---
+
+## Phase 2 — Sibling worktrees (destructive, one at a time)
+
+For each sibling worktree found in Phase 0.1 (excluding `<MAIN>`):
+
+### Step 2.<N>: Convert sibling `<SIBLING>` vault to symlink
+- [ ] Confirm this sibling was marked identical in Phase 0.3/0.4.
+- [ ] Prompt: `Proceed with sibling <SIBLING>? [y/N]`
+- [ ] If yes:
+```bash
+rm -rf "<SIBLING>/vault"
+ln -s "<VAULT_REPO_PATH_EXPANDED>" "<SIBLING>/vault"
+```
+- [ ] Verify: `test -L <SIBLING>/vault && test -e <SIBLING>/vault && echo "OK"`
+- [ ] If no, skip this sibling. Note that this sibling will be in a mixed state until converted manually.
+
+(Repeat for each sibling; inject one step per sibling from `<SIBLINGS>` at generation time.)
+
+**Phase 2 gate:** All confirmed siblings have working `vault` symlinks. Any skipped siblings are documented.
+
+---
+
+## Phase 3 — Manual follow-ups
+
+### Step 3.1: Reopen vault in Obsidian desktop app
+- [ ] Close the old `vault/` in Obsidian (if open).
+- [ ] Open `<VAULT_REPO_PATH_EXPANDED>/` as the new vault.
+- [ ] Verify `obsidian-cli` now points at the same directory the agents use.
+
+### Step 3.2: Re-run /ark-health
+- [ ] `cd <MAIN> && /ark-health`
+- [ ] Check #20 should return `pass` (symlink matches VAULT_TARGET, target exists).
+- [ ] All other checks should be unchanged from pre-externalization.
+
+### Step 3.3: Optional — push the vault repo
+- [ ] If GitHub remote was created in Step 1.7: already pushed.
+- [ ] If not and user wants one later: `cd <VAULT_REPO_PATH_EXPANDED> && gh repo create --private <PROJECT>-vault --source=. --push`
+
+---
+
+## Rollback (if Phase 1 fails partway)
+
+If the plan aborts during Phase 1:
+- **Before Step 1.8:** No destructive project-repo changes yet. Delete `<VAULT_REPO_PATH_EXPANDED>` and retry.
+- **After Step 1.8, before Step 1.10:** `git reset HEAD vault/` to un-stage the `git rm --cached`, then re-run from 1.8.
+- **After Step 1.10:** The real directory is gone. Rollback: `rm <MAIN>/vault && cp -a <VAULT_REPO_PATH_EXPANDED> <MAIN>/vault && git reset HEAD vault/`.
+- **After Step 1.13 (committed):** `git revert HEAD` and delete `<VAULT_REPO_PATH_EXPANDED>`.
+
+Never rollback Phase 2 automatically. Each sibling is handled independently.
+````
+
+After writing the plan file:
+
+```bash
+PLAN_FILE="docs/superpowers/plans/$(date +%Y-%m-%d)-externalize-vault.md"
+echo ""
+echo "Plan file written to: $PLAN_FILE"
+echo ""
+echo "Sibling worktrees that will be touched:"
+echo "<SIBLINGS>"
+echo ""
+echo "Next step: review the plan, then run /executing-plans $PLAN_FILE"
+```
+
+**Exit the wizard.** No filesystem changes beyond the plan file.
+
+---
+
 ## Path: Partial Ark (Repair)
 
 For vaults that have Ark structure but some checks are failing.
