@@ -73,6 +73,7 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 
 ### Workflow Orchestration
 - `/ark-workflow` — Task triage and skill chain orchestration (entry point for all non-trivial work)
+- `/ark-context-warmup` — Automatic context loader. Runs as step 0 of every /ark-workflow chain; queries NotebookLM + vault + TaskNotes for recent + relevant context. Also invokable standalone.
 
 ### Core (generalized from existing)
 - `/ark-code-review` — Multi-agent code review with fan-out architecture
