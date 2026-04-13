@@ -863,6 +863,60 @@ class TestEndToEndExecute:
         assert result is None
 
 
+class TestNotebookLMContractInputs:
+    """The notebooklm-vault warmup_contract's notebook_id input must include a
+    json_path_template so executor.resolve_input (lookup: single_or_default_for_warmup)
+    can resolve the notebook ID. Codex P1 finding: without json_path_template the
+    executor raises KeyError silently, and the entire NotebookLM lane returns None
+    → Degraded coverage on every warm-up."""
+
+    _NOTEBOOKLM_SKILL = _P(__file__).parent.parent.parent / "notebooklm-vault" / "SKILL.md"
+
+    def _load(self):
+        c = contract.load_contract(self._NOTEBOOKLM_SKILL)
+        assert c is not None, "notebooklm-vault warmup_contract missing or invalid"
+        return c
+
+    def test_every_notebook_id_input_has_json_path_template(self):
+        c = self._load()
+        for cmd in c["commands"]:
+            nb = cmd.get("inputs", {}).get("notebook_id")
+            assert nb is not None, f"command {cmd['id']!r} missing notebook_id input"
+            assert nb.get("lookup") == "single_or_default_for_warmup", (
+                f"command {cmd['id']!r} notebook_id lookup changed; test assumption broken"
+            )
+            assert "json_path_template" in nb, (
+                f"command {cmd['id']!r} notebook_id input is missing json_path_template; "
+                f"executor._lookup_single_or_default will KeyError at runtime"
+            )
+
+    def test_notebook_id_resolves_for_single_notebook_config(self):
+        c = self._load()
+        sample_config = {"notebooks": {"main": {"id": "nb-single-123"}}}
+        for cmd in c["commands"]:
+            nb_spec = cmd["inputs"]["notebook_id"]
+            resolved = executor.resolve_input(
+                nb_spec, config=sample_config, templates={}
+            )
+            assert resolved == "nb-single-123", (
+                f"command {cmd['id']!r} notebook_id did not resolve to the notebook's id "
+                f"(got {resolved!r})"
+            )
+
+    def test_notebook_id_resolves_for_multi_notebook_with_default(self):
+        c = self._load()
+        sample_config = {
+            "notebooks": {"main": {"id": "nb-main"}, "infra": {"id": "nb-infra"}},
+            "default_for_warmup": "infra",
+        }
+        for cmd in c["commands"]:
+            nb_spec = cmd["inputs"]["notebook_id"]
+            resolved = executor.resolve_input(
+                nb_spec, config=sample_config, templates={}
+            )
+            assert resolved == "nb-infra"
+
+
 class TestChainFrontmatterYamlSafety:
     """Step 6.5 frontmatter template must produce valid YAML even when the
     task_summary contains YAML-significant characters like ':', '#', '|', or

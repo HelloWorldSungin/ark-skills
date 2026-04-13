@@ -313,6 +313,7 @@ warmup_contract:
           # No silent fallback to "main". The executor resolves this via the lookup
           # rule, not a json_path fallback syntax.
           lookup: single_or_default_for_warmup
+          json_path_template: 'notebooks.{key}.id'
           required: true
         prompt:
           from: template
@@ -343,6 +344,7 @@ warmup_contract:
           # No silent fallback to "main". The executor resolves this via the lookup
           # rule, not a json_path fallback syntax.
           lookup: single_or_default_for_warmup
+          json_path_template: 'notebooks.{key}.id'
           required: true
         prompt:
           from: template
