@@ -49,7 +49,7 @@ One variable, one meaning:
 | Greenfield depth | Full auto, one confirmation | Greenfield has no committed state to destroy. Same auto-execute model as the rest of `/ark-onboard` greenfield applies. |
 | GitHub remote | Optional, offered after local `git init` | `gh repo create` is nice-to-have, not required for the symlink/hook logic to work. Offer only if `gh` is installed and authenticated. |
 | Centralized-location default | Prompt with smart default (`~/.superset/vaults/<project>/` for superset users, `~/Vaults/<project>/` otherwise) | Not every Ark user runs the superset CLI; hardcoding `~/.superset/` would surprise them. Detection keeps the default consistent with the user's existing toolchain. |
-| Canonical metadata for `<vault_repo_path>` | Tracked file `.ark/vault-path` in the project repo, containing the absolute path | Single durable source of truth. Survives reclones. Readable by Repair flow, external tooling, and humans. No inference from shell text or parsing JSON setup hooks. |
+| Canonical metadata for `<vault_repo_path>` | The tracked `scripts/setup-vault-symlink.sh` script itself, which contains a single `VAULT_TARGET="$HOME/..."` line by generation-time contract. `$HOME` keeps the path portable across machines. | Tracking an absolute path (e.g., `/Users/<specific_user>/.superset/...`) would poison every collaborator's clone with the wrong path. Using the tracked script as the metadata source means portability is already solved (by `$HOME`), and there's only one tracked artifact to keep consistent. Parsing the script is a contract, not inference — the template guarantees the line format. |
 | Worktree symlink automation | Primary: git `post-checkout` hook that calls a tracked script; Optional: `.superset/config.json` integration for existing superset projects | Post-checkout fires on `git worktree add` universally. The tracked script is the single logic source of truth. `.superset/config.json` is kept for backward compatibility with superset-based flows, not as a required layer. |
 | `embedded-vault` opt-out schema | Row in the `Project Configuration` table of CLAUDE.md: `\| **Vault layout** \| embedded (not symlinked) \|` — presence of the exact word `embedded` in that row marks the opt-out | Keeps escape hatch visible to humans, greppable by diagnostic, doesn't require a new config file. |
 | Check #20 severity | Warn-only (never fail), matching check #10 (index staleness) | An embedded vault is a smell, not a breakage — the project still works. Warn-only means embedded vaults can still reach the `Healthy` state, which matches the escape-hatch contract. |
@@ -75,11 +75,10 @@ One variable, one meaning:
 <project_repo>/
 ├── vault → <vault_repo_path>/        (symlink, git-ignored)
 ├── .notebooklm/config.json          (vault_root: "vault", tracked)
-├── .ark/vault-path                   (tracked; contains absolute <vault_repo_path>)
 ├── .gitignore                        (contains `vault`)
 ├── <common_git_dir>/hooks/post-checkout   (installed, not tracked)
 ├── .superset/config.json             (optional — if already present)
-└── scripts/setup-vault-symlink.sh    (tracked, single source of truth)
+└── scripts/setup-vault-symlink.sh    (tracked; canonical source — contains VAULT_TARGET with $HOME)
 ```
 
 ### Centralized-location default detection
@@ -92,26 +91,27 @@ else
 fi
 ```
 
-User is prompted with this default; can accept with Enter or override. The chosen value is stored in `<project_repo>/.ark/vault-path` (tracked) and parameterized into the setup script and post-checkout hook at generation time.
+User is prompted with this default; can accept with Enter or override. The chosen value is converted to its `$HOME`-portable form (e.g., `$HOME/.superset/vaults/<project>`) and written as the `VAULT_TARGET=` literal inside `scripts/setup-vault-symlink.sh` at generation time. That file — tracked in the project repo — is the single canonical source of truth for the vault location.
 
-### `.ark/vault-path` — canonical metadata
+### `scripts/setup-vault-symlink.sh` as canonical metadata
 
-Tracked, single-line file:
+The script is tracked. Its first non-comment line is by contract:
 
+```bash
+VAULT_TARGET="$HOME/.superset/vaults/<project>"
 ```
-/Users/<user>/.superset/vaults/<project>
-```
+
+`$HOME` expands at runtime, so the same tracked file works on any machine regardless of the user's actual home path. This is the same pattern ArkNode-Poly's existing `.git/hooks/post-checkout` uses in production.
+
+Read by:
+- Repair flow (primary source when locating `<vault_repo_path>`). Extraction: `grep -E '^VAULT_TARGET=' scripts/setup-vault-symlink.sh | head -1 | sed -E 's/^VAULT_TARGET="([^"]+)".*$/\1/'`.
+- `/ark-health` check #20 (confirming the declared target matches the symlink target).
 
 Written by:
 - Greenfield Step 2c (initial creation).
-- Externalization plan (step 11, during plan execution).
+- Externalization plan step 16 (during plan execution).
 
-Read by:
-- Repair flow (first fallback when locating `<vault_repo_path>`).
-- `/ark-health` check #20 (confirming the declared target matches the symlink target).
-- External tooling that wants to know where the vault lives without parsing shell scripts.
-
-Never edited by hand in normal operation. If the vault is intentionally moved, the user runs `/ark-onboard` Repair to update both the file and the symlink atomically.
+Never edited by hand in normal operation. If the vault is intentionally moved, the user runs `/ark-onboard` Repair to update the script and the symlink atomically.
 
 ### `scripts/setup-vault-symlink.sh` — single source of truth
 
@@ -210,7 +210,7 @@ Otherwise, **four new steps** are inserted between current Step 2 (Python check)
 
 - **Step 2a — Create centralized vault repo.** `mkdir -p <vault_repo_path>`; `cd` in; `git init`; write `.gitignore` containing per-user Obsidian files (`workspace.json`, `workspace-mobile.json`, `graph.json`, `plugin data.json`) **and nothing else** — `sync-state.json` is intentionally tracked. Create `<vault_repo_path>/.notebooklm/sync-state.json` with content `{"last_sync": null, "files": {}}`.
 - **Step 2b — Create symlink.** `ln -s <vault_repo_path> <project_repo>/vault`; append `vault` to `<project_repo>/.gitignore`.
-- **Step 2c — Install automation.** Write `<project_repo>/.ark/vault-path` containing the absolute `<vault_repo_path>`. Write `<project_repo>/scripts/setup-vault-symlink.sh` from the template (substituted with project name and vault repo path). Install `<common_git_dir>/hooks/post-checkout` with `chmod +x`. If `<project_repo>/.superset/config.json` exists, append the optional setup/teardown entries.
+- **Step 2c — Install automation.** Write `<project_repo>/scripts/setup-vault-symlink.sh` from the template, with `VAULT_TARGET=` set to the `$HOME`-relative form of the chosen vault path (e.g., `$HOME/.superset/vaults/<project>`). Install `<common_git_dir>/hooks/post-checkout` with `chmod +x`. If `<project_repo>/.superset/config.json` exists, append the optional setup/teardown entries.
 - **Step 2d — Offer GitHub remote.** If `gh` CLI is installed and `gh auth status` succeeds, prompt: `Create a GitHub repo for this vault now? [y/N]`. On yes, `gh repo create --private <project>-vault --source=<vault_repo_path> --push`. On no (or if `gh` unavailable), print the one-line command for later use.
 
 All subsequent greenfield steps (3 through 18 — directory creation, `00-Home.md`, `_meta/*`, TaskNotes scaffolding, index generation) run **inside the centralized vault repo**, not the project repo. The final `git add . && git commit -m "Initial vault scaffolding"` happens in the vault repo.
@@ -236,10 +236,10 @@ The wizard then writes `docs/superpowers/plans/YYYY-MM-DD-externalize-vault.md`,
 **Phase 0 — Preflight (no mutation):**
 
 1. Discover sibling worktrees: `git worktree list --porcelain | awk '/^worktree /{print $2}'`.
-2. For each sibling (including the main repo): check that `<sibling>/vault/` exists and is a real directory. Record the SHA-256 manifest of its contents: `(cd <sibling>/vault && find . -type f -print0 | sort -z | xargs -0 sha256sum) > /tmp/vault-manifest-<sibling>.txt`.
-3. Pairwise `diff -u` the manifests. If ANY manifests differ, print the divergent file list per pair and **abort the plan** with explicit instructions: user must resolve divergence manually (commit, discard, or merge) before re-running `/ark-onboard`.
+2. For each sibling (including the main repo): check that `<sibling>/vault/` exists and is a real directory (not a symlink). Abort with a clear message listing any siblings where `vault/` is missing, a symlink, or a broken symlink.
+3. Pairwise compare sibling `vault/` directories using git's own diff engine, which handles symlinks, file modes, binary files, and empty directories portably across macOS and Linux. Pick one sibling as the baseline (arbitrary — e.g., the main repo), then for every other sibling run: `git -c core.safecrlf=false diff --no-index --stat -- <baseline>/vault <sibling>/vault`. A non-zero exit or non-empty output means divergence. If ANY pair diverges, print the full `git diff --no-index --stat` output for each divergent pair and **abort the plan**. The user must resolve divergence manually (commit, discard, or merge) before re-running `/ark-onboard`.
 4. Check every sibling for uncommitted or untracked files under `vault/`: `(cd <sibling> && git status --porcelain vault/)`. Abort if any are present.
-5. Confirm `<vault_repo_path>` does not already exist or is empty.
+5. Confirm `<vault_repo_path>` does not already exist, or exists but is empty.
 
 Phase 0 exits the plan cleanly if any check fails. No destructive step runs unless all preflight checks pass.
 
@@ -248,14 +248,14 @@ Phase 0 exits the plan cleanly if any check fails. No destructive step runs unle
 6. `git init <vault_repo_path>`.
 7. Copy main-repo `vault/` contents into `<vault_repo_path>`.
 8. Copy `<project_repo>/.notebooklm/config.json` into `<vault_repo_path>/.notebooklm/` and update `vault_root: "."`.
-9. Move `<project_repo>/.notebooklm/sync-state.json` into `<vault_repo_path>/.notebooklm/` (or create empty state if missing).
-10. `cd <vault_repo_path> && git add . && git commit -m "Initial externalized vault"`.
-11. (Optional) `gh repo create --private <project>-vault --source=<vault_repo_path> --push`.
-12. `cd <project_repo> && git rm -r --cached vault/`.
-13. Append `vault` to `<project_repo>/.gitignore`.
-14. Write `<project_repo>/.ark/vault-path` containing absolute `<vault_repo_path>`.
+9. Move `<project_repo>/.notebooklm/sync-state.json` into `<vault_repo_path>/.notebooklm/` (or create empty state `{"last_sync": null, "files": {}}` if missing).
+10. Write `<vault_repo_path>/.gitignore` containing Obsidian per-user files only (`workspace.json`, `workspace-mobile.json`, `graph.json`, `plugin data.json`). `sync-state.json` is intentionally tracked.
+11. `cd <vault_repo_path> && git add . && git commit -m "Initial externalized vault"`.
+12. (Optional) `gh repo create --private <project>-vault --source=<vault_repo_path> --push`.
+13. `cd <project_repo> && git rm -r --cached vault/`.
+14. Append `vault` to `<project_repo>/.gitignore`.
 15. `rm -rf <project_repo>/vault && ln -s <vault_repo_path> <project_repo>/vault`.
-16. Write `scripts/setup-vault-symlink.sh`, install post-checkout hook, append to `.superset/config.json` if present.
+16. Write `scripts/setup-vault-symlink.sh` (with `VAULT_TARGET="$HOME/..."` in `$HOME`-portable form), install post-checkout hook, append to `.superset/config.json` if present.
 17. Update CLAUDE.md "Obsidian Vault" row to note symlink.
 18. `cd <project_repo> && git add . && git commit -m "Externalize vault"`.
 
@@ -277,31 +277,38 @@ Triggered on Partial Ark when diagnostic finds any of:
 - `vault` is a broken symlink, OR
 - `<common_git_dir>/hooks/post-checkout` missing/non-executable, OR
 - `scripts/setup-vault-symlink.sh` missing, OR
-- `.ark/vault-path` missing or declared path does not match the current symlink target.
+- `readlink vault` does not match the `VAULT_TARGET` declared in `scripts/setup-vault-symlink.sh` (after expanding `$HOME`).
 
 **Determining `<vault_repo_path>` in Repair** (in this order):
 
-1. If `<project_repo>/.ark/vault-path` exists: use its contents. (Canonical source.)
+1. If `scripts/setup-vault-symlink.sh` exists: extract `VAULT_TARGET` via the documented grep contract, expand `$HOME`, use the result. (Canonical source.)
 2. Else if `vault` is a broken symlink: `readlink vault` gives the original target. Use it as the intended path and print `git clone <remote> <target>` instructions if the target doesn't exist.
-3. Else if `scripts/setup-vault-symlink.sh` exists: extract the hardcoded `VAULT_TARGET=` literal (documented format in the template).
-4. Else: prompt the user with the Greenfield smart default.
+3. Else: prompt the user with the Greenfield smart default.
 
 For each missing piece, prompt `Fix [item]? [Y/n]` and either recreate it (if `<vault_repo_path>` already holds the vault) or print clone instructions and skip. All fixes are idempotent. No plan file — these are low-risk, non-destructive operations.
 
-If a mismatch is detected between `.ark/vault-path` and the actual symlink target, Repair stops and asks the user which to trust; it does not silently relink.
+If a mismatch is detected between `readlink vault` and the script's `VAULT_TARGET`, Repair stops and surfaces both values, asking the user which to trust. It does not silently relink.
 
 ### Healthy — audit check
 
 Add one warn-only check to the diagnostic:
 
-| # | Check | Tier | Pass Condition | Fail Condition |
-|---|-------|------|----------------|----------------|
-| **20** | Vault externalized | Standard (warn-only) | `vault` is a symlink AND `.ark/vault-path` matches `readlink vault`, OR CLAUDE.md `Project Configuration` table contains a `Vault layout` row with value matching `embedded` (case-insensitive) | N/A — this check never fails; it returns `warn` instead when `vault` is a real directory without the `embedded` opt-out |
+| # | Check | Tier | Pass Condition |
+|---|-------|------|----------------|
+| **20** | Vault externalized | Standard (warn-only) | One of: (a) `vault` is a symlink AND `readlink vault` matches the `VAULT_TARGET` declared in `scripts/setup-vault-symlink.sh` AND the resolved target exists; OR (b) CLAUDE.md `Project Configuration` table contains a `Vault layout` row whose value matches `embedded` (case-insensitive). |
 
-Status options for check 20:
-- `pass` — symlink resolves cleanly, OR opt-out is present.
-- `warn` — real directory without opt-out. Message: "Vault is embedded inside the project repo. Run `/ark-onboard` to externalize, or set `Vault layout: embedded` in CLAUDE.md if this is intentional."
-- `skip` — N/A (check always runs).
+Status options for check 20, by observed state:
+
+| Observed state | Status | Message |
+|----------------|--------|---------|
+| Symlink, target resolves, matches declared `VAULT_TARGET` | `pass` | — |
+| Real directory, `Vault layout: embedded` opt-out present | `pass` | — |
+| Real directory, no opt-out | `warn` | "Vault is embedded inside the project repo. Run `/ark-onboard` to externalize, or set `Vault layout: embedded` in CLAUDE.md if this is intentional." |
+| Symlink but target missing (broken link) | `warn` | "Vault symlink is broken. Run `/ark-onboard` Repair." |
+| Symlink but `readlink` disagrees with `VAULT_TARGET` in script | `warn` | "Vault symlink target disagrees with the declared path in `scripts/setup-vault-symlink.sh`. Run `/ark-onboard` Repair." |
+| No `vault` at all AND no `scripts/setup-vault-symlink.sh` | `warn` | "No vault configured. Run `/ark-onboard` Greenfield." |
+
+Check #20 never returns `fail`. All negative states are `warn`. State detection independently classifies these conditions (broken symlink, missing script) as Partial Ark for routing purposes; check #20 only reports diagnostic status.
 
 **Impact on Healthy classification:** Because check 20 is warn-only (matches check #10 for index staleness), a project with an embedded `vault/` directory still qualifies as `Healthy` as long as all other Critical + Standard checks pass. This matches the escape-hatch contract: embedded vaults are a smell, not a breakage.
 
@@ -313,10 +320,10 @@ Total check count rises from 19 → 20.
 |---|---|
 | No Vault (greenfield) | Centralized default → full-auto setup + hook install. If user picks embedded escape hatch, write opt-out row to CLAUDE.md. |
 | Non-Ark Vault (real dir, no Ark artifacts) | Inline Ark scaffolding as today (no change to scaffolding logic), followed by externalization plan file generation. Scaffolding is inline/safe; externalization is plan-only. |
-| Partial Ark (symlink broken / hook missing / script missing / `.ark/vault-path` mismatch) | Repair prompts + idempotent fixes |
+| Partial Ark (symlink broken / hook missing / script missing / symlink-target vs script-declared-target mismatch) | Repair prompts + idempotent fixes |
 | Partial Ark (real `vault/` with Ark artifacts, no opt-out) | Externalization plan file |
 | Partial Ark (real `vault/` with Ark artifacts, opt-out present) | Respect user choice; do not offer externalization |
-| Healthy (symlink present + `.ark/vault-path` matches) | Check 20 passes |
+| Healthy (symlink present + matches declared `VAULT_TARGET` in script) | Check 20 passes |
 | Healthy (real `vault/` with Ark artifacts, no opt-out) | Check 20 warns. Project still qualifies as Healthy. Wizard offers externalization plan but does not require it. |
 | Healthy (real `vault/` with Ark artifacts, opt-out present) | Check 20 passes. No externalization offered. |
 
@@ -327,7 +334,6 @@ Total check count rises from 19 → 20.
 | `<vault_repo_path>/` (vault repo) | create + `git init` + initial commit | via plan | — | — |
 | `<vault_repo_path>/.notebooklm/sync-state.json` | create empty | via plan | — | — |
 | `<project_repo>/vault` symlink | create | via plan | recreate | — |
-| `<project_repo>/.ark/vault-path` | create | via plan | rewrite if drift | — |
 | `<project_repo>/.gitignore` | append `vault` | via plan | verify | — |
 | `<common_git_dir>/hooks/post-checkout` | install | via plan | install if missing | — |
 | `<project_repo>/scripts/setup-vault-symlink.sh` | write | via plan | write if missing | — |
@@ -346,19 +352,19 @@ Total check count rises from 19 → 20.
 | `<vault_repo_path>` exists with content from a different project | Refuse; compare `00-Home.md` title and `.notebooklm/config.json` to confirm mismatch. Never overwrite. |
 | User types a `<vault_repo_path>` inside the project repo | Refuse — defeats the purpose. |
 | `<vault_repo_path>` parent doesn't exist | `mkdir -p` silently; confirm before creating. |
-| `vault` symlink points to the wrong location | Repair flow: compare `readlink vault` with `.ark/vault-path`; stop and ask user which to trust; never silently relink. |
-| `.ark/vault-path` and the symlink target disagree | Repair flow: surface both values, let user pick; never auto-fix. |
+| `vault` symlink points to the wrong location | Repair flow: compare `readlink vault` with the script's `VAULT_TARGET`; stop and ask user which to trust; never silently relink. |
+| Script's `VAULT_TARGET` and the symlink target disagree | Repair flow: surface both values, let user pick; never auto-fix. |
 | `gh` CLI not installed or not authenticated | Skip the remote prompt. Print one-liner for later. |
 | Project repo isn't a git repo yet | Existing Greenfield prereqs offer `git init` first. |
 | `<vault_repo_path>` is on a network mount / external drive | Warn about mount availability; continue. |
-| ArkNode-Poly (already on this pattern) running `/ark-onboard` | State detection classifies as Healthy with symlink + `.ark/vault-path` matching → check 20 passes → no changes made. (Spec includes one-time backfill: on first run post-adoption, if symlink exists but `.ark/vault-path` does not, wizard offers to create it.) |
+| ArkNode-Poly (already on this pattern) running `/ark-onboard` | State detection classifies as Healthy. If `scripts/setup-vault-symlink.sh` is missing but the symlink and hook exist (ArkNode-Poly's original hand-rolled layout), wizard offers to backfill the tracked script by inferring `VAULT_TARGET` from `readlink vault`. |
 | Externalization preflight finds divergent sibling vaults | Plan aborts before any destructive step. User must resolve divergence manually. Clear instructions printed. |
 
 ## Failure Modes
 
 - **Symlink creation fails** (permission denied, etc.): print the `ln` error verbatim, abort the wizard. Do not continue with partial state.
 - **Post-checkout hook install fails** (write-denied on `<common_git_dir>/hooks/`): abort, surface the error. Do not claim success.
-- **Post-install verification.** After installation, run `test -L vault && test -e vault && test -x <common_git_dir>/hooks/post-checkout && test -f scripts/setup-vault-symlink.sh && test -f .ark/vault-path`. If any check fails, wizard reports the specific step.
+- **Post-install verification.** After installation, run `test -L vault && test -e vault && test -x <common_git_dir>/hooks/post-checkout && test -f scripts/setup-vault-symlink.sh && grep -qE '^VAULT_TARGET=' scripts/setup-vault-symlink.sh`. If any check fails, wizard reports the specific step.
 - **Externalization plan — divergent siblings**: Phase 0 preflight aborts before any destructive step. Plan prints the divergent file list and instructs user to resolve. Plan can be re-run after resolution.
 - **Externalization plan — partial execution**: `/executing-plans` handles recovery. Plan is ordered so Phase 1 (main repo + vault target) completes atomically before Phase 2 (siblings) begins. Each phase has explicit rollback notes.
 - **`gh repo create` fails** (name taken, auth): keep local init state; print error + manual-create instructions. Do not roll back.
@@ -368,8 +374,8 @@ Total check count rises from 19 → 20.
 
 | Skill | Change |
 |-------|--------|
-| `/ark-health` | Add check #20 (vault-externalized, warn-only). Count rises 19 → 20. Sync with `/ark-onboard` shared diagnostic section. |
-| `/ark-onboard` | All changes in this spec. |
+| `/ark-health` | Add check #20 (vault-externalized, warn-only). Count rises 19 → 20. Sync with `/ark-onboard` shared diagnostic section. Update the existing Healthy-classification rule — currently "all Critical + Standard checks pass" ([skills/ark-onboard/SKILL.md](../../../skills/ark-onboard/SKILL.md), Project State Detection table) — to read "no Critical or Standard check returns `fail`" so warn-returning checks (10, 20) don't block Healthy. |
+| `/ark-onboard` | All changes in this spec, including the Healthy-classification rule revision above. |
 | `/notebooklm-vault` | Confirm it reads config from project's `.notebooklm/` first, falls back to `<vault>/.notebooklm/`, and resolves `sync-state.json` inside the vault. Add note about centralized-vault assumption. Bootstrap logic: if `sync-state.json` missing, create empty state (matches greenfield Step 2a behavior). |
 | `/wiki-update` | Session log filenames should include an environment prefix (`mac-`, `ct110-`) when `vault` is a symlink (cross-env collision prevention). Detect symlink via `test -L vault`. |
 | `/codebase-maintenance` | Add note: "When vault is symlinked, commit/push vault changes in the vault repo, not the project repo." |
@@ -381,15 +387,16 @@ Total check count rises from 19 → 20.
 
 1. Fresh empty git repo; run `/ark-onboard`; accept all defaults.
 2. Verify `<vault_repo_path>` exists with `.git/` and Ark artifacts.
-3. Verify `vault` symlink resolves, `vault` present in `.gitignore`, `<common_git_dir>/hooks/post-checkout` executable, `scripts/setup-vault-symlink.sh` tracked, `.ark/vault-path` exists and contains the absolute vault path.
+3. Verify `vault` symlink resolves, `vault` present in `.gitignore`, `<common_git_dir>/hooks/post-checkout` executable, `scripts/setup-vault-symlink.sh` tracked and contains a `VAULT_TARGET="$HOME/..."` line.
 4. `git worktree add ../test-wt` → verify `../test-wt/vault` symlink auto-created.
 5. `ls <vault_repo_path>/.notebooklm/` → `config.json` and `sync-state.json` both present; `cat <vault_repo_path>/.notebooklm/sync-state.json` shows `{"last_sync": null, "files": {}}`.
 6. `cd <vault_repo_path> && git ls-files | grep sync-state.json` → file is tracked (not ignored).
+7. Reclone the project repo on a different machine (or with a different `$HOME`) → re-run `/ark-onboard` Repair → verify the symlink is recreated correctly using `$HOME` expansion, no user-specific paths leaked into tracked files.
 
 ### Greenfield — escape hatch
 
 1. Fresh repo; answer `y` to "use embedded vault?"
-2. Verify `vault/` is a real directory; no symlink; no post-checkout hook; no `setup-vault-symlink.sh`; no `.ark/vault-path`; `vault/` NOT in `.gitignore`.
+2. Verify `vault/` is a real directory; no symlink; no post-checkout hook; no `setup-vault-symlink.sh`; `vault/` NOT in `.gitignore`.
 3. Verify CLAUDE.md `Project Configuration` table contains a `Vault layout` row whose value contains `embedded`.
 4. Run `/ark-health` → check 20 passes (opt-out present).
 
@@ -405,14 +412,14 @@ Total check count rises from 19 → 20.
 1. Repo with pre-existing real `vault/` dir + Ark artifacts + identical sibling worktrees; run `/ark-onboard`.
 2. Verify plan file at `docs/superpowers/plans/YYYY-MM-DD-externalize-vault.md`, parameterized with correct project name and `<vault_repo_path>`.
 3. Pipe plan to `/executing-plans` → Phase 0 passes, Phase 1 runs, Phase 2 prompts per sibling, Phase 3 manual steps surfaced.
-4. Verify end state matches Greenfield happy path (symlink, `.ark/vault-path`, hook, script, etc.).
+4. Verify end state matches Greenfield happy path (symlink, hook, script with `VAULT_TARGET`, etc.).
 
 ### Repair
 
 1. From a healthy setup: `rm vault && rm <common_git_dir>/hooks/post-checkout`.
 2. Run `/ark-onboard`.
-3. Verify both artifacts recreated using `.ark/vault-path` as the source of truth.
-4. Separately: edit `.ark/vault-path` to a bogus value → run `/ark-onboard` Repair → verify it surfaces the drift and asks the user to choose, does not silently relink.
+3. Verify both artifacts recreated using the `VAULT_TARGET` in `scripts/setup-vault-symlink.sh` as the source of truth.
+4. Separately: manually symlink `vault` to a bogus target that disagrees with the script's `VAULT_TARGET` → run `/ark-onboard` Repair → verify it surfaces both values and asks the user to choose, does not silently relink.
 
 ### Healthy audit
 
@@ -422,14 +429,14 @@ Total check count rises from 19 → 20.
 
 ### Failure-mode smoke tests
 
-1. Greenfield with `chmod -w ~/.superset/vaults/` → verify loud failure, no partial state, no stray `.ark/vault-path` written.
+1. Greenfield with `chmod -w ~/.superset/vaults/` → verify loud failure, no partial state, no stray tracked files written.
 2. Greenfield with `gh` uninstalled → verify `gh repo create` prompt is skipped.
 3. Greenfield with `<vault_repo_path>` parent unwritable → abort with specific error.
 
 ## Non-Goals
 
 - **CT110 / tinyAGI deploy automation.** The `TINYAGI_FALLBACK` slot in the symlink script is preserved (optional), but `/ark-onboard` does not deploy or configure the vault on remote hosts. That remains environment-specific tooling.
-- **`.vault-path` fallback file.** Not in scope. The `.ark/vault-path` file defined here serves the canonical-metadata role; the legacy tinyAGI `.vault-path` mechanism is orthogonal and handled by deploy tooling.
+- **`.vault-path` fallback file.** Not in scope. The tracked `scripts/setup-vault-symlink.sh` (via its `VAULT_TARGET` literal) serves the canonical-metadata role; the legacy tinyAGI `.vault-path` mechanism is orthogonal and handled by deploy tooling.
 - **Vault content migration between projects.** Renaming a project or merging two vaults is manual.
 - **Obsidian app auto-switch.** Opening the new vault in the Obsidian desktop app is a manual step in the externalization plan (Phase 3). The wizard cannot drive the Obsidian UI.
 - **Automatic sync-state repair.** If `sync-state.json` is deleted or corrupted post-externalization, `/notebooklm-vault` bootstraps empty state on next sync. `/ark-onboard` does not try to reconstruct it.
