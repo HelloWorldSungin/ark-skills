@@ -1703,9 +1703,17 @@ Adjust reminders based on what was actually set up:
 
 ---
 
-## Path: Non-Ark Vault (Migration)
+## Path: Non-Ark Vault (Ark Scaffolding + Externalization Offer)
 
-Key principle: **additive only.** Never delete or overwrite existing content. Frontmatter changes are explicit and reversible (separate commits).
+This path handles two distinct operations:
+
+1. **Ark scaffolding** (inline, safe) — add `_meta/`, `_Templates/`, `TaskNotes/`, etc. to an existing vault that doesn't have Ark structure yet. Runs the 14-step flow below, same as the prior "Migration" behavior. Non-destructive: never deletes or overwrites existing content. Frontmatter changes are explicit and reversible (separate commits).
+
+2. **Externalization** (destructive, plan file only) — if the scaffolded vault is still a real directory inside the project repo (i.e., `vault/` is not a symlink), the wizard also generates a plan file for moving the vault out into its own git repo and creating the symlink. The plan file is NOT executed; the user reviews and runs it via `/executing-plans` (see "Path: Externalization Plan Generation" below).
+
+**Key principle (scaffolding):** additive only. Never delete or overwrite existing content. Frontmatter changes are explicit and reversible (separate commits).
+
+**Key principle (externalization):** destructive steps live in a plan file, never in this skill's inline execution. Preflight gates prevent data loss.
 
 ### Migration Step 1: Scan existing vault
 
@@ -1941,6 +1949,22 @@ git add -A && git commit -m "feat: add Ark scaffolding to {project_name} vault"
 ```
 
 Show follow-up reminders (same as Greenfield Step 18, adjusted for migration context).
+
+### Migration Step 15: Offer externalization (if vault is still embedded)
+
+> **You are at Step 15 of 15 — Externalization offer.**
+
+```bash
+# Re-detect: is vault/ still a real directory (not a symlink)?
+if [ -d vault ] && [ ! -L vault ]; then
+  echo "Ark scaffolding complete. The vault is still embedded inside the project repo."
+  echo "To externalize it (recommended for worktree/Obsidian-app consistency), run:"
+  echo "  /ark-onboard"
+  echo "The wizard will detect the embedded-Ark state and generate an externalization plan."
+fi
+```
+
+This is a pointer only — it does NOT generate the plan inline. The externalization offer triggers when the user re-runs `/ark-onboard` and state detection classifies the project as `Partial Ark (real vault/ with Ark artifacts, no opt-out)`.
 
 ---
 
