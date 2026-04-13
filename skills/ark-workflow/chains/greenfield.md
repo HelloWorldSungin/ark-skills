@@ -4,6 +4,7 @@
 
 *rare for greenfield*
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. Implement directly
 2. `/cso` (if security-relevant)
 3. `/ship` → `/land-and-deploy`
@@ -14,6 +15,7 @@
 ## Medium
 
 *Session 1 — Design:*
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/brainstorming` — explore intent, propose approaches, write spec
 2. `/codex` — review the spec
 3. Commit spec → **end session, start fresh for implementation** (set `handoff_marker: after-step-3`)
@@ -37,6 +39,7 @@
 ## Heavy
 
 *Session 1 — Design & Planning:*
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/brainstorming` — explore intent, propose approaches, write spec
 2. `/codex` — review the spec
 3. `/writing-plans` — break into phased implementation plan

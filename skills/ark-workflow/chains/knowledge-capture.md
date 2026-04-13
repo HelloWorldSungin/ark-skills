@@ -6,6 +6,7 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 
 *syncing recent changes, updating a few pages*
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/wiki-update` — end-of-session workflow (session log, TaskNote update, insight extraction, index regen)
 2. `/cross-linker` (if vault)
 
@@ -13,6 +14,7 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 
 *catching up after extended period, rebuilding tags, ingesting external docs*
 
+0. `/ark-context-warmup` — load recent + relevant project context
 1. `/wiki-status` — vault statistics
 2. `/wiki-lint` — broken links, missing frontmatter, tag violations
 3. `/wiki-update` — end-of-session workflow (session log, TaskNote update, insight extraction, index regen)

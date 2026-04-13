@@ -294,3 +294,43 @@ Generate the Recommendation section using these priorities in order:
 | `tasknotes_list_tasks` | List with pagination | page, limit |
 | `tasknotes_toggle_status` | Cycle status | task file path |
 | `tasknotes_get_stats` | Task statistics | none |
+
+## Warmup Contract
+
+Machine-readable subcontract consumed by `/ark-context-warmup`. Spec: `docs/superpowers/specs/2026-04-12-ark-context-warmup-design.md`. Calling convention: `docs/superpowers/plans/2026-04-12-ark-context-warmup-implementation.md` D6.
+
+```yaml
+warmup_contract:
+  version: 1
+  commands:
+    - id: status-and-search
+      shell: 'python3 "$ARK_SKILLS_ROOT/skills/ark-tasknotes/scripts/warmup_search.py" --tasknotes {{tasknotes_path}} --prefix {{task_prefix}} --task-normalized {{task_normalized}} --task-summary {{task_summary}} --scenario {{scenario}} --json'
+      inputs:
+        tasknotes_path:
+          from: env
+          env_var: WARMUP_TASKNOTES_PATH
+          required: true
+        task_prefix:
+          from: env
+          env_var: WARMUP_TASK_PREFIX
+          required: true
+        task_normalized:
+          from: env
+          env_var: WARMUP_TASK_NORMALIZED
+          required: true
+        task_summary:
+          from: env
+          env_var: WARMUP_TASK_SUMMARY
+          required: true
+        scenario:
+          from: env
+          env_var: WARMUP_SCENARIO
+          required: true
+      output:
+        format: json
+        extract:
+          matches: '$.matches'
+          status_summary: '$.status_summary'
+          extracted_component: '$.extracted_component'
+        required_fields: [matches, status_summary]
+```

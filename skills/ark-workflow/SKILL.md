@@ -195,6 +195,22 @@ Output the numbered skill chain with all conditions resolved. Include the sessio
 
 ### Step 6.5: Activate Continuity
 - Create TodoWrite tasks for each step in the resolved chain
+- Compute task fields for `/ark-context-warmup` (step 0 of every chain). `/ark-workflow` needs the same `ARK_SKILLS_ROOT` resolution as the warm-up skill — mirror `/ark-context-warmup` SKILL.md's Project Discovery section verbatim so dev-mode runs inside the ark-skills worktree resolve helpers from the branch under test rather than a stale installed copy:
+  ```bash
+  if [ -n "${CLAUDE_PLUGIN_DIR:-}" ] && [ -d "$CLAUDE_PLUGIN_DIR" ]; then
+      ARK_SKILLS_ROOT="$CLAUDE_PLUGIN_DIR"
+  elif [ -f "$(pwd)/.claude-plugin/marketplace.json" ]; then
+      # CWD is the ark-skills repo itself (dev/test mode)
+      ARK_SKILLS_ROOT="$(pwd)"
+  else
+      ARK_SKILLS_ROOT=$(find ~/.claude/plugins -maxdepth 6 -type d -name ark-skills 2>/dev/null | head -1)
+  fi
+  TASK_TEXT="<verbatim user request>"
+  TASK_NORMALIZED=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" normalize "$TASK_TEXT")
+  TASK_SUMMARY=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" summary "$TASK_TEXT")
+  TASK_HASH=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" hash "$TASK_NORMALIZED")
+  CHAIN_ID=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-helpers.py" chain-id)
+  ```
 - Write `.ark-workflow/current-chain.md` at project root with this frontmatter:
 
   ---
@@ -202,6 +218,13 @@ Output the numbered skill chain with all conditions resolved. Include the sessio
   weight: {weight}
   batch: false
   created: {ISO-8601 timestamp}
+  chain_id: {CHAIN_ID}
+  task_text: |
+    {TASK_TEXT — multi-line verbatim, indented 2 spaces}
+  task_summary: |-
+    {TASK_SUMMARY — single-line, indented 2 spaces; block scalar avoids YAML escaping for ':', '#', '|', quotes}
+  task_normalized: {TASK_NORMALIZED}
+  task_hash: {TASK_HASH}
   handoff_marker: null
   handoff_instructions: null
   ---

@@ -1,0 +1,17 @@
+description: "'decided against' in unrelated sentence → no candidate (documents known noise pattern)"
+input:
+  task_normalized: rate limiting
+  scenario: greenfield
+  tasknotes:
+    matches: []
+    status_summary: {}
+    extracted_component: rate
+  notebooklm:
+    citations:
+      - session: S042
+        quote: We decided against the old quarterly planning cadence.
+    bootstrap: ""
+    session_continue: ""
+expected:
+  exact: false
+  candidates: []

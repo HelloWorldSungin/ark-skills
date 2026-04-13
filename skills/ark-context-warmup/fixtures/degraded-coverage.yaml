@@ -1,0 +1,18 @@
+description: Wiki lane unavailable → Degraded coverage for wiki. Adjusted from the plan (original used empty-matches, but Task 13's corrected semantics only emit Degraded coverage for None lanes, not empty-result lanes).
+input:
+  task_normalized: orphan task
+  scenario: greenfield
+  tasknotes:
+    matches: []
+    status_summary: {open: 1}
+    extracted_component: orphan
+  notebooklm:
+    citations: []
+    bootstrap: "content"
+    session_continue: ""
+  wiki: null
+expected:
+  exact: false
+  candidates:
+    - type: Degraded coverage
+      detail: wiki lane unavailable

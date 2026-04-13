@@ -129,3 +129,52 @@ Compose the answer with citations using `[[page-name]]` wikilink notation. Inclu
 ### Quick Mode
 
 If the user says "quick answer" or "just scan": use only T4 Step 3a (index scan). Return matching page titles and summaries without reading full pages.
+
+## Warmup Contract
+
+Machine-readable subcontract consumed by `/ark-context-warmup`. Spec: `docs/superpowers/specs/2026-04-12-ark-context-warmup-design.md`. Calling convention: `docs/superpowers/plans/2026-04-12-ark-context-warmup-implementation.md` D6.
+
+Wiki-query already exposes the right behavior as a skill — this contract just tells warm-up which scenario-aware queries to run and how to extract findings. The actual implementation lives in the /wiki-query workflow; warm-up invokes it via the inline command pattern below.
+
+```yaml
+warmup_contract:
+  version: 1
+  commands:
+    - id: scenario-query
+      # Warm-up invokes wiki-query inline via its T4 scan path (index.md + summaries).
+      # For the warm-up's purposes, we only need the top-3 most relevant summaries, not the full T1/T2/T3 routing.
+      shell: 'python3 "$ARK_SKILLS_ROOT/skills/wiki-query/scripts/warmup_scan.py" --vault {{vault_path}} --query {{query}} --top 3 --json'
+      inputs:
+        vault_path:
+          from: env
+          env_var: WARMUP_VAULT_PATH
+          required: true
+        query:
+          from: template
+          template_id: scenario_query
+      output:
+        format: json
+        extract:
+          matches: '$.matches'            # [{title, summary, path}]
+          tier_used: '$.tier'             # always "T4" for warmup
+        required_fields: [matches]
+  prompt_templates:
+    # Two-layer indirection: /ark-context-warmup sets WARMUP_SCENARIO_QUERY_TEMPLATE
+    # to the appropriate scenario_templates entry below before dispatching the
+    # wiki lane. The executor's _interpolate_template iterates until a fixed
+    # point, so the outer {WARMUP_SCENARIO_QUERY_TEMPLATE} expansion plus the
+    # inner {WARMUP_TASK_TEXT} in the scenario template both resolve in one
+    # resolve_input call. Use single-brace — shell-style ${VAR} is not a
+    # supported placeholder form.
+    scenario_query: |
+      {WARMUP_SCENARIO_QUERY_TEMPLATE}
+  scenario_templates:
+    # Picked by warm-up based on WARMUP_SCENARIO env var; template substituted into scenario_query above.
+    greenfield: 'Has anything like {WARMUP_TASK_TEXT} been built before? Existing components or prior design decisions?'
+    bugfix: 'Have we seen bugs related to {WARMUP_TASK_TEXT} before? Known failure modes, incident notes, prior fixes?'
+    migration: 'Past migration notes for {WARMUP_TASK_TEXT}? Rollback procedures, prior framework changes?'
+    performance: 'Past optimization work on {WARMUP_TASK_TEXT}? Benchmarks, bottleneck analyses?'
+    hygiene: 'Related refactors or audits on {WARMUP_TASK_TEXT}? Tech debt notes, prior cleanup?'
+    ship: 'Deploy runbooks, rollback steps, prior incidents for {WARMUP_TASK_TEXT}? Environment-specific gotchas?'
+    knowledge-capture: 'What vault pages already exist on {WARMUP_TASK_TEXT} topic? Recent session coverage?'
+```

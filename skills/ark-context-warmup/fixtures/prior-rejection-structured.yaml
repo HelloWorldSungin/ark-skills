@@ -1,0 +1,20 @@
+description: Trigger phrase near ≥2 task keywords → medium-confidence prior rejection
+input:
+  task_normalized: service mesh adoption
+  scenario: greenfield
+  tasknotes:
+    matches: []
+    status_summary: {}
+    extracted_component: service
+  notebooklm:
+    citations:
+      - session: S042
+        quote: We decided against service mesh adoption because of operational overhead.
+    bootstrap: ""
+    session_continue: ""
+expected:
+  exact: false
+  candidates:
+    - type: Possible prior rejection
+      confidence: medium
+      id: S042
