@@ -33,6 +33,71 @@ vault/                        # {vault_root}
     └── meta/ArkSignal-counter
 ```
 
+## Centralized Vault Layout (Default)
+
+New projects default to a **centralized vault**: the vault lives in its own git repo at `~/.superset/vaults/<project>/` (or `~/Vaults/<project>/` for non-superset users), and the project repo contains a `vault` symlink to it. This mirrors ArkNode-Poly's production pattern. Benefits:
+
+- Worktrees share a single vault — session logs and tasks are visible everywhere.
+- Obsidian desktop app points at exactly one vault for any project, so `obsidian-cli` agrees with the agent.
+- NotebookLM sync state is shared (not duplicated per worktree).
+
+### Vault path terms
+
+| Term | Meaning | Example |
+|------|---------|---------|
+| `<vault_repo_path>` | Absolute path to the centralized vault repo — the full path, not its parent | `~/.superset/vaults/ArkNode-Poly` |
+| `<project_repo>` | The project repo that symlinks into the vault | `~/.superset/projects/ArkNode-Poly` |
+| `<common_git_dir>` | Output of `git rev-parse --git-common-dir` (shared across worktrees) | `~/.superset/projects/ArkNode-Poly/.git` |
+
+### Default path detection
+
+```bash
+if [ -d "$HOME/.superset" ]; then
+  DEFAULT_VAULT_REPO_PATH="$HOME/.superset/vaults/<project>"
+else
+  DEFAULT_VAULT_REPO_PATH="$HOME/Vaults/<project>"
+fi
+```
+
+### Path constraint — `$HOME`-portable
+
+The chosen vault path **must start with `$HOME/`** (or `~/`, which normalizes to `$HOME/`). The wizard rejects absolute paths outside `$HOME` (e.g., `/Volumes/...`, `/mnt/...`, another user's home). Users who want a vault on an external drive should `ln -s /Volumes/ExternalDrive/vaults $HOME/Vaults` and point the wizard at the `$HOME` path. This keeps tracked metadata portable across machines by construction.
+
+When writing `VAULT_TARGET` into the tracked setup script, always store the `$HOME/`-prefixed form (e.g., `VAULT_TARGET="$HOME/.superset/vaults/ArkNode-Poly"`), not the expanded absolute path. `$HOME` expands at runtime on whichever machine runs the script.
+
+### Layout diagram
+
+```
+<vault_repo_path>/                      (centralized vault — its own git repo)
+├── .git/
+├── .obsidian/
+├── .notebooklm/
+│   ├── config.json                 (vault_root: ".",  tracked)
+│   └── sync-state.json             (empty init, tracked)
+├── _meta/, _Templates/, _Attachments/
+├── TaskNotes/
+├── 00-Home.md
+└── <ProjectDocs>/                   (monorepo layout)  OR  flat (standalone)
+
+<project_repo>/
+├── vault → <vault_repo_path>/        (symlink, git-ignored)
+├── .notebooklm/config.json          (vault_root: "vault", tracked)
+├── .gitignore                        (contains `vault`)
+├── <common_git_dir>/hooks/post-checkout   (installed, not tracked)
+├── .superset/config.json             (optional — if already present)
+└── scripts/setup-vault-symlink.sh    (tracked; canonical source — contains VAULT_TARGET with $HOME)
+```
+
+### Embedded vault opt-out
+
+Users who explicitly want the vault committed to the project repo can skip the centralized layout. When they do, the wizard writes this row into CLAUDE.md's `Project Configuration` table:
+
+```markdown
+| **Vault layout** | embedded (not symlinked) |
+```
+
+Check #20 (vault-externalized) reads this row: presence of the word `embedded` (case-insensitive) in the `Vault layout` row means the user opted in to embedded. In that case, check #20 returns `pass` for the opt-out.
+
 ## Required CLAUDE.md Fields (Normalized)
 
 Only 4 user-provided fields (everything else is derived):
