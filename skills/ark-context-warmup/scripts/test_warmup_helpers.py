@@ -666,3 +666,198 @@ class TestSynthesize:
         assert len(captured_tmp_paths) >= 2
         # At least two distinct tmp names (ensures uniqueness)
         assert len(set(captured_tmp_paths)) == len(captured_tmp_paths)
+
+
+_EXEC_PATH = _P(__file__).parent / "executor.py"
+_spec_ex = _ilu.spec_from_file_location("executor", _EXEC_PATH)
+executor = _ilu.module_from_spec(_spec_ex)
+_spec_ex.loader.exec_module(executor)
+
+
+class TestInputResolution:
+    def test_env_input(self, monkeypatch):
+        monkeypatch.setenv("WARMUP_SCENARIO", "greenfield")
+        input_spec = {"from": "env", "env_var": "WARMUP_SCENARIO", "required": True}
+        assert executor.resolve_input(input_spec, config=None, templates={}) == "greenfield"
+
+    def test_env_input_missing_required(self, monkeypatch):
+        monkeypatch.delenv("MISSING_VAR", raising=False)
+        input_spec = {"from": "env", "env_var": "MISSING_VAR", "required": True}
+        import pytest
+        with pytest.raises(executor.InputResolutionError):
+            executor.resolve_input(input_spec, config=None, templates={})
+
+    def test_config_input_simple_json_path(self):
+        cfg = {"notebooks": {"main": {"id": "nb-abc"}}}
+        input_spec = {"from": "config", "json_path": "notebooks.main.id", "required": True}
+        assert executor.resolve_input(input_spec, config=cfg, templates={}) == "nb-abc"
+
+    def test_config_input_lookup_single_or_default_for_warmup(self):
+        cfg = {"notebooks": {"main": {"id": "nb-abc"}}}
+        input_spec = {"from": "config", "lookup": "single_or_default_for_warmup",
+                      "json_path_template": "notebooks.{key}.id", "required": True}
+        assert executor.resolve_input(input_spec, config=cfg, templates={}) == "nb-abc"
+
+    def test_config_input_lookup_multi_with_default(self):
+        cfg = {"notebooks": {"a": {"id": "nb-a"}, "b": {"id": "nb-b"}}, "default_for_warmup": "b"}
+        input_spec = {"from": "config", "lookup": "single_or_default_for_warmup",
+                      "json_path_template": "notebooks.{key}.id", "required": True}
+        assert executor.resolve_input(input_spec, config=cfg, templates={}) == "nb-b"
+
+    def test_config_input_lookup_multi_without_default_raises(self):
+        cfg = {"notebooks": {"a": {"id": "nb-a"}, "b": {"id": "nb-b"}}}
+        input_spec = {"from": "config", "lookup": "single_or_default_for_warmup",
+                      "json_path_template": "notebooks.{key}.id", "required": True}
+        import pytest
+        with pytest.raises(executor.InputResolutionError, match="default_for_warmup"):
+            executor.resolve_input(input_spec, config=cfg, templates={})
+
+    def test_template_input(self):
+        input_spec = {"from": "template", "template_id": "my_prompt"}
+        result = executor.resolve_input(
+            input_spec, config=None,
+            templates={"my_prompt": "Hello, {WARMUP_TASK_TEXT}!"},
+        )
+        assert result == "Hello, {WARMUP_TASK_TEXT}!"
+
+
+class TestShellSubstitution:
+    def test_substitute(self):
+        result = executor.substitute_shell_template(
+            "run {{cmd}} with id {{id}}", {"cmd": "do-thing", "id": "xyz"}
+        )
+        assert result == "run do-thing with id xyz"
+
+    def test_missing_var_raises(self):
+        import pytest
+        with pytest.raises(KeyError):
+            executor.substitute_shell_template("run {{missing}}", {})
+
+
+class TestJSONPathExtract:
+    def test_dotted(self):
+        data = {"answer": {"sections": {"recent": "stuff"}}}
+        assert executor.extract_json_path(data, "$.answer.sections.recent") == "stuff"
+
+    def test_missing_key_returns_none(self):
+        assert executor.extract_json_path({"a": 1}, "$.b.c") is None
+
+    def test_root(self):
+        assert executor.extract_json_path({"x": 1}, "$") == {"x": 1}
+
+    def test_array_indexing_not_supported_raises(self):
+        import pytest
+        with pytest.raises(executor.JSONPathError, match="array"):
+            executor.extract_json_path({"a": [1, 2]}, "$.a[0]")
+
+
+class TestPrecondition:
+    def test_script_exit_zero_runs(self, tmp_path):
+        script = tmp_path / "ok.sh"
+        script.write_text("#!/usr/bin/env bash\nexit 0\n")
+        script.chmod(0o755)
+        ok, stderr = executor.run_precondition(
+            script_path=script, env={}, timeout_s=5
+        )
+        assert ok is True
+
+    def test_script_nonzero_skips(self, tmp_path):
+        script = tmp_path / "nope.sh"
+        script.write_text("#!/usr/bin/env bash\necho skip reason >&2\nexit 1\n")
+        script.chmod(0o755)
+        ok, stderr = executor.run_precondition(
+            script_path=script, env={}, timeout_s=5
+        )
+        assert ok is False
+        assert "skip reason" in stderr
+
+    def test_script_timeout_treated_as_skip(self, tmp_path):
+        script = tmp_path / "slow.sh"
+        script.write_text("#!/usr/bin/env bash\nsleep 10\n")
+        script.chmod(0o755)
+        ok, stderr = executor.run_precondition(
+            script_path=script, env={}, timeout_s=1
+        )
+        assert ok is False
+        assert "timeout" in stderr.lower() or "timed out" in stderr.lower()
+
+    def test_script_receives_env(self, tmp_path):
+        script = tmp_path / "echoenv.sh"
+        script.write_text("#!/usr/bin/env bash\n[ \"$WARMUP_TASK_HASH\" = 'abc' ] && exit 0 || exit 1\n")
+        script.chmod(0o755)
+        ok, _ = executor.run_precondition(
+            script_path=script, env={"WARMUP_TASK_HASH": "abc"}, timeout_s=5
+        )
+        assert ok is True
+
+
+class TestShellExecute:
+    def test_shell_timeout(self):
+        r = executor.run_shell("sleep 10", timeout_s=1)
+        assert r.timed_out is True
+
+    def test_shell_captures_stdout(self):
+        r = executor.run_shell("echo hello", timeout_s=5)
+        assert r.timed_out is False
+        assert r.exit_code == 0
+        assert r.stdout.strip() == "hello"
+
+
+class TestEndToEndExecute:
+    def test_execute_command_happy_path(self, tmp_path, monkeypatch):
+        script = tmp_path / "fake_backend.sh"
+        script.write_text("#!/usr/bin/env bash\necho '{\"payload\": {\"value\": \"'\"$FOO\"'\"}}'\n")
+        script.chmod(0o755)
+        monkeypatch.setenv("FOO", "bar")
+        command_spec = {
+            "id": "fake",
+            "shell": f"bash {script}",
+            "inputs": {},
+            "output": {
+                "format": "json",
+                "extract": {"value": "$.payload.value"},
+                "required_fields": ["value"],
+            },
+        }
+        result = executor.execute_command(
+            command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
+        )
+        assert result == {"value": "bar"}
+
+    def test_execute_command_missing_required_field_returns_none(self, tmp_path):
+        script = tmp_path / "empty.sh"
+        script.write_text("#!/usr/bin/env bash\necho '{}'\n")
+        script.chmod(0o755)
+        command_spec = {
+            "id": "empty",
+            "shell": f"bash {script}",
+            "inputs": {},
+            "output": {
+                "format": "json",
+                "extract": {"value": "$.missing"},
+                "required_fields": ["value"],
+            },
+        }
+        result = executor.execute_command(
+            command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
+        )
+        assert result is None
+
+    def test_execute_command_precondition_skip(self, tmp_path):
+        pre = tmp_path / "pre.sh"
+        pre.write_text("#!/usr/bin/env bash\nexit 1\n")
+        pre.chmod(0o755)
+        shell_script = tmp_path / "main.sh"
+        shell_script.write_text("#!/usr/bin/env bash\necho '{\"x\":\"should-not-run\"}'\n")
+        shell_script.chmod(0o755)
+        command_spec = {
+            "id": "skipped",
+            "shell": f"bash {shell_script}",
+            "inputs": {},
+            "preconditions": [{"id": "no", "script": str(pre)}],
+            "output": {"format": "json", "extract": {"x": "$.x"}, "required_fields": ["x"]},
+        }
+        result = executor.execute_command(
+            command_spec, config=None, templates={}, env_overrides={}, timeout_s=5
+        )
+        assert result is None
