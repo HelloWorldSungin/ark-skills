@@ -6,6 +6,7 @@
 # OMC transient state (session-scoped, regenerated per run)
 # Keep .omc/specs/ and .omc/plans/ committable — durable artifacts.
 .omc/state/
+.omc/sessions/
 .omc/project-memory.json
 .omc/logs/
 .omc/research/
