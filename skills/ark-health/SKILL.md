@@ -5,7 +5,7 @@ description: Diagnostic check for Ark ecosystem health — plugins, CLAUDE.md, v
 
 # Ark Health Check
 
-Run all 20 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions.
+Run all 21 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions.
 
 ## Context-Discovery Exemption
 
@@ -13,9 +13,9 @@ This skill is exempt from normal context-discovery. It must work when CLAUDE.md 
 
 - Checks 1–3 (Plugins) run normally
 - Checks 4–6 (Project Configuration) report **fail** with explanation
-- Checks 7–20 report "cannot check — CLAUDE.md missing" instead of failing silently
+- Checks 7–20 report "cannot check — CLAUDE.md missing" instead of failing silently (Check 21 is exempt — runs unconditionally)
 
-Never abort early. Run all 20 checks regardless of earlier failures.
+Never abort early. Run all 21 checks regardless of earlier failures.
 
 ## Vault Path Terminology
 
@@ -96,7 +96,7 @@ Detection: Read the `system-reminder` skill list in your current session context
 
 ### Project Configuration (Checks 4–6)
 
-Read CLAUDE.md before running these checks. If CLAUDE.md does not exist, checks 4–6 all fail and checks 7–20 report "cannot check — CLAUDE.md missing".
+Read CLAUDE.md before running these checks. If CLAUDE.md does not exist, checks 4–6 all fail and checks 7–20 report "cannot check — CLAUDE.md missing". Check 21 (OMC plugin) is exempt — it does not depend on CLAUDE.md.
 
 ```bash
 # Attempt to read CLAUDE.md from current working directory
@@ -526,11 +526,45 @@ Check #20 **never returns `fail`**. All negative states are `warn`. State detect
 
 ---
 
+**Check 21 — OMC plugin** | Tier: Standard (upgrade-style, never blocks tier classification)
+
+Detect oh-my-claudecode (OMC) — the autonomous-execution framework that powers `/ark-workflow` Path B. Detection mirrors the canonical `HAS_OMC` probe in `skills/ark-workflow/SKILL.md:54-61` structurally: detect first, then apply the `ARK_SKIP_OMC=true` override (downstream emergency rollback per `skills/ark-workflow/references/omc-integration.md` § Section 3). Check 21 is exempt from the CLAUDE.md-missing skip rule because OMC presence is a CLI/cache-dir property, not a project-config property.
+
+```bash
+# Canonical: skills/ark-workflow/SKILL.md:54-61
+# OMC_CACHE_DIR canonical: ~/.claude/plugins/cache/omc
+# (see skills/ark-workflow/references/omc-integration.md § Section 0)
+if command -v omc >/dev/null 2>&1 || [ -d "$HOME/.claude/plugins/cache/omc" ]; then
+  HAS_OMC=true
+else
+  HAS_OMC=false
+fi
+# ARK_SKIP_OMC=true forces HAS_OMC=false regardless of detection
+[ "$ARK_SKIP_OMC" = "true" ] && HAS_OMC=false
+
+if [ "$HAS_OMC" = "true" ]; then
+  echo "PASS: OMC detected"
+elif [ "$ARK_SKIP_OMC" = "true" ]; then
+  echo "SKIP: ARK_SKIP_OMC=true (user-suppressed)"
+else
+  echo "UPGRADE: OMC not installed"
+fi
+```
+
+- **Pass:** `omc` CLI on PATH OR `~/.claude/plugins/cache/omc` directory exists, AND `ARK_SKIP_OMC` is not `true`
+- **Upgrade action:** Install OMC at https://github.com/anthropics/oh-my-claudecode — unlocks `/ark-workflow` Path B (autonomous execution via `/autopilot`, `/ralph`, `/ultrawork`, `/team`)
+- **Skip:** When `ARK_SKIP_OMC=true` (env-suppressed); render as `--` with note `OMC suppressed (ARK_SKIP_OMC=true)`
+- **Fail:** Never. OMC is upgrade-style (mirrors Checks 14/17/18 — MemPalace, NotebookLM CLI, NotebookLM config).
+- **Tier:** Standard — surfaces alongside Standard-tier checks in the scorecard. Absence does NOT block any tier classification (Standard, Quick, or Full).
+- **CLAUDE.md exemption:** Check 21 runs even when CLAUDE.md is missing. It does not depend on any CLAUDE.md field.
+
+---
+
 ## Workflow
 
 ### Step 1: Run All 20 Checks
 
-Run checks in sequence. Do not abort on failure — complete all 20. Track results as you go:
+Run checks in sequence. Do not abort on failure — complete all 21. Track results as you go:
 
 ```
 results = {
@@ -554,10 +588,11 @@ results = {
   18: pass|fail|upgrade|skip,
   19: pass|fail|upgrade|skip,
   20: pass|warn,
+  21: pass|upgrade|skip,
 }
 ```
 
-For checks 7–20: if CLAUDE.md was missing (check 4 = fail), record `skip` with message "cannot check — CLAUDE.md missing".
+For checks 7–20: if CLAUDE.md was missing (check 4 = fail), record `skip` with message "cannot check — CLAUDE.md missing". Check 21 (OMC plugin) is exempt — runs regardless of CLAUDE.md.
 
 For checks 15, 16, 18, 19: if their prerequisite check failed, record `skip` with message "requires check N".
 
@@ -574,14 +609,16 @@ Each check gets one of four outcomes:
 
 **Tier assignment:**
 
-Determine the user's implicit tier from the highest tier where no Critical or Standard check returns `fail`. Warn and skip outcomes do NOT block tier classification.
+Determine the user's implicit tier from the highest tier where no Critical or Standard check returns `fail`. Warn, skip, and upgrade outcomes do NOT block tier classification.
 
 - **Minimal tier:** No fail in checks 1–9, checks 10–11 skip (no vault)
 - **Quick tier:** No fail in checks 1–11 (vault present, no integrations)
 - **Standard tier:** No fail in checks 1–13 (TaskNotes MCP configured)
 - **Full tier:** No fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
 
-Warn-returning checks (10 index staleness, 20 vault externalized) are advisory — they surface in the scorecard but don't demote the tier.
+Check 21 (OMC plugin) is **tier-agnostic**: it never returns `fail`, so it never demotes any tier. It is surfaced in the scorecard alongside Standard-tier checks for visibility, but installing or omitting OMC has no effect on the user's tier.
+
+Warn-returning checks (10 index staleness, 20 vault externalized) are advisory — they surface in the scorecard but don't demote the tier. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking.
 
 Use this tier label in the summary line.
 
@@ -630,6 +667,9 @@ Integrations
   --  NotebookLM -- not installed
       Unlock: T1 retrieval (fastest answers) + /notebooklm-vault
       Install: pipx install notebooklm-cli
+  --  OMC plugin -- not installed
+      Unlock: /ark-workflow Path B (autonomous execution via /autopilot, /ralph, /ultrawork, /team)
+      Install: see https://github.com/anthropics/oh-my-claudecode
 
 Score: {tier} tier | {N} fix, {N} warning, {N} upgrades available
 Run /ark-onboard to fix or upgrade
@@ -651,6 +691,6 @@ Run /ark-onboard to fix or upgrade
 - **Always points to `/ark-onboard`** for remediation at the end of every run.
 - **Index staleness is a warning, not a failure.** A stale index does not block any workflow.
 - **Tier vocabulary** gives the user a name for their current setup level (Minimal / Quick / Standard / Full).
-- **This skill is authoritative** for all 20 check definitions. If `/ark-onboard`'s copy of a check drifts from this file, this file is the source of truth.
+- **This skill is authoritative** for all 21 check definitions. If `/ark-onboard`'s copy of a check drifts from this file, this file is the source of truth.
 - **Plugin detection is session-based**, not filesystem-based. Plugins are detected by whether their skills appear in the current session — not by inspecting `~/.claude/plugins/`.
 - **Graceful degradation:** Never abort on CLAUDE.md absence. Report clearly and continue.
