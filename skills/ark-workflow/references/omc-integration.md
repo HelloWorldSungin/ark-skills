@@ -203,25 +203,30 @@ remediation loop per `.claude/skills/omc-reference/SKILL.md` lines 106–108).
 What `check_path_b_coverage.py` validates against — byte-identity on
 canonicalized blocks, 6 allowed shapes.
 
-| Variant | Shape | Engine (step 3) | Starts at | Ends at |
-|---------|-------|-----------------|-----------|---------|
+Rows are grouped — variants sharing identical shape/engine/closeout collapse
+into a single row. Expand parenthetical labels against the variant column to
+recover the 19 per-variant assignments.
+
+| Variants (grouped) | Shape | Engine (step 3) | Starts at | Ends at |
+|---|---|---|---|---|
 | Greenfield Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
 | Greenfield Heavy | /ultrawork | `/ultrawork` | `/ark-code-review --thorough` | `/claude-history-ingest` |
 | Bugfix Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Hygiene Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
-| Hygiene Audit-Only | Special-A | `/autopilot` | `/wiki-update` | STOP (no code review, no ship) |
+| Hygiene Audit-Only | Special-A | `/autopilot` | `/wiki-update` | STOP (findings-only) |
 | Ship Standalone | Vanilla | `/autopilot` | `/ark-code-review --thorough` | `/claude-history-ingest` |
-| Knowledge-Capture Light | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
-| Knowledge-Capture Full | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
+| Knowledge-Capture Light / Full | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
 | Migration Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
 | Migration Heavy | /team | `/team` | `/ark-code-review --thorough` | `/claude-history-ingest` |
 | Performance Light | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
 | Performance Medium / Heavy | /ralph | `/ralph` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 
-Total: 19 rows. **Six distinct shapes** (Vanilla 12 + /ralph 2 + /ultrawork 1
-+ /team 1 + Special-A 1 + Special-B 2). `check_path_b_coverage.py` canonicalizes
-each block (strip scenario headers and weight markers) and hashes it; expected
-distinct hashes = 6; expected total blocks = 19.
+11 rows representing **19 variants** across **6 distinct shapes** (Vanilla 12 +
+/ralph 2 + /ultrawork 1 + /team 1 + Special-A 1 + Special-B 2).
+`check_path_b_coverage.py` canonicalizes each block (strip scenario headers and
+weight markers) and hashes it; expected distinct hashes = 6; expected total
+blocks = 19. The CI script reads chain files directly, so row-grouping in this
+table does not affect coverage enforcement.
 
 ---
 
