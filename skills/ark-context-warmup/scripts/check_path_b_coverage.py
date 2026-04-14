@@ -85,16 +85,26 @@ def _hash(canonical: str) -> str:
 
 def _classify_shape(canonical: str) -> str:
     """Return one of: 'vanilla', 'special-a-hygiene-audit-only',
-    'special-b-knowledge-capture', or 'unknown'."""
-    has_interview = "/deep-interview" in canonical
-    has_history_ingest = "/claude-history-ingest" in canonical
+    'special-b-knowledge-capture', or 'unknown'.
+
+    Order matters: Special-B is the distinctive-marker variant (has `/wiki-ingest`
+    as an actual step), Special-A has `STOP` + no `/claude-history-ingest`, and
+    Vanilla is identified by the presence of `/ark-code-review` in its closeout
+    prose. We do NOT rely on `/deep-interview` for classification because Special-B
+    mentions it inside a parenthetical ("substitutes for `/deep-interview`").
+    """
+    has_wiki_ingest = "/wiki-ingest" in canonical
     has_stop = "STOP" in canonical
-    has_wiki_ingest = "/wiki-ingest" in canonical or "wiki-ingest" in canonical
+    has_history_ingest = "/claude-history-ingest" in canonical
+    has_code_review = "/ark-code-review" in canonical
+    # Special-B has /wiki-ingest as an actual step (unique to reflective capture).
+    if has_wiki_ingest:
+        return "special-b-knowledge-capture"
+    # Special-A: findings-only, STOP in closeout, no further mining.
     if has_stop and not has_history_ingest:
         return "special-a-hygiene-audit-only"
-    if has_history_ingest and has_wiki_ingest and not has_interview:
-        return "special-b-knowledge-capture"
-    if has_interview:
+    # Vanilla: closeout inherits Path A's /ark-code-review onward.
+    if has_code_review:
         return "vanilla"
     return "unknown"
 
