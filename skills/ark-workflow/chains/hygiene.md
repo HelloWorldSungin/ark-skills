@@ -10,6 +10,17 @@
 3. `/wiki-update` (if vault — to record findings)
 4. **STOP** — do not implement, do not ship. Ask user: "Findings above. Do you want to create tickets via `/ark-tasknotes`, or proceed with fixes (I'll re-triage as Hygiene Light/Medium/Heavy)?"
 
+### Path B (OMC-powered — if HAS_OMC=true)
+
+*Findings-only — no code review, no ship.*
+
+0. `/ark-context-warmup` — same as Path A
+1. `/deep-interview` — converge on audit scope (ambiguity threshold 20%)
+2. `/omc-plan --consensus` — multi-agent consensus audit plan
+3. `/autopilot` — execution only; produces findings document
+4. `<<HANDBACK>>` — Ark resumes authority
+5. **Ark closeout (Special-A):** `/wiki-update` (record findings in vault) → STOP. No code review, no ship — findings-only chain. See `references/omc-integration.md` § Section 4 (Special-A row).
+
 ## Light
 
 0. `/ark-context-warmup` — load recent + relevant project context
@@ -20,6 +31,17 @@
 5. `/ship` → `/land-and-deploy`
 6. `/canary` (if deploy risk)
 7. `/wiki-update` (if vault)
+
+### Path B (OMC-powered — if HAS_OMC=true)
+
+*Front-loaded judgment + autonomous execution + Ark closeout.*
+
+0. `/ark-context-warmup` — same as Path A
+1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
+2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
+3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
+5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 
 ## Medium
 
@@ -33,6 +55,17 @@
 7. `/ship` → `/land-and-deploy`
 8. `/canary` (if deploy risk)
 9. `/wiki-update` (if vault)
+
+### Path B (OMC-powered — if HAS_OMC=true)
+
+*Front-loaded judgment + autonomous execution + Ark closeout.*
+
+0. `/ark-context-warmup` — same as Path A
+1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
+2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
+3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
+5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 
 ## Heavy
 
@@ -48,6 +81,17 @@
 9. `/canary` (if deploy risk)
 10. `/wiki-update` (if vault)
 11. `/claude-history-ingest`
+
+### Path B (OMC-powered — if HAS_OMC=true)
+
+*Front-loaded judgment + autonomous execution + Ark closeout.*
+
+0. `/ark-context-warmup` — same as Path A
+1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
+2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
+3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
+5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 
 ## Dedup rule
 

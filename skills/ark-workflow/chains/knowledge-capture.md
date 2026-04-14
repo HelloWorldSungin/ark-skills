@@ -10,6 +10,17 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 1. `/wiki-update` — end-of-session workflow (session log, TaskNote update, insight extraction, index regen)
 2. `/cross-linker` (if vault)
 
+### Path B (OMC-powered — if HAS_OMC=true)
+
+*Reflective capture with front-loaded mining + autonomous synthesis.*
+
+0. `/ark-context-warmup` — same as Path A
+1. `/claude-history-ingest` — mine recent conversations as capture source (substitutes for `/deep-interview` since capture is reflective)
+2. `/omc-plan --consensus` — plan the capture (wiki pages, tags, cross-links)
+3. `/autopilot` — execution only; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
+4. `<<HANDBACK>>` — Ark resumes authority
+5. **Ark closeout (Special-B):** `/wiki-update` (finalize session log + epic) → `/claude-history-ingest` (final mining sweep). No code review, no ship — capture-only chain. See `references/omc-integration.md` § Section 4 (Special-B row).
+
 ## Full
 
 *catching up after extended period, rebuilding tags, ingesting external docs*
@@ -22,3 +33,14 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 5. `/cross-linker` — discover missing wikilinks
 6. `/tag-taxonomy` — normalize tags
 7. `/claude-history-ingest` — mine recent sessions
+
+### Path B (OMC-powered — if HAS_OMC=true)
+
+*Reflective capture with front-loaded mining + autonomous synthesis.*
+
+0. `/ark-context-warmup` — same as Path A
+1. `/claude-history-ingest` — mine recent conversations as capture source (substitutes for `/deep-interview` since capture is reflective)
+2. `/omc-plan --consensus` — plan the capture (wiki pages, tags, cross-links)
+3. `/autopilot` — execution only; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
+4. `<<HANDBACK>>` — Ark resumes authority
+5. **Ark closeout (Special-B):** `/wiki-update` (finalize session log + epic) → `/claude-history-ingest` (final mining sweep). No code review, no ship — capture-only chain. See `references/omc-integration.md` § Section 4 (Special-B row).

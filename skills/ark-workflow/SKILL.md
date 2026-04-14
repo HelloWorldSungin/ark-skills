@@ -47,6 +47,20 @@ echo "HAS_VAULT=$HAS_VAULT"
 HAS_CI=false
 [ -d ".github/workflows" ] || [ -f ".gitlab-ci.yml" ] || [ -f "Dockerfile" ] && HAS_CI=true
 echo "HAS_CI=$HAS_CI"
+
+# Has OMC? (oh-my-claudecode — autonomous execution framework)
+# OMC_CACHE_DIR canonical: ~/.claude/plugins/cache/omc
+# (see references/omc-integration.md § Section 0)
+if command -v omc >/dev/null 2>&1 || [ -d "$HOME/.claude/plugins/cache/omc" ]; then
+  HAS_OMC=true
+else
+  HAS_OMC=false
+fi
+# ARK_SKIP_OMC=true forces HAS_OMC=false regardless of detection
+# (emergency rollback for downstream projects — see references/omc-integration.md § Section 3)
+[ "$ARK_SKIP_OMC" = "true" ] && HAS_OMC=false
+export HAS_OMC
+echo "HAS_OMC=$HAS_OMC"
 ```
 
 6. Store these values for condition resolution in later steps.
@@ -192,6 +206,52 @@ Walk through the chain and resolve every conditional using Condition Resolution 
 
 ### Step 6: Present the Resolved Chain
 Output the numbered skill chain with all conditions resolved. Include the session handoff marker if applicable.
+
+### Step 6 (continued): Dual-path presentation when HAS_OMC=true
+
+When `HAS_OMC=true`, every chain variant has both a `## Path A` (Ark-native) and a
+`### Path B (OMC-powered)` block in its chain file. Render both, then emit a
+recommendation + 3-button override based on the OR-any signal rule.
+
+**The 4 signals** (OR — ANY one firing recommends Path B):
+
+1. **Keyword signal** — the user's prompt contains an OMC keyword from the verbatim
+   list (`autopilot`, `ralph`, `ulw`, `ultrawork`, `ccg`, `ralplan`, `deep interview`,
+   `deep-interview`, `deslop`, `anti-slop`, `deep-analyze`, `tdd`, `deepsearch`,
+   `ultrathink`, `cancelomc`, `team`, `/team`). Detector: case-insensitive regex with
+   word-boundary anchors.
+2. **Heavy weight** — triaged weight class is Heavy (autonomous pipeline amortizes
+   best on multi-hour work).
+3. **Multi-module scope** — task touches ≥3 independent modules (mechanical
+   parallelism payoff for `/ultrawork`).
+4. **Explicit autonomy** — user explicitly requests hands-off execution ("just do
+   it", "handle it", "run it to completion").
+
+See `references/omc-integration.md` § Section 3 for the full detector specification.
+
+**Recommendation UX (when any signal fires):**
+
+```
+Recommended: Path B (OMC-powered — autonomous execution, ~1–4 hours, ~3 checkpoints)
+
+  [Accept Path B]   [Use Path A]   [Show me both]
+```
+
+Include an inline one-line checkpoint-density + duration estimate next to the
+recommendation so users know what Path B costs before accepting.
+
+**Footer UX (when no signal fires):** render a small `[Show me both]` footer link
+so discoverability is preserved for users whose first task doesn't trip a signal.
+
+**Degradation (HAS_OMC=false):** emit Path A only, followed by exactly one line:
+`NOTE: OMC not detected. Autonomous-execution chains hidden. Install: <URL>` (URL
+sourced from `references/omc-integration.md` § Section 0 `INSTALL_HINT_URL`).
+
+**Telemetry:** write one newline-delimited JSON line to `.ark-workflow/telemetry.log`
+per triage invocation with fields `{ts, has_omc, ark_skip_omc, signals_matched,
+recommendation, path_selected, variant}`. No prompt text, no user identifier.
+`.ark-workflow/telemetry.log` is `.gitignore`d (covered by the existing
+`.ark-workflow/` ignore line).
 
 ### Step 6.5: Activate Continuity
 - Create TodoWrite tasks for each step in the resolved chain

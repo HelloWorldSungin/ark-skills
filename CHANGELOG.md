@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.13.0] - 2026-04-13
+
+### Added
+
+- **Dual-mode `/ark-workflow` routing.** Every chain now emits Path A (Ark-native, step-by-step, user-in-the-loop) and Path B (OMC-powered: `/deep-interview` → `/omc-plan --consensus` → `/autopilot` execution-only → `<<HANDBACK>>` → variant-inherited Ark closeout) when OMC is installed. 19 variants across 7 chain files; graceful degradation to Path A only when `HAS_OMC=false`.
+- **`HAS_OMC` availability probe** in `skills/ark-workflow/SKILL.md` (bash; mirrors `HAS_UI`/`HAS_VAULT` pattern). Honors `ARK_SKIP_OMC=true` env var as emergency rollback.
+- **`has_omc` key** added to `skills/ark-context-warmup/scripts/availability.py` probe result; Context Brief now includes an "OMC detected: yes/no" line.
+- **`skills/ark-workflow/references/omc-integration.md`** consolidates Section 0 canonical constants (`OMC_CACHE_DIR`, `OMC_CLI_BIN`, `INSTALL_HINT_URL`, `HANDBACK_MARKER`), two-philosophies axis, per-chain skill map, OR-any signal rule (4 signals: keyword / Heavy weight / multi-module / explicit autonomy), variant-inherited handback contract with four sub-contracts (`/autopilot`, `/ralph`, `/ultrawork`, `/team`), per-variant expected-closeout table (19 rows, 3 shapes), and `/autopilot` execution-only mechanism (`OMC_EXECUTION_ONLY=1` env-var fallback pending first-class OMC flag).
+- **`skills/ark-context-warmup/scripts/check_path_b_coverage.py`** — CI check enforcing 19 Path B blocks across 7 chain files with ≤6 distinct canonicalized shapes: Vanilla (`/autopilot`, 12 variants), `/ralph` (Performance Medium+Heavy, 2 variants — Section 4.2), `/ultrawork` (Greenfield Heavy, 1 variant — Section 4.3), `/team` (Migration Heavy, 1 variant — Section 4.4), Special-A Hygiene-Audit-Only (1), Special-B Knowledge-Capture (2). Canonicalization strips `--(quick|thorough)` weight markers and `{weight}` placeholders so weight-indistinguishable blocks within a shape hash identically.
+
+### Changed
+
+- **All 19 variants across all 7 chain files** gained a `### Path B (OMC-powered)` section (12 Vanilla + 2 `/ralph` + 1 `/ultrawork` + 1 `/team` + 1 Special-A + 2 Special-B).
+- **Step 6 of `/ark-workflow`** now renders the 3-button recommendation UX (`[Accept Path B] [Use Path A] [Show me both]`) when `HAS_OMC=true` and ≥1 of the 4 signals fires (OR-any rule; discoverability over neutrality). Includes checkpoint-density + duration estimate next to `[Accept Path B]` to mitigate blackbox-acceptance risk.
+
+### Degradation contract
+
+- `HAS_OMC=false` emits Path A only, plus a one-line install hint (`NOTE: OMC not detected. Autonomous-execution chains hidden. Install: <URL>`). `ARK_SKIP_OMC=true` forces this path regardless of detection. Zero behavioral change vs v1.12.0 on OMC-less installs. OMC remains optional.
+
+### Observability
+
+- Router writes one newline-delimited JSON line per triage invocation to `.ark-workflow/telemetry.log` (gitignored, covered by the existing `.ark-workflow/` ignore rule). Fields: `ts`, `has_omc`, `ark_skip_omc`, `signals_matched`, `recommendation`, `path_selected`, `variant`. Anonymized — no prompt text, no user identifier, no file paths. Enables post-hoc measurement of Path B selection rate, recommendation accuracy, and `ARK_SKIP_OMC` usage.
+
+### Commit convention
+
+All Phase 1/2a/2b/3/4/5 commits use the intent-line + structured-trailer format from `.claude/skills/omc-reference/SKILL.md` lines 112–141 (`Constraint:`, `Rejected:`, `Directive:`, `Confidence:`, `Scope-risk:`, `Not-tested:`). See `.omc/plans/2026-04-13-omc-ark-workflow-integration.md` § Commit Convention for the worked example.
+
+### Plan
+
+Implementation plan: `.omc/plans/2026-04-13-omc-ark-workflow-integration.md` (ralplan consensus iteration 2, Architect + Critic both APPROVE). Spec: `.omc/specs/deep-interview-omc-ark-workflow-integration.md`.
+
 ## [1.12.0] - 2026-04-13
 
 ### Added

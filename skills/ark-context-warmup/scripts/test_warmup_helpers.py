@@ -494,6 +494,119 @@ class TestAvailabilityProbe:
         )
         assert p["notebooklm"] is True
 
+    # ── OMC probe tests (backfilled for H3 per /ark-code-review --thorough pass 2) ──
+    # These tests were missing in v1.13.0's initial ship — the HAS_OMC probe branch
+    # shipped uncovered. Fills coverage for the P1 default-cache fix (commit b4e7f73),
+    # the H1 ARK_SKIP_OMC short-circuit fix (commit dea650e), the H2 OSError safety
+    # fix, and the OR-semantics contract documented in references/omc-integration.md.
+    #
+    # Each test uses `monkeypatch` to isolate env vars (ARK_SKIP_OMC) and HOME
+    # (default-path resolution) — otherwise tests would depend on the machine's
+    # real ~/.claude/plugins/cache/omc directory, which defeats isolation.
+
+    def test_omc_has_cli_set_returns_true(self, tmp_path, monkeypatch):
+        """H3.1: CLI path explicitly set → has_omc=True (OR-left branch)."""
+        monkeypatch.delenv("ARK_SKIP_OMC", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        p = avail.probe(
+            project_repo=tmp_path, vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope", task_prefix="X-",
+            notebooklm_cli_path=None,
+            omc_cli_path="/fake/bin/omc", omc_cache_dir=None,
+        )
+        assert p["has_omc"] is True
+        assert "has_omc_skip_reason" not in p
+
+    def test_omc_has_cache_set_returns_true(self, tmp_path, monkeypatch):
+        """H3.2: explicit cache_dir exists → has_omc=True (OR-right branch)."""
+        monkeypatch.delenv("ARK_SKIP_OMC", raising=False)
+        cache = tmp_path / "omc-cache"
+        cache.mkdir()
+        p = avail.probe(
+            project_repo=tmp_path, vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope", task_prefix="X-",
+            notebooklm_cli_path=None,
+            omc_cli_path=None, omc_cache_dir=cache,
+        )
+        assert p["has_omc"] is True
+
+    def test_omc_default_cache_path_resolved_when_none(self, tmp_path, monkeypatch):
+        """H3.3 (P1 fix): omc_cache_dir=None resolves to ~/.claude/plugins/cache/omc.
+        With HOME=tmp_path, creating the full default sub-path must flip has_omc=True."""
+        monkeypatch.delenv("ARK_SKIP_OMC", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        default_cache = tmp_path / ".claude" / "plugins" / "cache" / "omc"
+        default_cache.mkdir(parents=True)
+        p = avail.probe(
+            project_repo=tmp_path, vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope", task_prefix="X-",
+            notebooklm_cli_path=None,
+            omc_cli_path=None, omc_cache_dir=None,
+        )
+        assert p["has_omc"] is True, (
+            "P1 regression — omc_cache_dir=None should resolve the canonical default path "
+            "(~/.claude/plugins/cache/omc) BEFORE the existence check, not just for error strings"
+        )
+
+    def test_omc_none_and_nothing_returns_false(self, tmp_path, monkeypatch):
+        """H3.4: both None and default path absent → has_omc=False + skip reason."""
+        monkeypatch.delenv("ARK_SKIP_OMC", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))  # no .claude/plugins/cache/omc here
+        p = avail.probe(
+            project_repo=tmp_path, vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope", task_prefix="X-",
+            notebooklm_cli_path=None,
+            omc_cli_path=None, omc_cache_dir=None,
+        )
+        assert p["has_omc"] is False
+        assert "OMC_CACHE_DIR" in p["has_omc_skip_reason"]
+        assert "not present" in p["has_omc_skip_reason"]
+
+    def test_omc_ark_skip_env_var_forces_false(self, tmp_path, monkeypatch):
+        """H3.5 (H1 fix): ARK_SKIP_OMC=true forces has_omc=False even when
+        detection would succeed. Dual-consumer contract — bash and Python
+        must agree when the emergency rollback is active."""
+        monkeypatch.setenv("ARK_SKIP_OMC", "true")
+        cache = tmp_path / "omc-cache"
+        cache.mkdir()
+        p = avail.probe(
+            project_repo=tmp_path, vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope", task_prefix="X-",
+            notebooklm_cli_path=None,
+            omc_cli_path="/fake/bin/omc", omc_cache_dir=cache,  # both would trigger True
+        )
+        assert p["has_omc"] is False
+        assert "ARK_SKIP_OMC" in p["has_omc_skip_reason"]
+        assert "emergency rollback" in p["has_omc_skip_reason"]
+
+    def test_omc_cache_dir_oserror_isolated_to_omc_lane(self, tmp_path, monkeypatch):
+        """H3.6 (H2 fix): if resolved_cache.exists() raises OSError (e.g., permission
+        denied, symlink loop), the OMC lane must fail cleanly with a distinct skip
+        reason — it MUST NOT take down notebooklm/wiki/tasknotes lanes.
+
+        Simulated via a Path subclass whose .exists() raises OSError."""
+        monkeypatch.delenv("ARK_SKIP_OMC", raising=False)
+
+        class BrokenPath(type(tmp_path)):
+            def exists(self):
+                raise PermissionError("simulated perm denied on OMC cache")
+        broken_cache = BrokenPath(tmp_path / "broken-cache")
+
+        p = avail.probe(
+            project_repo=tmp_path, vault_path=tmp_path / "nope",
+            tasknotes_path=tmp_path / "nope", task_prefix="X-",
+            notebooklm_cli_path=None,
+            omc_cli_path=None, omc_cache_dir=broken_cache,
+        )
+        # OMC lane fails cleanly
+        assert p["has_omc"] is False
+        assert "cache check failed" in p["has_omc_skip_reason"]
+        assert "PermissionError" in p["has_omc_skip_reason"]
+        # Other lanes remain inspectable (didn't crash due to the OMC exception)
+        assert "notebooklm" in p
+        assert "wiki" in p
+        assert "tasknotes" in p
+
 
 _ilu = importlib.util
 _P = Path
@@ -784,6 +897,35 @@ class TestSynthesize:
             scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="", evidence=[],
         )
         assert "### Evidence\nNone" in brief
+
+    def test_omc_detected_line_yes(self):
+        """Spec AC8: Context Brief includes an 'OMC detected: yes/no' line."""
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="",
+            evidence=[], has_omc=True,
+        )
+        assert "**OMC detected:** yes" in brief
+        # Must appear before the first sub-section so it's visible at top.
+        omc_idx = brief.index("**OMC detected:**")
+        where_idx = brief.index("### Where We Left Off")
+        assert omc_idx < where_idx
+
+    def test_omc_detected_line_no(self):
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="",
+            evidence=[], has_omc=False,
+        )
+        assert "**OMC detected:** no" in brief
+
+    def test_omc_detected_line_defaults_to_no(self):
+        """Backward compat: callers that don't pass has_omc still work."""
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="", evidence=[],
+        )
+        assert "**OMC detected:** no" in brief
 
     def test_frontmatter_fields(self):
         brief = synthesize.assemble_brief(

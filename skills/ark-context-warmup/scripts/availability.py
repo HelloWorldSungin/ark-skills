@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 
@@ -28,12 +29,18 @@ def probe(
     tasknotes_path: Path,
     task_prefix: str,
     notebooklm_cli_path: str | None,
+    # OMC_CACHE_DIR canonical constant lives in
+    # skills/ark-workflow/references/omc-integration.md § Section 0.
+    omc_cli_path: str | None = None,
+    omc_cache_dir: Path | None = None,
 ) -> dict:
     """Returns a dict with keys:
     - notebooklm: bool
     - wiki: bool
     - tasknotes: bool
-    - notebooklm_skip_reason, wiki_skip_reason, tasknotes_skip_reason: str (present if False)
+    - has_omc: bool
+    - notebooklm_skip_reason, wiki_skip_reason, tasknotes_skip_reason,
+      has_omc_skip_reason: str (present if False)
     """
     result: dict = {}
 
@@ -84,5 +91,50 @@ def probe(
         result["tasknotes_skip_reason"] = f"Tasks directory missing at {tasks_dir}"
     else:
         result["tasknotes"] = True
+
+    # OMC — optional autonomous-execution framework. Mirrors notebooklm idiom:
+    # upstream callers resolve `omc_cli_path` via `shutil.which("omc")` so the
+    # probe stays pure. Detection is OR of: CLI on PATH, or cache dir present.
+    # When `omc_cache_dir` is None the canonical default (OMC_CACHE_DIR) is
+    # resolved in-probe so the dual-consumer contract holds — bash and Python
+    # agree on the same default path without the caller having to pre-resolve.
+    # OMC_CACHE_DIR canonical: see skills/ark-workflow/references/omc-integration.md § Section 0.
+    #
+    # ARK_SKIP_OMC=true short-circuit mirrors the bash probe in
+    # skills/ark-workflow/SKILL.md — the emergency rollback must force
+    # has_omc=False on both consumers so the Context Brief and chain output
+    # never disagree. Placed before detection so the skip reason is specific.
+    if os.environ.get("ARK_SKIP_OMC") == "true":
+        result["has_omc"] = False
+        result["has_omc_skip_reason"] = "ARK_SKIP_OMC=true (emergency rollback active)"
+        return result
+
+    resolved_cache = (
+        omc_cache_dir
+        if omc_cache_dir is not None
+        else Path.home() / ".claude" / "plugins" / "cache" / "omc"
+    )
+    has_cli = omc_cli_path is not None
+    # Path.exists() can raise OSError on symlink loops, permission errors, or
+    # unreadable parents. Treat any such error as "cache absent" rather than
+    # letting it take down the rest of the probe (notebooklm / wiki / tasknotes
+    # lanes must remain inspectable even if the OMC cache path is problematic).
+    try:
+        has_cache = resolved_cache.exists()
+    except OSError as exc:
+        has_cache = False
+        result["has_omc"] = False
+        result["has_omc_skip_reason"] = (
+            f"OMC cache check failed at {resolved_cache} ({exc.__class__.__name__}: {exc})"
+        )
+        return result
+
+    if has_cli or has_cache:
+        result["has_omc"] = True
+    else:
+        result["has_omc"] = False
+        result["has_omc_skip_reason"] = (
+            f"OMC CLI not on PATH and OMC_CACHE_DIR ({resolved_cache}) not present"
+        )
 
     return result
