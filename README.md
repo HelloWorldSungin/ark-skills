@@ -71,9 +71,9 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 
 ### Workflow Orchestration
 
-**`/ark-workflow`** — Task triage and skill chain orchestration. Detects scenario across 7 types (greenfield, bugfix, ship, knowledge capture, hygiene, migration, performance), classifies weight (light/medium/heavy) via risk-primary triage with decision-density escalation, and outputs an ordered skill chain with project-specific conditions resolved. Handles multi-item batches with per-item classification, root cause consolidation, and dependency grouping. Includes cross-session continuity via `.ark-workflow/current-chain.md` state file and TodoWrite rehydration. Entry point for all non-trivial work.
+**`/ark-workflow`** — Task triage and skill chain orchestration. Detects scenario across 7 types (greenfield, bugfix, ship, knowledge capture, hygiene, migration, performance), classifies weight (light/medium/heavy) via risk-primary triage with decision-density escalation, and outputs an ordered skill chain with project-specific conditions resolved. Handles multi-item batches with per-item classification, root cause consolidation, and dependency grouping. Includes cross-session continuity via `.ark-workflow/current-chain.md` state file and TodoWrite rehydration. Entry point for all non-trivial work. **As of v1.13.0, every chain variant also emits a `### Path B (OMC-powered)` block when `HAS_OMC=true`** — front-loads judgment via `/deep-interview` → `/omc-plan --consensus`, delegates execution to `/autopilot` / `/ralph` / `/ultrawork` / `/team`, then hands control back to Ark at `<<HANDBACK>>` for closeout. OMC is optional; `ARK_SKIP_OMC=true` is an emergency rollback that forces Path A only. See `skills/ark-workflow/references/omc-integration.md` for the full contract.
 
-**`/ark-context-warmup`** — Automatic context loader; runs as step 0 of every `/ark-workflow` chain. Queries `/notebooklm-vault`, `/wiki-query`, and `/ark-tasknotes` backends in a partial-parallel fan-out, synthesizes a single Context Brief, and surfaces possible duplicates, prior rejections, and in-flight collisions as Evidence candidates. Cache keyed on `chain_id + task_hash`, 2-hour TTL, 24-hour pruning. Backends participate via a `warmup_contract` YAML block in their SKILL.md (see `skills/notebooklm-vault/SKILL.md`, `skills/wiki-query/SKILL.md`, `skills/ark-tasknotes/SKILL.md`).
+**`/ark-context-warmup`** — Automatic context loader; runs as step 0 of every `/ark-workflow` chain. Queries `/notebooklm-vault`, `/wiki-query`, and `/ark-tasknotes` backends in a partial-parallel fan-out, synthesizes a single Context Brief, and surfaces possible duplicates, prior rejections, and in-flight collisions as Evidence candidates. Cache keyed on `chain_id + task_hash`, 2-hour TTL, 24-hour pruning. Backends participate via a `warmup_contract` YAML block in their SKILL.md (see `skills/notebooklm-vault/SKILL.md`, `skills/wiki-query/SKILL.md`, `skills/ark-tasknotes/SKILL.md`). v1.13.0 adds an `has_omc` probe in `scripts/availability.py` (OR of `command -v omc` / `~/.claude/plugins/cache/omc` / `ARK_SKIP_OMC=true` override); the Context Brief now renders an `**OMC detected:** yes/no` line at the top.
 
 ### Core Skills
 
@@ -124,7 +124,7 @@ See `CLAUDE.md` in this repo for the full discovery procedure and field referenc
 ```
 ark-skills (Claude Code plugin)
 ├── .claude-plugin/
-│   ├── plugin.json           # Plugin metadata (ark-skills v1.4.0)
+│   ├── plugin.json           # Plugin metadata (ark-skills v1.13.0)
 │   └── marketplace.json      # Repo-level plugin registry
 └── skills/                   # 18 shared skills
       ↓ context-discovery

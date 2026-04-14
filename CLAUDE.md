@@ -85,7 +85,7 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 
 ### Onboarding
 - `/ark-onboard` — Interactive setup wizard (greenfield, migration, repair). Absorbs `/wiki-setup`.
-- `/ark-health` — Diagnostic check for Ark ecosystem health (19 checks, scored scorecard)
+- `/ark-health` — Diagnostic check for Ark ecosystem health (20 checks, scored scorecard)
 
 ### Vault Maintenance (adapted from obsidian-wiki)
 - `/wiki-query` — Query vault knowledge with tiered retrieval
