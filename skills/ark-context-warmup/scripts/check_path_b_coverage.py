@@ -138,6 +138,25 @@ def _classify_shape(canonical: str) -> str:
     return "unknown"
 
 
+def _classification_flags(canonical: str) -> dict:
+    """Return the flag set used by _classify_shape(), for diagnostic output
+    on 'unknown' classifications. A developer hitting the "did not classify
+    into an allowed shape" error can use this to figure out which marker(s)
+    were unexpectedly present or missing without re-running the classifier
+    mentally against the raw markdown.
+    """
+    return {
+        "wiki_ingest": "/wiki-ingest" in canonical,
+        "stop": "STOP" in canonical,
+        "history_ingest": "/claude-history-ingest" in canonical,
+        "code_review": "/ark-code-review" in canonical,
+        "team": "/team" in canonical,
+        "ralph": "/ralph" in canonical,
+        "ultrawork": "/ultrawork" in canonical,
+        "autopilot": "/autopilot" in canonical,
+    }
+
+
 def _collect(chain_dir: Path) -> list[tuple[Path, str]]:
     """Return list of (file_path, raw_block_body) across all chain files."""
     collected: list[tuple[Path, str]] = []
@@ -197,23 +216,26 @@ def main() -> int:
     # Assertion 5: shape distribution (only when full coverage expected).
     if args.expected_blocks == 19:
         distribution: dict[str, int] = {}
-        unknown_files: list[str] = []
+        unknown_details: list[str] = []
         for path, _, canonical in canonicals:
             shape = _classify_shape(canonical)
             distribution[shape] = distribution.get(shape, 0) + 1
             if shape == "unknown":
-                unknown_files.append(path.name)
+                flags = _classification_flags(canonical)
+                flag_str = ", ".join(f"{k}={v}" for k, v in flags.items())
+                unknown_details.append(f"{path.name} markers={{{flag_str}}}")
         for shape, expected_count in ALLOWED_SHAPES.items():
             actual = distribution.get(shape, 0)
             if actual != expected_count:
                 errors.append(
                     f"shape '{shape}' count = {actual}, expected {expected_count}"
                 )
-        if unknown_files:
+        if unknown_details:
             errors.append(
-                f"{len(unknown_files)} block(s) did not classify into an "
-                f"allowed shape: {unknown_files}"
+                f"{len(unknown_details)} block(s) did not classify into an "
+                f"allowed shape:"
             )
+            errors.extend(f"  - {d}" for d in unknown_details)
 
     if errors:
         for e in errors:

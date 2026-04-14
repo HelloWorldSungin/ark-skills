@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 
@@ -98,13 +99,36 @@ def probe(
     # resolved in-probe so the dual-consumer contract holds — bash and Python
     # agree on the same default path without the caller having to pre-resolve.
     # OMC_CACHE_DIR canonical: see skills/ark-workflow/references/omc-integration.md § Section 0.
+    #
+    # ARK_SKIP_OMC=true short-circuit mirrors the bash probe in
+    # skills/ark-workflow/SKILL.md — the emergency rollback must force
+    # has_omc=False on both consumers so the Context Brief and chain output
+    # never disagree. Placed before detection so the skip reason is specific.
+    if os.environ.get("ARK_SKIP_OMC") == "true":
+        result["has_omc"] = False
+        result["has_omc_skip_reason"] = "ARK_SKIP_OMC=true (emergency rollback active)"
+        return result
+
     resolved_cache = (
         omc_cache_dir
         if omc_cache_dir is not None
         else Path.home() / ".claude" / "plugins" / "cache" / "omc"
     )
     has_cli = omc_cli_path is not None
-    has_cache = resolved_cache.exists()
+    # Path.exists() can raise OSError on symlink loops, permission errors, or
+    # unreadable parents. Treat any such error as "cache absent" rather than
+    # letting it take down the rest of the probe (notebooklm / wiki / tasknotes
+    # lanes must remain inspectable even if the OMC cache path is problematic).
+    try:
+        has_cache = resolved_cache.exists()
+    except OSError as exc:
+        has_cache = False
+        result["has_omc"] = False
+        result["has_omc_skip_reason"] = (
+            f"OMC cache check failed at {resolved_cache} ({exc.__class__.__name__}: {exc})"
+        )
+        return result
+
     if has_cli or has_cache:
         result["has_omc"] = True
     else:
