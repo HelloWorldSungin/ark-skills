@@ -2554,7 +2554,7 @@ If user accepts, execute Greenfield Steps 13-15. Then re-run diagnostic and show
 
 If already at Full tier:
 ```
-All 21 checks pass. Full tier active. (Check 21 OMC may be in upgrade state — non-blocking.)
+Checks 1-20 all pass. Full tier active. (Check 21 OMC is tier-agnostic — install separately if interested.)
 No upgrades available. Run /ark-health anytime to verify.
 ```
 

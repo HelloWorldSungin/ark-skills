@@ -562,7 +562,7 @@ fi
 
 ## Workflow
 
-### Step 1: Run All 20 Checks
+### Step 1: Run All 21 Checks
 
 Run checks in sequence. Do not abort on failure — complete all 21. Track results as you go:
 
