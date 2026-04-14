@@ -11,6 +11,7 @@
 .omc/logs/
 .omc/research/
 .omc/notepad.md
+.omc/artifacts/
 
 # Python bytecode cache
 **/__pycache__/
