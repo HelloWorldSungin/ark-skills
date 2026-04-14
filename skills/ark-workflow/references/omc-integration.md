@@ -198,6 +198,35 @@ remediation loop per `.claude/skills/omc-reference/SKILL.md` lines 106–108).
 - This keeps Ark as the last-word reviewer and avoids OMC-internal
   bounded-remediation running on the far side of the handback.
 
+### 4.5 Mid-execution crash recovery
+
+If the OMC engine crashes, stalls, or exits abnormally before emitting
+`<<HANDBACK>>`, the chain is stuck at step 3 (or step 4 if `<<HANDBACK>>`
+partially emitted). Recovery procedure:
+
+1. **Inspect `.omc/state/sessions/{id}/`** for the engine's last-known state
+   (checkpoint files, exit codes, partial artifacts). This is OMC-internal
+   and not authoritative, but gives a hint about whether the engine made
+   durable progress.
+2. **Read `.ark-workflow/current-chain.md`** — this is Ark's authoritative
+   SoT. The `handoff_marker` frontmatter field and the step checklist show
+   exactly where the chain stopped.
+3. **Choose one of three recovery paths:**
+   - **Re-run step 3 from scratch** — safe for idempotent engines; the OMC
+     session is discarded and a fresh `/deep-interview` + `/omc-plan` +
+     engine execution replays.
+   - **Resume within step 3** — if the engine supports resume (e.g.,
+     `/autopilot` reads `.omc/state/autopilot-state.json`), the engine's own
+     resume flow continues. Ark's chain file is unchanged; it waits for
+     `<<HANDBACK>>` as if the original attempt never paused.
+   - **Abandon Path B, finish Path A** — pivot the chain file to the
+     variant's Path A tail. Manually edit `current-chain.md` to replace
+     steps 3-5 with the Path A closeout sequence and proceed.
+
+The principle: **`.ark-workflow/current-chain.md` remains the single source
+of truth** for recovery. `.omc/state/sessions/` is advisory-only — never
+consult it for "is the chain complete" determination.
+
 ### Per-Variant Expected Closeout Table
 
 What `check_path_b_coverage.py` validates against — byte-identity on
@@ -290,21 +319,46 @@ substitute `/claude-history-ingest` as step 1.
 
 ## Section 6 — `/autopilot` Execution-Only Invocation
 
-Open Question #1 from the implementation plan. Final mechanism TBD; fallback
-contract is:
+Open Question #1 from the implementation plan. **The mechanism is unresolved
+in v1.13.0.** Until OMC exposes a first-class flag, this section ships a
+provisional fallback with a documented failure mode.
 
-**Fallback mechanism (v1.13.0 ships this):** the chain's step 3 invokes
-`/autopilot` in an environment scope with `OMC_EXECUTION_ONLY=1` exported. If
-OMC honors this env var, its internal Phase 5 is skipped; if not, the chain
-relies on the user intercepting before autopilot's Phase 5 starts (documented
-in the Path B block). `ARK_SKIP_OMC=true` remains the downstream escape hatch.
+**Provisional fallback (v1.13.0):** the chain's step 3 invokes `/autopilot` in
+an environment scope with `OMC_EXECUTION_ONLY=1` exported.
+
+**Known failure mode — autonomous execution is unsafe if OMC ignores the env
+var.** OMC has no obligation to honor an env var it doesn't own. If OMC
+ignores `OMC_EXECUTION_ONLY=1`, there is no reliable secondary safeguard;
+autopilot's internal Phase 5 (docs/ship) WILL run after Phase 4, meaning the
+chain duplicates the Ark closeout and Ark loses its single-source-of-truth
+guarantee at `<<HANDBACK>>`. The Path B block's "the chain relies on the user
+intercepting" language is **not a degraded-but-acceptable path — it is
+undefined behavior during autonomous execution** and requires manual
+interruption that Path B's core premise specifically tries to eliminate.
+
+**Operational guidance for v1.13.0:**
+
+- **Before enabling Path B for `/autopilot` variants** in a production
+  workflow, verify interactively that the installed OMC version respects
+  `OMC_EXECUTION_ONLY=1` — run `/autopilot` once under this env var and
+  confirm Phase 5 does not execute. Document the result in your project's
+  ops notes.
+- If OMC does not honor the env var, **do not enable Path B for Vanilla
+  variants on that OMC install.** Use `ARK_SKIP_OMC=true` as the rollback
+  or stick to Path A until a first-class mechanism ships.
+- Engine-specific variants (`/team`, `/ralph`, `/ultrawork`) do not depend
+  on this env var — their handback boundaries are defined by engine-native
+  exit semantics (team-verify completion, loop-to-verified exit, last-lane
+  completion). They ship unaffected by this caveat.
 
 **Path B step 3 wording (current):** `/autopilot` — execution only; skips
 autopilot's internal Phase 5 (docs/ship). See § Section 4.1.
 
-**Post-Phase-2a ADR follow-up:** confirm whether OMC exposes a first-class flag
-(`--skip-phase-5`, `--execution-only`) or a session marker. If so, replace the
-env-var fallback with the first-class mechanism in v1.14.x.
+**Post-Phase-2a ADR follow-up (blocks /autopilot-variant production use):**
+confirm whether OMC exposes a first-class flag (`--skip-phase-5`,
+`--execution-only`) or a session marker. If so, replace the env-var fallback
+with the first-class mechanism in v1.14.x. Until then, the "operational
+guidance" above governs safe use.
 
 ---
 
