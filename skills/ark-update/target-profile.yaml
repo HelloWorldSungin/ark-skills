@@ -1,0 +1,10 @@
+# ark-update target profile — declarative authoritative state for HEAD-conformant downstream projects.
+# See spec (.omc/specs/deep-interview-ark-update-framework.md) and plan (.omc/plans/ralplan-ark-update.md)
+# for schema documentation.
+#
+# This file is populated in Step 4 of the build sequence. At Step 0 it is an empty skeleton.
+schema_version: 1
+managed_regions: []
+ensured_files: []
+ensured_gitignore: []
+ensured_mcp_servers: []
