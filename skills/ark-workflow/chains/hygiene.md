@@ -10,6 +10,17 @@
 3. `/wiki-update` (if vault — to record findings)
 4. **STOP** — do not implement, do not ship. Ask user: "Findings above. Do you want to create tickets via `/ark-tasknotes`, or proceed with fixes (I'll re-triage as Hygiene Light/Medium/Heavy)?"
 
+### Path B (OMC-powered — if HAS_OMC=true)
+
+*Findings-only — no code review, no ship.*
+
+0. `/ark-context-warmup` — same as Path A
+1. `/deep-interview` — converge on audit scope (ambiguity threshold 20%)
+2. `/omc-plan --consensus` — multi-agent consensus audit plan
+3. `/autopilot` — execution only; produces findings document
+4. `<<HANDBACK>>` — Ark resumes authority
+5. **Ark closeout (Special-A):** `/wiki-update` (record findings in vault) → STOP. No code review, no ship — findings-only chain. See `references/omc-integration.md` § Section 4 (Special-A row).
+
 ## Light
 
 0. `/ark-context-warmup` — load recent + relevant project context
