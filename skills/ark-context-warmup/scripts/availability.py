@@ -28,12 +28,18 @@ def probe(
     tasknotes_path: Path,
     task_prefix: str,
     notebooklm_cli_path: str | None,
+    # OMC_CACHE_DIR canonical constant lives in
+    # skills/ark-workflow/references/omc-integration.md § Section 0.
+    omc_cli_path: str | None = None,
+    omc_cache_dir: Path | None = None,
 ) -> dict:
     """Returns a dict with keys:
     - notebooklm: bool
     - wiki: bool
     - tasknotes: bool
-    - notebooklm_skip_reason, wiki_skip_reason, tasknotes_skip_reason: str (present if False)
+    - has_omc: bool
+    - notebooklm_skip_reason, wiki_skip_reason, tasknotes_skip_reason,
+      has_omc_skip_reason: str (present if False)
     """
     result: dict = {}
 
@@ -84,5 +90,20 @@ def probe(
         result["tasknotes_skip_reason"] = f"Tasks directory missing at {tasks_dir}"
     else:
         result["tasknotes"] = True
+
+    # OMC — optional autonomous-execution framework. Mirrors notebooklm idiom:
+    # upstream callers resolve `omc_cli_path` via `shutil.which("omc")` so the
+    # probe stays pure. Detection is OR of: CLI on PATH, or cache dir present.
+    # OMC_CACHE_DIR canonical: see skills/ark-workflow/references/omc-integration.md § Section 0.
+    has_cli = omc_cli_path is not None
+    has_cache = omc_cache_dir is not None and omc_cache_dir.exists()
+    if has_cli or has_cache:
+        result["has_omc"] = True
+    else:
+        result["has_omc"] = False
+        resolved = omc_cache_dir if omc_cache_dir is not None else Path.home() / ".claude" / "plugins" / "cache" / "omc"
+        result["has_omc_skip_reason"] = (
+            f"OMC CLI not on PATH and OMC_CACHE_DIR ({resolved}) not present"
+        )
 
     return result
