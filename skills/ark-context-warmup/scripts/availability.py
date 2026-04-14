@@ -94,16 +94,23 @@ def probe(
     # OMC — optional autonomous-execution framework. Mirrors notebooklm idiom:
     # upstream callers resolve `omc_cli_path` via `shutil.which("omc")` so the
     # probe stays pure. Detection is OR of: CLI on PATH, or cache dir present.
+    # When `omc_cache_dir` is None the canonical default (OMC_CACHE_DIR) is
+    # resolved in-probe so the dual-consumer contract holds — bash and Python
+    # agree on the same default path without the caller having to pre-resolve.
     # OMC_CACHE_DIR canonical: see skills/ark-workflow/references/omc-integration.md § Section 0.
+    resolved_cache = (
+        omc_cache_dir
+        if omc_cache_dir is not None
+        else Path.home() / ".claude" / "plugins" / "cache" / "omc"
+    )
     has_cli = omc_cli_path is not None
-    has_cache = omc_cache_dir is not None and omc_cache_dir.exists()
+    has_cache = resolved_cache.exists()
     if has_cli or has_cache:
         result["has_omc"] = True
     else:
         result["has_omc"] = False
-        resolved = omc_cache_dir if omc_cache_dir is not None else Path.home() / ".claude" / "plugins" / "cache" / "omc"
         result["has_omc_skip_reason"] = (
-            f"OMC CLI not on PATH and OMC_CACHE_DIR ({resolved}) not present"
+            f"OMC CLI not on PATH and OMC_CACHE_DIR ({resolved_cache}) not present"
         )
 
     return result

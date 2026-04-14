@@ -785,6 +785,35 @@ class TestSynthesize:
         )
         assert "### Evidence\nNone" in brief
 
+    def test_omc_detected_line_yes(self):
+        """Spec AC8: Context Brief includes an 'OMC detected: yes/no' line."""
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="",
+            evidence=[], has_omc=True,
+        )
+        assert "**OMC detected:** yes" in brief
+        # Must appear before the first sub-section so it's visible at top.
+        omc_idx = brief.index("**OMC detected:**")
+        where_idx = brief.index("### Where We Left Off")
+        assert omc_idx < where_idx
+
+    def test_omc_detected_line_no(self):
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="",
+            evidence=[], has_omc=False,
+        )
+        assert "**OMC detected:** no" in brief
+
+    def test_omc_detected_line_defaults_to_no(self):
+        """Backward compat: callers that don't pass has_omc still work."""
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="", evidence=[],
+        )
+        assert "**OMC detected:** no" in brief
+
     def test_frontmatter_fields(self):
         brief = synthesize.assemble_brief(
             chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",

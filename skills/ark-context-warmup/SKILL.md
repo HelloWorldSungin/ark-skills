@@ -109,7 +109,7 @@ Each lane has a 90s outer timeout at the subagent level (in addition to the 90s 
 ### Step 5: Evidence + Synthesis
 
 - Pass all lane outputs to `evidence.derive_candidates(...)`
-- Pass the three lane outputs + evidence to `synthesize.assemble_brief(...)`
+- Pass the three lane outputs + evidence + `has_omc` (from the `availability.probe(...)` result dict) to `synthesize.assemble_brief(..., has_omc=availability["has_omc"])`. This renders the `OMC detected: yes/no` line at the top of the Context Brief (spec AC8).
 - `synthesize.write_brief_atomic(...)` to cache
 - Emit the brief to the session
 

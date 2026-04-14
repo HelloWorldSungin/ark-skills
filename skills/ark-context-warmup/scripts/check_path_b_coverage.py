@@ -31,8 +31,19 @@ import sys
 from pathlib import Path
 
 # Expected distribution when --expected-blocks == 19 (the full plan target).
+#
+# Six canonicalized shapes now allowed (was 3 prior to P2-1 hardening): the
+# base `vanilla` shape invokes `/autopilot` (Section 4.1). Three engine-specific
+# shapes wire the remaining Section 4 sub-contracts into real chains:
+#   - `ralph`      → Performance Medium + Heavy (Section 4.2)
+#   - `ultrawork`  → Greenfield Heavy (Section 4.3)
+#   - `team`       → Migration Heavy (Section 4.4, handback after team-verify/before team-fix)
+# Plus the two pre-existing special-case shapes.
 ALLOWED_SHAPES = {
-    "vanilla": 16,
+    "vanilla": 12,
+    "ralph": 2,
+    "ultrawork": 1,
+    "team": 1,
     "special-a-hygiene-audit-only": 1,
     "special-b-knowledge-capture": 2,
 }
@@ -84,27 +95,45 @@ def _hash(canonical: str) -> str:
 
 
 def _classify_shape(canonical: str) -> str:
-    """Return one of: 'vanilla', 'special-a-hygiene-audit-only',
-    'special-b-knowledge-capture', or 'unknown'.
+    """Return one of: 'vanilla', 'ralph', 'ultrawork', 'team',
+    'special-a-hygiene-audit-only', 'special-b-knowledge-capture', or 'unknown'.
 
-    Order matters: Special-B is the distinctive-marker variant (has `/wiki-ingest`
-    as an actual step), Special-A has `STOP` + no `/claude-history-ingest`, and
-    Vanilla is identified by the presence of `/ark-code-review` in its closeout
-    prose. We do NOT rely on `/deep-interview` for classification because Special-B
-    mentions it inside a parenthetical ("substitutes for `/deep-interview`").
+    Order matters:
+      1. Special-B is the distinctive-marker variant (has `/wiki-ingest` as an
+         actual step); check first because its block mentions `/deep-interview`
+         in a parenthetical ("substitutes for `/deep-interview`").
+      2. Special-A: `STOP` + no `/claude-history-ingest` (findings-only).
+      3. Engine-specific shapes key on the step-3 engine keyword. `/team`,
+         `/ralph`, `/ultrawork` each appear only in their own shape; vanilla
+         contains none of them.
+      4. Vanilla: `/autopilot` present + `/ark-code-review` in closeout.
+
+    We do NOT rely on `/deep-interview` absence for classification because
+    Special-B mentions it in a parenthetical.
     """
     has_wiki_ingest = "/wiki-ingest" in canonical
     has_stop = "STOP" in canonical
     has_history_ingest = "/claude-history-ingest" in canonical
     has_code_review = "/ark-code-review" in canonical
+    has_team = "/team" in canonical
+    has_ralph = "/ralph" in canonical
+    has_ultrawork = "/ultrawork" in canonical
+    has_autopilot = "/autopilot" in canonical
     # Special-B has /wiki-ingest as an actual step (unique to reflective capture).
     if has_wiki_ingest:
         return "special-b-knowledge-capture"
     # Special-A: findings-only, STOP in closeout, no further mining.
     if has_stop and not has_history_ingest:
         return "special-a-hygiene-audit-only"
-    # Vanilla: closeout inherits Path A's /ark-code-review onward.
-    if has_code_review:
+    # Engine-specific vanillas — each engine keyword is unique to its own shape.
+    if has_team:
+        return "team"
+    if has_ralph:
+        return "ralph"
+    if has_ultrawork:
+        return "ultrawork"
+    # Vanilla: default /autopilot engine + closeout inherits Path A.
+    if has_autopilot and has_code_review:
         return "vanilla"
     return "unknown"
 
@@ -125,8 +154,8 @@ def main() -> int:
                     help="Directory containing chain *.md files")
     ap.add_argument("--expected-blocks", type=int, default=19,
                     help="Expected total Path B blocks (default 19)")
-    ap.add_argument("--max-distinct-shapes", type=int, default=3,
-                    help="Max distinct canonicalized hashes (default 3)")
+    ap.add_argument("--max-distinct-shapes", type=int, default=6,
+                    help="Max distinct canonicalized hashes (default 6 — see ALLOWED_SHAPES)")
     args = ap.parse_args()
 
     errors: list[str] = []

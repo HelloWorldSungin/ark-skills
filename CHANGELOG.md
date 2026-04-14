@@ -10,11 +10,11 @@ All notable changes to this project will be documented in this file.
 - **`HAS_OMC` availability probe** in `skills/ark-workflow/SKILL.md` (bash; mirrors `HAS_UI`/`HAS_VAULT` pattern). Honors `ARK_SKIP_OMC=true` env var as emergency rollback.
 - **`has_omc` key** added to `skills/ark-context-warmup/scripts/availability.py` probe result; Context Brief now includes an "OMC detected: yes/no" line.
 - **`skills/ark-workflow/references/omc-integration.md`** consolidates Section 0 canonical constants (`OMC_CACHE_DIR`, `OMC_CLI_BIN`, `INSTALL_HINT_URL`, `HANDBACK_MARKER`), two-philosophies axis, per-chain skill map, OR-any signal rule (4 signals: keyword / Heavy weight / multi-module / explicit autonomy), variant-inherited handback contract with four sub-contracts (`/autopilot`, `/ralph`, `/ultrawork`, `/team`), per-variant expected-closeout table (19 rows, 3 shapes), and `/autopilot` execution-only mechanism (`OMC_EXECUTION_ONLY=1` env-var fallback pending first-class OMC flag).
-- **`skills/ark-context-warmup/scripts/check_path_b_coverage.py`** — CI check enforcing 19 Path B blocks across 7 chain files with ≤3 distinct canonicalized shapes (Vanilla + Special-A Hygiene-Audit-Only + Special-B Knowledge-Capture). Canonicalization strips `--(quick|thorough)` weight markers and `{weight}` placeholders so all vanilla blocks hash to a single shape.
+- **`skills/ark-context-warmup/scripts/check_path_b_coverage.py`** — CI check enforcing 19 Path B blocks across 7 chain files with ≤6 distinct canonicalized shapes: Vanilla (`/autopilot`, 12 variants), `/ralph` (Performance Medium+Heavy, 2 variants — Section 4.2), `/ultrawork` (Greenfield Heavy, 1 variant — Section 4.3), `/team` (Migration Heavy, 1 variant — Section 4.4), Special-A Hygiene-Audit-Only (1), Special-B Knowledge-Capture (2). Canonicalization strips `--(quick|thorough)` weight markers and `{weight}` placeholders so weight-indistinguishable blocks within a shape hash identically.
 
 ### Changed
 
-- **All 19 variants across all 7 chain files** gained a `### Path B (OMC-powered)` section (16 Vanilla + 1 Special-A + 2 Special-B).
+- **All 19 variants across all 7 chain files** gained a `### Path B (OMC-powered)` section (12 Vanilla + 2 `/ralph` + 1 `/ultrawork` + 1 `/team` + 1 Special-A + 2 Special-B).
 - **Step 6 of `/ark-workflow`** now renders the 3-button recommendation UX (`[Accept Path B] [Use Path A] [Show me both]`) when `HAS_OMC=true` and ≥1 of the 4 signals fires (OR-any rule; discoverability over neutrality). Includes checkpoint-density + duration estimate next to `[Accept Path B]` to mitigate blackbox-acceptance risk.
 
 ### Degradation contract

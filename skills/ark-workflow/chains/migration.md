@@ -81,15 +81,15 @@
 16. Session log
 17. `/claude-history-ingest`
 
-*Note: `/team` is a suitable autopilot variant for Heavy migrations (coordinated cross-module parallelism). Handback contract: `references/omc-integration.md` § Section 4.4 — `<<HANDBACK>>` fires after `team-verify`, before `team-fix`.*
+*Note: Path B uses `/team` as the execution engine (coordinated cross-module migration via `team-plan → team-prd → team-exec → team-verify`). Handback contract: `references/omc-integration.md` § Section 4.4 — `<<HANDBACK>>` fires after `team-verify`, **before** `team-fix`. Bounded remediation (`team-fix`) is reserved for Ark's review loop if `/ark-code-review` concurs with residual defects.*
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
-*Front-loaded judgment + autonomous execution + Ark closeout.*
+*Front-loaded judgment + coordinated multi-agent execution + Ark closeout.*
 
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
-4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
-5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
+3. `/team` — coordinated cross-module migration; follows omc-reference pipeline `team-plan → team-prd → team-exec → team-verify`. See `references/omc-integration.md` § Section 4.4 for the handback boundary.
+4. `<<HANDBACK>>` — Ark resumes authority after `team-verify`, **before** `team-fix` (bounded remediation reserved for Ark's review). `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
+5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward. If Ark review concurs with residual defects from `team-verify`, invoke `team-fix` from within Ark's review; otherwise proceed to `/ship`. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (/team row).

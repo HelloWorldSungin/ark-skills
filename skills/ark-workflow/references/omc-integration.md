@@ -201,24 +201,27 @@ remediation loop per `.claude/skills/omc-reference/SKILL.md` lines 106–108).
 ### Per-Variant Expected Closeout Table
 
 What `check_path_b_coverage.py` validates against — byte-identity on
-canonicalized blocks, 3 allowed shapes.
+canonicalized blocks, 6 allowed shapes.
 
-| Variant | Shape | Starts at | Ends at |
-|---------|-------|-----------|---------|
-| Greenfield Light / Medium / Heavy | Vanilla | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
-| Bugfix Light / Medium / Heavy | Vanilla | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
-| Hygiene Light / Medium / Heavy | Vanilla | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
-| Hygiene Audit-Only | Special-A | `/wiki-update` | STOP (no code review, no ship) |
-| Ship Standalone | Vanilla | `/ark-code-review --thorough` | `/claude-history-ingest` |
-| Knowledge-Capture Light | Special-B | `/wiki-update` | `/claude-history-ingest` |
-| Knowledge-Capture Full | Special-B | `/wiki-update` | `/claude-history-ingest` |
-| Migration Light / Medium / Heavy | Vanilla | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
-| Performance Light / Medium / Heavy | Vanilla | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
+| Variant | Shape | Engine (step 3) | Starts at | Ends at |
+|---------|-------|-----------------|-----------|---------|
+| Greenfield Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
+| Greenfield Heavy | /ultrawork | `/ultrawork` | `/ark-code-review --thorough` | `/claude-history-ingest` |
+| Bugfix Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
+| Hygiene Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
+| Hygiene Audit-Only | Special-A | `/autopilot` | `/wiki-update` | STOP (no code review, no ship) |
+| Ship Standalone | Vanilla | `/autopilot` | `/ark-code-review --thorough` | `/claude-history-ingest` |
+| Knowledge-Capture Light | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
+| Knowledge-Capture Full | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
+| Migration Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
+| Migration Heavy | /team | `/team` | `/ark-code-review --thorough` | `/claude-history-ingest` |
+| Performance Light | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
+| Performance Medium / Heavy | /ralph | `/ralph` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 
-Total: 19 rows. Three distinct shapes (Vanilla, Special-A, Special-B).
-`check_path_b_coverage.py` canonicalizes each block (strip scenario headers and
-weight markers) and hashes it; expected distinct hashes = 3; expected total
-blocks = 19.
+Total: 19 rows. **Six distinct shapes** (Vanilla 12 + /ralph 2 + /ultrawork 1
++ /team 1 + Special-A 1 + Special-B 2). `check_path_b_coverage.py` canonicalizes
+each block (strip scenario headers and weight markers) and hashes it; expected
+distinct hashes = 6; expected total blocks = 19.
 
 ---
 
