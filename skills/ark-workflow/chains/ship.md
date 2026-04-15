@@ -10,15 +10,7 @@
 5. `/wiki-update` (if vault)
 6. `/document-release` (if standard docs exist)
 
-*Note: Path B is unusual for Ship Standalone (Ship is already mechanical). Shown for discoverability per spec — see `references/omc-integration.md` § Section 2.*
-
-### Path B (OMC-powered — if HAS_OMC=true)
-
-*Front-loaded judgment + autonomous execution + Ark closeout.*
-
-0. `/ark-context-warmup` — same as Path A
-1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
-2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
-4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
-5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
+*Note: Ship Standalone is Path A only — no Path B block. Ship is already
+mechanical; the OMC-powered pipeline added no value and was retired in R17
+of the 2026-04-15 uniformity refactor. See `references/omc-integration.md`
+§ Section 2 for the rationale.*

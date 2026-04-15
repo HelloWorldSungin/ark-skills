@@ -10,7 +10,7 @@ What this script checks:
      post-uniformity: Vanilla + /team + Special-A + Special-B).
   3. Every block contains the literal `<<HANDBACK>>` marker.
   4. Every block contains either `/deep-interview` OR `/claude-history-ingest`.
-  5. Distribution of shapes matches ALLOWED_SHAPES when --expected-blocks == 18.
+  5. Distribution of shapes matches ALLOWED_SHAPES when --expected-blocks == 17.
 
 Canonicalization strips:
   - The scenario-specific header line (`### Path B (OMC-powered...)`).
@@ -31,8 +31,9 @@ import re
 import sys
 from pathlib import Path
 
-# Expected distribution when --expected-blocks == 18 (the R2-state target;
-# will drop to 17 after R17 removes Ship Standalone's Path B block).
+# Expected distribution when --expected-blocks == 17 (the post-R17 target,
+# after Ship Standalone's Path B block was removed in the 2026-04-15
+# uniformity refactor).
 #
 # Four canonicalized shapes allowed post-uniformity (2026-04-14 decision):
 #   - `vanilla`    → every Path B variant except Migration Heavy, Hygiene
@@ -49,10 +50,12 @@ from pathlib import Path
 #
 # Knowledge-Capture Full has NO Path B (removed in v1.14.0): full-variant capture
 # is too broad and branchy for auto-routed single-engine execution. Users who want
-# autonomous bulk capture invoke `/omc-teams 1:gemini "<task>"` manually. This is
-# why the count is 18 (not 19) and `special-b-knowledge-capture` is 1 (not 2).
+# autonomous bulk capture invoke `/omc-teams 1:gemini "<task>"` manually.
+# Ship Standalone has NO Path B (removed in R17): Ship is already mechanical,
+# so the OMC-powered pipeline added no value. Together these exclusions bring
+# the total to 17 (not 19).
 ALLOWED_SHAPES = {
-    "vanilla": 15,
+    "vanilla": 14,
     "team": 1,
     "special-a-hygiene-audit-only": 1,
     "special-b-knowledge-capture": 1,
@@ -181,8 +184,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--chains", required=True, type=Path,
                     help="Directory containing chain *.md files")
-    ap.add_argument("--expected-blocks", type=int, default=18,
-                    help="Expected total Path B blocks (default 18 — Knowledge-Capture Full has no Path B)")
+    ap.add_argument("--expected-blocks", type=int, default=17,
+                    help="Expected total Path B blocks (default 17 — Knowledge-Capture Full and Ship Standalone have no Path B)")
     ap.add_argument("--max-distinct-shapes", type=int, default=4,
                     help="Max distinct canonicalized hashes (default 4 — see ALLOWED_SHAPES)")
     args = ap.parse_args()
@@ -224,7 +227,7 @@ def main() -> int:
         )
 
     # Assertion 5: shape distribution (only when full coverage expected).
-    if args.expected_blocks == 18:
+    if args.expected_blocks == 17:
         distribution: dict[str, int] = {}
         unknown_details: list[str] = []
         for path, _, canonical in canonicals:

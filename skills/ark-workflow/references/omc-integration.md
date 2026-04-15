@@ -63,7 +63,6 @@ Which OMC engine is the natural fit per chain variant.
 | Bugfix Heavy | `/autopilot` | Reproduction-finicky bugs handled inside autopilot's Phase 2 (Execution via internal /ralph loop) |
 | Hygiene Light / Medium / Heavy | `/autopilot` | Cleanup follows consensus plan deterministically |
 | Hygiene Audit-Only | `/autopilot` (findings mode) | Findings-only; no code mutation |
-| Ship Standalone | `/autopilot` | Discouraged but available; Ship is already mechanical |
 | Knowledge-Capture Light | `/autopilot` | Capture + synthesis fits consensus-then-execute |
 | Knowledge-Capture Full | — (no Path B) | Full capture is too broad/branchy for auto-routed single-engine execution; users invoke `/omc-teams 1:gemini` manually when desired |
 | Migration Light / Medium | `/autopilot` | Linear upgrade path |
@@ -86,12 +85,22 @@ Path B is recommended when **any** of these fires:
 
 1. **Keyword** — prompt contains an OMC keyword.
 2. **Heavy weight** — triaged class is Heavy.
-3. **Multi-module scope** — task touches ≥3 independent modules.
+3. **Multi-module scope** — task touches ≥3 independent modules (LLM-judgment
+   call during triage — no mechanical counter exists in SKILL.md or any
+   helper script; grep-verified).
 4. **Explicit autonomy** — user explicitly requests hands-off execution.
 
 ### Signal #1 detector specification
 
-Verbatim keyword list from `.claude/skills/omc-reference/SKILL.md` lines 89–101:
+Superset of the canonical keyword list at `.claude/skills/omc-reference/SKILL.md`
+lines 89–101. Ark adds the following non-canonical keywords to trigger Path B
+recommendation:
+
+- `team` / `/team` — explicit team-orchestration invocation
+- `ultrawork` — long-form of the canonical `ulw`
+- `deep-interview` — hyphenated form alongside the canonical `deep interview`
+
+Canonical omc-reference list (verbatim):
 
 > `"autopilot"→autopilot`
 > `"ralph"→ralph`
@@ -251,8 +260,9 @@ shapes were retired in R2).
 
 Rows are grouped — variants sharing identical shape/engine/closeout collapse
 into a single row. Expand parenthetical labels against the variant column to
-recover the 18 per-variant assignments. Knowledge-Capture Full has no Path B
-and therefore no row in this table.
+recover the 17 per-variant assignments. Knowledge-Capture Full has no Path B
+(removed in v1.14.0); Ship Standalone has no Path B (removed in R17 of the
+2026-04-15 uniformity refactor) — neither has a row in this table.
 
 | Variants (grouped) | Shape | Engine (step 3) | Starts at | Ends at |
 |---|---|---|---|---|
@@ -260,19 +270,17 @@ and therefore no row in this table.
 | Bugfix Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Hygiene Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Hygiene Audit-Only | Special-A | `/autopilot` | `/wiki-update` | STOP (findings-only) |
-| Ship Standalone | Vanilla | `/autopilot` | `/ark-code-review --thorough` | `/claude-history-ingest` |
 | Knowledge-Capture Light | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
 | Migration Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
 | Migration Heavy | /team | `/team` | `/ark-code-review --thorough` | `/claude-history-ingest` |
 | Performance Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 
-9 rows representing **18 variants** across **4 distinct shapes** (Vanilla 15 +
+8 rows representing **17 variants** across **4 distinct shapes** (Vanilla 14 +
 /team 1 + Special-A 1 + Special-B 1). `check_path_b_coverage.py` canonicalizes
 each block (strip scenario headers and weight markers) and hashes it;
-expected distinct hashes = 4; expected total blocks = 18. The CI script
+expected distinct hashes = 4; expected total blocks = 17. The CI script
 reads chain files directly, so row-grouping in this table does not affect
-coverage enforcement. (Ship Standalone's Path B block is removed in a
-subsequent commit; at that point the totals drop to 17 blocks / Vanilla 14.)
+coverage enforcement.
 
 ---
 
@@ -281,7 +289,7 @@ subsequent commit; at that point the totals drop to 17 blocks / Vanilla 14.)
 Three templates the chain files copy in verbatim (with per-variant weight/headline
 substitution). These are what `check_path_b_coverage.py` hashes against.
 
-### Template Vanilla (15 variants; drops to 14 after Ship Standalone Path B removal)
+### Template Vanilla (14 variants)
 
 ```markdown
 ### Path B (OMC-powered — if HAS_OMC=true)
@@ -297,7 +305,7 @@ substitution). These are what `check_path_b_coverage.py` hashes against.
 ```
 
 Variant-specific weight substitution: Light → `--quick`, Medium → `--quick`,
-Heavy → `--thorough`. (Ship Standalone always uses `--thorough`.)
+Heavy → `--thorough`.
 
 ### Template Special-A (Hygiene Audit-Only)
 

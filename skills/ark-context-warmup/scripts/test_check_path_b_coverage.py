@@ -1,12 +1,12 @@
 """Unit tests for check_path_b_coverage.py — the CI contract validator that
 enforces byte-identity canonicalization + shape distribution across the
-18 Path B blocks in /ark-workflow chains (R2 state; drops to 17 after R17
-removes Ship Standalone's Path B block).
+17 Path B blocks in /ark-workflow chains (post-2026-04-15 uniformity refactor).
 
 Originally backfilled for /ark-code-review --thorough pass 2 H4 finding —
 the script shipped in v1.13.0 with zero tests. Updated for the 2026-04-14
-uniformity refactor (R2): /ralph and /ultrawork shapes retired, leaving
-4 distinct canonicalized shapes (vanilla, team, special-a, special-b).
+uniformity refactor: /ralph and /ultrawork shapes retired (R2); Ship
+Standalone Path B block removed (R17). Resulting contract: 17 total blocks
+across 4 distinct canonicalized shapes (vanilla, team, special-a, special-b).
 
 Uses importlib.util to load the target module by path (matches the pattern
 used for synthesize/evidence/executor in test_warmup_helpers.py)."""
@@ -302,8 +302,8 @@ class TestCLI:
         include the flag marker dump to help the developer diagnose."""
         chains = tmp_path / "chains"
         chains.mkdir()
-        # 18 blocks to hit the full-coverage classifier path (shape distribution
-        # assertion only runs when --expected-blocks == 18 at R2 state)
+        # 17 blocks to hit the full-coverage classifier path (shape distribution
+        # assertion only runs when --expected-blocks == 17)
         bad_block = (
             "### Path B (OMC-powered — if HAS_OMC=true)\n\n"
             "No markers match here.\n\n"
@@ -311,10 +311,10 @@ class TestCLI:
             "4. `<<HANDBACK>>` — required marker.\n"
             "5. `/deep-interview` — required marker.\n"
         )
-        # 17 good blocks to hit 18 total count + 1 bad block
-        body = "## Dummy\n" + "\n".join(_vanilla_block() for _ in range(17)) + bad_block
+        # 16 good blocks to hit 17 total count + 1 bad block
+        body = "## Dummy\n" + "\n".join(_vanilla_block() for _ in range(16)) + bad_block
         self._write_chain(chains, "foo", body)
-        result = self._run(chains)  # default --expected-blocks 18
+        result = self._run(chains)  # default --expected-blocks 17
         assert result.returncode == 1
         # Verify the flag dump appears in the error output
         assert "markers=" in result.stderr
@@ -322,9 +322,8 @@ class TestCLI:
 
     def test_real_repo_chains_pass(self, tmp_path):
         """End-to-end sanity: the live repo chains directory must pass the
-        default (18 blocks, 4 shapes) check at R2 state. This pins the CI
-        contract. After R17 lands, the default drops to 17 blocks (ship.md
-        Path B removed); update this test alongside that commit."""
+        default (17 blocks, 4 shapes) check. This pins the post-uniformity
+        CI contract (2026-04-15)."""
         live_chains = Path(__file__).parent.parent.parent / "ark-workflow" / "chains"
         if not live_chains.is_dir():
             pytest.skip("live chains directory not accessible")
@@ -333,19 +332,19 @@ class TestCLI:
             capture_output=True, text=True,
         )
         assert result.returncode == 0, f"CI contract broken: {result.stderr}"
-        assert "18 Path B block" in result.stdout
+        assert "17 Path B block" in result.stdout
         assert "4 distinct canonicalized shape" in result.stdout
 
 
 # ── ALLOWED_SHAPES contract ─────────────────────────────────────────────
 
 class TestAllowedShapesContract:
-    def test_allowed_shapes_sum_to_18(self):
+    def test_allowed_shapes_sum_to_17(self):
         """ALLOWED_SHAPES distribution must sum to the total expected-blocks
-        count at R2 state. If someone adds a new engine shape without
-        reducing vanilla, this pins that invariant. After R17 (Ship
-        Standalone Path B removal) the sum drops to 17."""
-        assert sum(cpc.ALLOWED_SHAPES.values()) == 18
+        count. If someone adds a new engine shape without reducing vanilla,
+        this pins that invariant. Post-2026-04-15 uniformity refactor the
+        sum is 17 (Ship Standalone Path B removed in R17)."""
+        assert sum(cpc.ALLOWED_SHAPES.values()) == 17
 
     def test_allowed_shapes_contains_four_shapes(self):
         """The 4-shape model is the post-uniformity contract (2026-04-14).
