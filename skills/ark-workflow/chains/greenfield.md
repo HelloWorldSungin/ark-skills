@@ -36,16 +36,17 @@
 5. `/test-driven-development` — write tests first, implement against them
 6. `/ark-code-review --quick` → `/simplify`
 7. `/qa` (if UI)
-8. `/cso` (if security-relevant)
-9. `/ship` → `/land-and-deploy`
-10. `/canary` (if deploy risk)
+8. `/visual-verdict` (if UI with design reference)
+9. `/cso` (if security-relevant)
+10. `/ship` → `/land-and-deploy`
+11. `/canary` (if deploy risk)
 
 *Document:*
-11. `/wiki-update` (if vault)
-12. `/wiki-ingest` (if vault + new component needs its own page)
-13. `/cross-linker` (if vault)
-14. `/document-release` (if standard docs exist)
-15. Session log
+12. `/wiki-update` (if vault)
+13. `/wiki-ingest` (if vault + new component needs its own page)
+14. `/cross-linker` (if vault)
+15. `/document-release` (if standard docs exist)
+16. Session log
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
@@ -76,17 +77,18 @@
 10. `/ark-code-review --thorough` + `/ask codex` → `/simplify`
 11. `/qa` (if UI)
 12. `/design-review` (if UI)
-13. `/cso` (if security-relevant)
-14. `/ship` → `/land-and-deploy`
-15. `/canary` (if deploy risk)
+13. `/visual-verdict` (if UI with design reference)
+14. `/cso` (if security-relevant)
+15. `/ship` → `/land-and-deploy`
+16. `/canary` (if deploy risk)
 
 *Document:*
-16. `/wiki-update` (if vault)
-17. `/wiki-ingest` (if vault + new component needs its own page)
-18. `/cross-linker` (if vault)
-19. `/document-release` (if standard docs exist)
-20. Session log
-21. `/claude-history-ingest`
+17. `/wiki-update` (if vault)
+18. `/wiki-ingest` (if vault + new component needs its own page)
+19. `/cross-linker` (if vault)
+20. `/document-release` (if standard docs exist)
+21. Session log
+22. `/claude-history-ingest`
 
 *Note: Path B uses `/autopilot` as the execution engine. Multi-module parallelism is handled inside autopilot's Phase 2 (Execution via internal /ultrawork). Handback contract: `references/omc-integration.md` § Section 4.1.*
 

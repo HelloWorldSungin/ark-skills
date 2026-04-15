@@ -328,6 +328,14 @@ When presenting a skill chain, resolve all conditions using Project Discovery va
 **UI triggers (for `/qa`, `/design-review`):**
 - Project has frontend dependencies (react, vue, svelte, next, angular, @remix, solid-js) AND the current task touches UI-facing code
 
+**UI-with-design-reference trigger (for `/visual-verdict`):**
+- All UI triggers above AND a design reference is present in the repo. Signals that indicate a design reference exists:
+  - A `design/`, `designs/`, `mocks/`, or `mockups/` directory at repo root
+  - A `DESIGN.md`, `design-system.md`, or similar design-spec file outside `docs/superpowers/`
+  - A Figma export file (`.fig`, `.sketch`, `.xd`) or PNG/SVG mockup linked from README or CONTRIBUTING
+  - An explicit design reference named in the user's task prompt
+- If UI is present but no design reference is found, output "Skipping `/visual-verdict` — no design reference found" and continue without the step.
+
 **Standard docs trigger (for `/document-release`):**
 - Project has README.md, ARCHITECTURE.md, CONTRIBUTING.md, or CHANGELOG.md outside of `docs/superpowers/`
 
