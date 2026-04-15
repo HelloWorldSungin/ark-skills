@@ -60,7 +60,8 @@ Which OMC engine is the natural fit per chain variant.
 | Hygiene Light / Medium / Heavy | `/autopilot` | Cleanup follows consensus plan deterministically |
 | Hygiene Audit-Only | `/autopilot` (findings mode) | Findings-only; no code mutation |
 | Ship Standalone | `/autopilot` | Discouraged but available; Ship is already mechanical |
-| Knowledge-Capture Light / Full | `/autopilot` | Capture + synthesis fits consensus-then-execute |
+| Knowledge-Capture Light | `/autopilot` | Capture + synthesis fits consensus-then-execute |
+| Knowledge-Capture Full | — (no Path B) | Full capture is too broad/branchy for auto-routed single-engine execution; users invoke `/omc-teams 1:gemini` manually when desired |
 | Migration Light / Medium | `/autopilot` | Linear upgrade path |
 | Migration Heavy | `/team` | Cross-module coordination benefits from multi-agent |
 | Performance Light | `/autopilot` | Discouraged but available |
@@ -234,7 +235,8 @@ canonicalized blocks, 6 allowed shapes.
 
 Rows are grouped — variants sharing identical shape/engine/closeout collapse
 into a single row. Expand parenthetical labels against the variant column to
-recover the 19 per-variant assignments.
+recover the 18 per-variant assignments. Knowledge-Capture Full has no Path B
+and therefore no row in this table.
 
 | Variants (grouped) | Shape | Engine (step 3) | Starts at | Ends at |
 |---|---|---|---|---|
@@ -244,17 +246,17 @@ recover the 19 per-variant assignments.
 | Hygiene Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Hygiene Audit-Only | Special-A | `/autopilot` | `/wiki-update` | STOP (findings-only) |
 | Ship Standalone | Vanilla | `/autopilot` | `/ark-code-review --thorough` | `/claude-history-ingest` |
-| Knowledge-Capture Light / Full | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
+| Knowledge-Capture Light | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
 | Migration Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
 | Migration Heavy | /team | `/team` | `/ark-code-review --thorough` | `/claude-history-ingest` |
 | Performance Light | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
 | Performance Medium / Heavy | /ralph | `/ralph` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 
-11 rows representing **19 variants** across **6 distinct shapes** (Vanilla 12 +
-/ralph 2 + /ultrawork 1 + /team 1 + Special-A 1 + Special-B 2).
+11 rows representing **18 variants** across **6 distinct shapes** (Vanilla 12 +
+/ralph 2 + /ultrawork 1 + /team 1 + Special-A 1 + Special-B 1).
 `check_path_b_coverage.py` canonicalizes each block (strip scenario headers and
 weight markers) and hashes it; expected distinct hashes = 6; expected total
-blocks = 19. The CI script reads chain files directly, so row-grouping in this
+blocks = 18. The CI script reads chain files directly, so row-grouping in this
 table does not affect coverage enforcement.
 
 ---

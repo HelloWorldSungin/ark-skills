@@ -34,13 +34,4 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 6. `/tag-taxonomy` — normalize tags
 7. `/claude-history-ingest` — mine recent sessions
 
-### Path B (OMC-powered — if HAS_OMC=true)
-
-*Reflective capture with front-loaded mining + autonomous synthesis.*
-
-0. `/ark-context-warmup` — same as Path A
-1. `/claude-history-ingest` — mine recent conversations as capture source (substitutes for `/deep-interview` since capture is reflective)
-2. `/omc-plan --consensus` — plan the capture (wiki pages, tags, cross-links)
-3. `/autopilot` — execution only; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
-4. `<<HANDBACK>>` — Ark resumes authority
-5. **Ark closeout (Special-B):** `/wiki-update` (finalize session log + epic) → `/claude-history-ingest` (final mining sweep). No code review, no ship — capture-only chain. See `references/omc-integration.md` § Section 4 (Special-B row).
+Knowledge-Capture **Full** intentionally has no Path B block. Full-variant capture is too broad and too branchy for a single-engine autonomous pass — `/omc-teams` with a Gemini 1M-context worker was considered but rejected as auto-routed behavior (orchestration-model mismatch; keeps `/omc-teams` a user-triggered power tool instead). Users who want autonomous bulk capture can invoke `/omc-teams 1:gemini "<task>"` manually, or run the Path A steps above with `/autopilot` invocations on the individual sub-steps.

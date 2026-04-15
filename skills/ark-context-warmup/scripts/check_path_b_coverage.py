@@ -9,7 +9,7 @@ What this script checks:
   2. Canonicalized blocks collapse to ≤3 distinct hashes (Vanilla, Special-A, Special-B).
   3. Every block contains the literal `<<HANDBACK>>` marker.
   4. Every block contains either `/deep-interview` OR `/claude-history-ingest`.
-  5. Distribution of shapes matches ALLOWED_SHAPES when --expected-blocks == 19.
+  5. Distribution of shapes matches ALLOWED_SHAPES when --expected-blocks == 18.
 
 Canonicalization strips:
   - The scenario-specific header line (`### Path B (OMC-powered...)`).
@@ -30,22 +30,29 @@ import re
 import sys
 from pathlib import Path
 
-# Expected distribution when --expected-blocks == 19 (the full plan target).
+# Expected distribution when --expected-blocks == 18 (the full plan target).
 #
-# Six canonicalized shapes now allowed (was 3 prior to P2-1 hardening): the
-# base `vanilla` shape invokes `/autopilot` (Section 4.1). Three engine-specific
-# shapes wire the remaining Section 4 sub-contracts into real chains:
+# Six canonicalized shapes allowed: the base `vanilla` shape invokes
+# `/autopilot` (Section 4.1). Three engine-specific shapes wire the remaining
+# Section 4 sub-contracts into real chains:
 #   - `ralph`      → Performance Medium + Heavy (Section 4.2)
 #   - `ultrawork`  → Greenfield Heavy (Section 4.3)
 #   - `team`       → Migration Heavy (Section 4.4, handback after team-verify/before team-fix)
-# Plus the two pre-existing special-case shapes.
+# Plus two special-case shapes:
+#   - `special-a-hygiene-audit-only` — Hygiene Audit-Only (findings, no ship)
+#   - `special-b-knowledge-capture`  — Knowledge-Capture Light (/autopilot capture)
+#
+# Knowledge-Capture Full has NO Path B (removed in v1.14.0): full-variant capture
+# is too broad and branchy for auto-routed single-engine execution. Users who want
+# autonomous bulk capture invoke `/omc-teams 1:gemini "<task>"` manually. This is
+# why the count is 18 (not 19) and `special-b-knowledge-capture` is 1 (not 2).
 ALLOWED_SHAPES = {
     "vanilla": 12,
     "ralph": 2,
     "ultrawork": 1,
     "team": 1,
     "special-a-hygiene-audit-only": 1,
-    "special-b-knowledge-capture": 2,
+    "special-b-knowledge-capture": 1,
 }
 
 _PATH_B_HEADING_RE = re.compile(
@@ -171,8 +178,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--chains", required=True, type=Path,
                     help="Directory containing chain *.md files")
-    ap.add_argument("--expected-blocks", type=int, default=19,
-                    help="Expected total Path B blocks (default 19)")
+    ap.add_argument("--expected-blocks", type=int, default=18,
+                    help="Expected total Path B blocks (default 18 — Knowledge-Capture Full has no Path B)")
     ap.add_argument("--max-distinct-shapes", type=int, default=6,
                     help="Max distinct canonicalized hashes (default 6 — see ALLOWED_SHAPES)")
     args = ap.parse_args()
@@ -214,7 +221,7 @@ def main() -> int:
         )
 
     # Assertion 5: shape distribution (only when full coverage expected).
-    if args.expected_blocks == 19:
+    if args.expected_blocks == 18:
         distribution: dict[str, int] = {}
         unknown_details: list[str] = []
         for path, _, canonical in canonicals:

@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.15.0] - 2026-04-15
+
+### Added
+
+- **External Second Opinion via `omc ask`** in `skills/ark-code-review/SKILL.md`. `/ark-code-review --thorough` (and any mode that inherits it, including `--full`) now solicits a vendor-training-biased second opinion from `codex` and/or `gemini` when either CLI is on PATH alongside OMC. Opt-out via `--no-multi-vendor` (alias `--no-xv`). Uses the `omc ask <vendor> "<prompt>"` primitive — no tmux, no process orchestration. Each vendor response is captured as a plain markdown artifact at `.omc/artifacts/ask/<vendor>-<slug>-<ts>.md` and merged into the unified report.
+- **Trust Boundary Notice** in the External Second Opinion section — explicit guidance to confirm the diff contains no regulated / NDA / secret content before accepting the default fan-out, with per-invocation (`--no-multi-vendor`) and per-project (CLAUDE.md routing) opt-out paths.
+- **Vendor context cap discipline.** Vendors receive only `<diff_path>`, `<changed_files_list>`, and a 1-paragraph neutral branch description — **NOT** CLAUDE.md, plugin skills, vault content, or TaskNotes. Native CC agents remain the conventions-aware layer; vendor streams are a vendor-diversity sanity check, not a capability expansion.
+- **Gemini capacity caveat** documented — observed `MODEL_CAPACITY_EXHAUSTED` (HTTP 429) on `gemini-3.1-pro-preview` under burst load during live testing, handled as a per-vendor runtime failure with graceful degradation to "synthesize on remaining streams".
+
+### Changed
+
+- **`--thorough` and `--full` mode descriptions** in `skills/ark-code-review/SKILL.md` updated to document the External Second Opinion augmentation and its trust-boundary / context-cap discipline.
+
+### Explicitly not included
+
+- **`/omc-teams` chain integration.** `/omc-teams` (process-based CLI workers in tmux panes) is NOT auto-routed by `/ark-workflow`. It remains a user-triggered power tool — users invoke `/omc-teams 1:<vendor> "<task>"` manually when they want a process-isolated worker. Knowledge-Capture Full deliberately has no Path B block for the same reason: full-variant capture is too broad and branchy for a single-engine autonomous pass, and wiring `/omc-teams` as the step-3 engine clashes with its multi-stage leader-driven orchestration model (`omc team` only allocates + registers workers; it does not auto-execute, and the framework enforces `one_team_per_leader_session`). Users can still invoke `/omc-teams` manually for bulk capture if desired.
+- **`HAS_OMC_TEAMS` probe.** Not needed — External Second Opinion uses `omc ask` which requires only `HAS_OMC=true AND (codex OR gemini on PATH)`, and there is no auto-routed `/omc-teams` integration.
+
+### Rationale
+
+`omc ask` was chosen over `omc team` (the `/omc-teams` primitive) for External Second Opinion fan-out because:
+
+- No tmux dependency.
+- No multi-stage leader-driven orchestration required; single-shot invocation matches the review skill's single-pass consumption model.
+- No `omc team api list-tasks --json` schema dependency; vendor output is returned as a plain markdown artifact path on stdout.
+- Built-in shell/JSON quoting removes the injection surface from prompt interpolation.
+
+Early design iterations routed `/ark-workflow` chains to `/omc-teams` (a "Knowledge-Capture Full" Path B variant using `/omc-teams 1:gemini` as the step-3 engine). A live Codex review on that design surfaced two bug-level issues (gate over-permissiveness on codex-only hosts; hardcoded `vault/` path violating the plugin's context-discovery rule) and an architectural mismatch (`omc team` expects leader-driven multi-stage flow, not a single "spawn and wait" call). The decision was made to drop auto-routed `/omc-teams` integration entirely and keep `/omc-teams` as a user-triggered primitive. The `omc ask`-based External Second Opinion in `/ark-code-review --thorough` is the only ark-auto-routed vendor integration that ships in v1.15.0.
+
+### Coverage footprint
+
+- `skills/ark-context-warmup/scripts/check_path_b_coverage.py` expects **18 Path B blocks** across 7 chain files (was 19 pre-v1.15.0 — Knowledge-Capture Full's Path B was removed this release). `ALLOWED_SHAPES` count for `special-b-knowledge-capture` dropped from 2 → 1 (only the Light variant now has a Special-B block). Distinct canonicalized shapes remain 6.
+
+### Version note
+
+This entry was originally authored as v1.14.0 on branch `ark-workflow-improve-OMC` (commit `0376ebc`, date 2026-04-14) before a rebase onto master. While this branch was open, master independently shipped a different v1.14.0 (Stream A + Stream B — see entry below). This External Second Opinion release was renumbered to v1.15.0 to avoid the collision. Content is unchanged; only the version label differs from the original commit.
+
 ## [1.14.0] - 2026-04-14
 
 Combined two-stream release: **Stream A** (OMC plugin detection in `/ark-onboard` + `/ark-health`) and **Stream B** (`/ark-update` version-driven migration framework). Total plugin skill count: 18 → **19**. Total `/ark-health` diagnostic check count: 20 → **22**.

@@ -21,6 +21,7 @@ Before running this skill, discover project context per the plugin CLAUDE.md:
 /ark-code-review                              # Default: review current branch vs {base_branch}
 /ark-code-review --quick                      # Fast: code-reviewer only
 /ark-code-review --thorough                   # Full: all agents including error/test analysis
+/ark-code-review --thorough --no-multi-vendor # Thorough WITHOUT external Codex/Gemini fan-out (alias: --no-xv)
 /ark-code-review --full                       # Thorough + auto-detect epic from branch name
 /ark-code-review --epic {task_prefix}001           # Review epic + stories + sessions vs code
 /ark-code-review --plan some-feature-slug     # Review code against plan + spec docs
@@ -276,9 +277,13 @@ For **--plan** mode:
 ### `--thorough` mode
 Run all agents (including silent-failure-hunter and test-analyzer). Use for significant changes, new features, or pre-merge reviews.
 
+**External Second Opinion (opt-out, default-on):** When `HAS_OMC=true` and at least one of `codex`/`gemini` is on PATH, `--thorough` also solicits a vendor-training-biased **second opinion** via `omc ask <vendor>` in parallel (Codex = code-quality lens; Gemini = UI/docs lens). Vendors do NOT see CLAUDE.md or plugin skills — native CC agents remain the conventions-aware layer. Disable with `--no-multi-vendor` (alias `--no-xv`). See **External Second Opinion (Vendor CLIs)** section below for trust-boundary notice, trigger logic, fan-out prompts, synthesis approach, and full degradation table.
+
 ### `--full` mode
 
 Combines `--thorough` (all 5 code analysis agents) with `--epic` (vault context cross-referencing), auto-detecting the epic from the current branch name.
+
+**Inherits External Second Opinion from `--thorough`:** when `HAS_OMC=true` and at least one of `codex`/`gemini` is on PATH, `--full` also solicits vendor second opinions via `omc ask`. Same `--no-multi-vendor` / `--no-xv` opt-out applies. See **External Second Opinion (Vendor CLIs)** section for the trust-boundary notice and framing — vendors do NOT see CLAUDE.md, plugin skills, vault, or TaskNotes.
 
 #### Step 0: Auto-detect epic from branch name
 
@@ -637,6 +642,129 @@ Plan completion must be >= 80% for merge recommendation.
    - "Want me to post these findings as inline comments on PR #N?" (via `gh pr review N --comment --body "..."`)
    - "Want me to request changes on the PR?" (via `gh pr review N --request-changes --body "..."`)
    - "Or just leave the review here locally?"
+
+## External Second Opinion (Vendor CLIs via `omc ask`)
+
+When `--thorough` (and any mode that inherits it, like `--full`) runs on a host with external vendor CLIs (`codex` and/or `gemini`) installed alongside OMC, the review solicits a **second opinion** from each available vendor. Claude (parent) synthesizes all streams — native + vendor — into the unified report.
+
+This is **opt-out**: pass `--no-multi-vendor` (alias `--no-xv`) to disable. It is **not a convention-aware review** — the vendors do not see this project's CLAUDE.md, plugin skills, vault content, or TaskNotes. They bring a vendor-training-biased code-quality perspective as a complementary stream to the native CC agents (which remain the conventions-aware layer).
+
+### Framing: what the vendors add (and don't)
+
+| Source | What it brings |
+|---|---|
+| Native CC agents (`code-reviewer`, `code-architect`, …) | Conventions awareness (CLAUDE.md, ark skills), same-context continuity, access to vault/TaskNotes |
+| Codex CLI via `omc ask codex` | OpenAI model family's training-biased code-quality lens — second opinion on bugs, logic, security smells |
+| Gemini CLI via `omc ask gemini` | Google model family's training-biased perspective — second opinion on UI/UX cues and documentation hygiene |
+
+**The value is vendor diversity, not capability expansion.** The native CC review already covers correctness / architecture / tests at parent capacity. The vendor streams are a cheap sanity check: when Codex and the native reviewer both flag the same issue, confidence rises; when only a vendor flags it, you have a specific vendor-diversity signal to weigh.
+
+### Trust Boundary Notice
+
+Sending the diff to external vendors **widens the trust boundary** beyond the local machine. By default, `--thorough` performs this fan-out whenever `codex` or `gemini` is on PATH. Before accepting the default on a new repository, confirm:
+
+- The code in the diff is not regulated, proprietary-under-NDA, or containing secrets. Scan with `git diff --name-only` and inspect the changed files.
+- The installed vendor CLIs are authenticated to accounts that align with your organization's policy for external AI access.
+- If unsure, pass `--no-multi-vendor` (alias `--no-xv`) for this invocation. For a persistent per-project opt-out, add a line to your project CLAUDE.md routing rules and surface the flag in your review wrapper.
+
+The vendor streams receive only: `<diff_path>`, `<changed_files_list>`, and a **1-paragraph neutral branch description** written by Claude from public signals (commit messages + filenames). They do **NOT** receive CLAUDE.md, plugin skills, vault content, TaskNotes, or project secrets. Passing those would dilute the vendor-diversity value (the point is an independent view) and widen the trust boundary further.
+
+### Primitive: `omc ask`
+
+Fan-out uses the `omc ask <vendor> "<prompt>"` primitive from the OMC framework. Unlike `omc team` (which spawns tmux panes and requires multi-stage leader orchestration via `omc team api`), `omc ask` is a single-shot invocation that:
+
+- Handles shell/JSON quoting of the prompt argument internally — no injection surface for the review skill to manage.
+- Handles vendor CLI authentication, timeout, and retry concerns.
+- Returns the path to a captured markdown artifact on stdout.
+- Writes the artifact to `.omc/artifacts/ask/<vendor>-<slug>-<ts>.md` for later re-read.
+
+Surface A therefore does **not** require tmux and has no `omc team api list-tasks` JSON-schema dependency.
+
+### Trigger conditions (ALL must be true)
+
+1. `--thorough` is set (or inherited via `--full`).
+2. `--no-multi-vendor` / `--no-xv` is **not** present in the user's invocation.
+3. `HAS_OMC=true` (OMC CLI on PATH or cache present; honors `ARK_SKIP_OMC=true` cascade per `skills/ark-workflow/SKILL.md`).
+4. At least one of `codex` / `gemini` is on PATH.
+
+If trigger conditions 3 or 4 fail, Surface A is skipped entirely with a one-line notice (see Degradation Table). If only one vendor is present, only that vendor's `omc ask` is invoked.
+
+### Fan-out (parallel with native CC agents in Step 2)
+
+**Preparation (single-shot, before fan-out):**
+
+- `DIFF_PATH` — persisted diff path captured in Step 1 of this skill (e.g., `.ark-workflow/review-diff-<ts>.patch`).
+- `CHANGED_FILES` — the newline-separated list from `git diff {base_branch}...HEAD --name-only`.
+- `BRANCH_DESC` — a 1-paragraph neutral summary of what the branch is trying to achieve. Claude writes this from commit messages + filenames only. **No CLAUDE.md content, no vault content, no secrets.**
+
+**Codex fan-out — external second opinion (code-quality lens):**
+
+```bash
+omc ask codex "You are an independent external reviewer with no project-specific context. Give a second opinion on the diff at ${DIFF_PATH}.
+
+Changed files:
+${CHANGED_FILES}
+
+Branch description (public signals only):
+${BRANCH_DESC}
+
+Lens: general code quality — bugs, logic errors, security concerns, architecture smells. You do NOT know this project's conventions; do not invent rules to enforce. Only report findings with confidence >= 80. For each finding include [file:line], a one-line description, severity (critical/high/medium), and the reasoning. Skip style/formatting issues — linters handle those. Skip anything that requires seeing code outside the diff to judge confidently."
+```
+
+**Gemini fan-out — external second opinion (UI / docs lens):**
+
+```bash
+omc ask gemini "You are an independent external reviewer with no project-specific context. Give a second opinion on the diff at ${DIFF_PATH}.
+
+Changed files:
+${CHANGED_FILES}
+
+Branch description (public signals only):
+${BRANCH_DESC}
+
+Lens: UI/UX consistency (only if UI files are touched) and documentation hygiene — code-comment drift, missing API docs, README staleness. You do NOT know this project's conventions; do not invent rules to enforce. Only report findings with confidence >= 80. For each finding include [file:line], a one-line description, severity (critical/high/medium), and the reasoning. Skip style/formatting issues — linters handle those. Skip anything that requires seeing code outside the diff to judge confidently."
+```
+
+Both invocations run in parallel with the native CC agents (Step 2 fan-out). Each returns the artifact path on stdout; wait for both to complete before synthesis.
+
+### Synthesis
+
+After all sources (native + vendor) complete, Claude reads each vendor artifact directly:
+
+```bash
+cat .omc/artifacts/ask/codex-<slug>-<ts>.md
+cat .omc/artifacts/ask/gemini-<slug>-<ts>.md
+```
+
+No JSON parsing, no tmux pane capture — the artifacts are plain markdown. Findings are merged into the unified report; the "Reviewers" header line in the report adds vendor labels:
+
+```
+Reviewers: code-reviewer, code-architect, test-coverage-checker, silent-failure-hunter, test-analyzer, codex-cli, gemini-cli
+```
+
+Findings are deduplicated across all sources (prefer the more specific finding, or the one backed by ark-conventions context). Each entry is tagged with which source surfaced it (e.g., `Found by: codex-cli`).
+
+### Degradation table
+
+| `omc` CLI | `codex` | `gemini` | Behavior | Notice |
+|---|---|---|---|---|
+| ✗ | — | — | Skip Surface A. Native CC review only. | "External second opinion skipped (OMC not installed). See https://github.com/anthropics/oh-my-claudecode." |
+| ✓ | ✗ | ✗ | Skip Surface A. Native CC review only. | "External second opinion skipped (no vendor CLI on PATH). Install `@openai/codex` and/or `@google/gemini-cli` to enable." |
+| ✓ | ✓ | ✗ | Run Codex only. | "Gemini second opinion skipped (CLI not on PATH). Install `@google/gemini-cli` to include it." |
+| ✓ | ✗ | ✓ | Run Gemini only. | "Codex second opinion skipped (CLI not on PATH). Install `@openai/codex` to include it." |
+| ✓ | ✓ | ✓ | Full fan-out (both vendors in parallel). | (none — both second opinions active) |
+
+The same skip-with-notice applies when `--no-multi-vendor` / `--no-xv` is present ("External second opinion disabled by `--no-multi-vendor` flag."). `ARK_SKIP_OMC=true` cascades into this table via the `HAS_OMC=false` row (OMC CLI effectively unavailable).
+
+Per-vendor runtime failures (exit code ≠ 0 from `omc ask`) further downgrade to "synthesize on remaining streams"; failed-vendor notes appear in the report's footer.
+
+### Vendor capacity caveat (Gemini)
+
+During live testing, Gemini preview models (`gemini-3.1-pro-preview` class) have returned `MODEL_CAPACITY_EXHAUSTED` (HTTP 429) under burst load. When this happens, `omc ask gemini` exits non-zero; treat it as a per-vendor runtime failure per the table above and continue synthesis on the remaining streams. The failure is on the vendor side, not the ark-code-review skill. Retry the Gemini stream manually later if full coverage matters for that review.
+
+### Cost notice
+
+Each `omc ask` invocation is a separate call to the vendor's API. For Heavy diffs with dual-vendor fan-out, the cost delta over native-only review is two additional vendor API calls per `--thorough`. If you have a per-review cost ceiling, use `--no-multi-vendor` to opt out for that invocation, or uninstall the vendor CLI you don't want consulted.
 
 ## Post-Review Actions
 
