@@ -2,6 +2,90 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.14.0] - 2026-04-14
+
+Combined two-stream release: **Stream A** (OMC plugin detection in `/ark-onboard` + `/ark-health`) and **Stream B** (`/ark-update` version-driven migration framework). Total plugin skill count: 18 → **19**. Total `/ark-health` diagnostic check count: 20 → **22**.
+
+### Added
+
+#### Stream B — `/ark-update` version-driven migration framework (NEW skill, 19th)
+
+- **`skills/ark-update/SKILL.md`** — LLM-facing wrapper (210 LOC). Preflight git dirty-check, `ARK_SKILLS_ROOT` three-case resolution (mirrors `/ark-context-warmup:31-49`), `HAS_OMC` probe + centralized-vault detection exported as `ARK_HAS_OMC` / `ARK_CENTRALIZED_VAULT` env vars to `migrate.py`, pre-run warning for inside-marker overwrite, post-run summary rendering (ops-applied / drift events / failures / suggested commit message), refusal-mode handoff to `/ark-onboard repair`. Context-discovery exemption block (byte-pattern-parallel to `/ark-onboard`, `/ark-health`). POSIX-only declaration.
+- **`skills/ark-update/scripts/migrate.py`** — CLI entry point. Two-phase engine: Phase 1 replays pending destructive migrations (`migrations/*.yaml`, ordered by semver, with `depends_on_op` chaining and dedup against `migrations-applied.jsonl`); Phase 2 converges on the declarative `target-profile.yaml` (idempotent, HTML-comment marker-driven). `_read_gate_flags()` strictly recognizes `"0"`/`"1"` env values (whitespace-stripped); other values degrade safely to "disabled." `_check_ark_not_gitignored` pre-mortem guard refuses when `.ark/` is gitignored.
+- **`skills/ark-update/scripts/plan.py`** — dry-run plan builder that enumerates the same target-profile surface as the engine, renders a byte-deterministic plan tree.
+- **`skills/ark-update/scripts/state.py`** — log + pointer + lock + backup_path. **Clean-run zero-write invariant** (codex P1-2): `maybe_append_log_and_pointer` short-circuits on runs with zero ops applied — no JSONL append, no pointer rewrite, byte-stable on disk. `computed_installed_version` derives from max-semver dedup over `(semver, phase)` pairs (codex P2-6); timestamps are advisory only. JSONL log schema includes `failed_ops[]` array (codex P2-4).
+- **`skills/ark-update/scripts/markers.py`** — HTML-comment marker extract/replace/insert. Marker format: `<!-- ark:begin id=<id> version=<semver> -->` / `<!-- ark:end id=<id> -->`. Stale `version=` triggers rewrite + backup even when content matches template (codex P2-3 — marker-version honesty).
+- **`skills/ark-update/scripts/paths.py`** — `safe_resolve` + `PathTraversalError` (codex P1-1). All op-accepted paths dual-gated: load-time validation in `migrate.py:_validate_target_profile_paths` and dispatch-time re-validation in `TargetProfileOp._safe_args`. Symlink targets pre-resolved before comparison.
+- **`skills/ark-update/scripts/ops/__init__.py`** — `TargetProfileOp` + `DestructiveOp` base classes and `OP_REGISTRY`. `DestructiveOp` scaffold wired-but-empty for v1.0; first destructive migration ships when needed.
+- **Five op implementations:**
+  - `ensure_claude_md_section` — managed HTML-comment regions in CLAUDE.md; drift detection + `.bak` + `.bak.meta.json` provenance sidecar ({op, region_id, run_id, pre_hash (sha256), reason, timestamp}).
+  - `ensure_gitignore_entry` — appends patterns if absent; safe no-op if already present.
+  - `ensure_mcp_server` — adds entries to `.mcp.json`; `_ark_managed: true` sentinel prevents clobbering user-managed entries; `McpClobberError` refusal on collision without sentinel; `JSONDecodeError`-tolerant.
+  - `create_file_from_template` — byte-copy templates into project with symlink-target guard (`SymlinkTargetError`).
+  - `ensure_routing_rules_block` — subclass of `ensure_claude_md_section` with canonical `_canonical_args` injection for the routing-rules region.
+- **`skills/ark-update/scripts/check_target_profile_valid.py`** — CI validator. Schema-checks `target-profile.yaml`; enforces `templates/routing-template.md` byte-equality with `skills/ark-workflow/references/routing-template.md` (drift guard); accepts log-schema extensions (`failed_ops`, `depends_on_op`).
+- **`skills/ark-update/target-profile.yaml`** — v1.0 declarative profile: 2 managed regions (`omc-routing` since 1.13.0, `routing-rules` at v1.12.0), 1 ensured-file (`setup-vault-symlink` gated on `only_if_centralized_vault` since 1.11.0), 1 gitignore entry (`.ark-workflow/` since 1.13.0), 0 MCP server rows. `schema_version: 1`.
+- **`skills/ark-update/tests/`** — **237 passing tests in ~9s**. Unit coverage for paths, state, markers, plan, each of 5 ops. Integration: 7 fixtures (pre-v1.11, pre-v1.12, pre-v1.13, fresh, healthy-current, drift-inside-markers, drift-outside-markers) × convergence + idempotency + dry-run + refusal-modes + destructive-replay + e2e-shell + logging + run-summary + backup-provenance + gate-flags (23 new). `MANUAL_STAGE5.md` runbook for the mandatory ship gate.
+
+#### Stream A — OMC plugin detection in `/ark-onboard` + `/ark-health`
+
+- **`/ark-health` Check 21** — detects the `oh-my-claudecode` plugin. Upgrade-style, tier-agnostic. Present in all tiers (Lite, Standard, Full). Warn-only when OMC absent — never fails the scorecard.
+- **`/ark-onboard` Healthy Step 3** — OMC upgrade entry surfaced when scorecard shows Check 21 = warn. Non-blocking.
+- **`/ark-onboard` Greenfield Step 18** — OMC mention during new-project setup (optional).
+- **`/ark-onboard` scorecard** — now reports 21 checks (before Stream B's Check 22 lands below).
+
+#### Stream A + Stream B — `/ark-health` Check 22 (Plugin Versioning)
+
+- **New `### Plugin Versioning (Checks 22+)` section** in `skills/ark-health/SKILL.md`.
+- **Check 22: `ark-skills version current?`** — compares `.ark/plugin-version` vs `$ARK_SKILLS_ROOT/VERSION`; surfaces `upgrade available: run /ark-update` on mismatch. Warn-only (never fails). Additionally asserts `.ark/` is not gitignored (pre-mortem Scenario 3 mitigation).
+
+### Changed
+
+- **`skills/ark-onboard/SKILL.md` Repair section** — new anchored paragraph at end of `## Path: Partial Ark (Repair)`: "For version drift (plugin updated but project conventions out of date), run `/ark-update`..." Wrapped with `<!-- stream-b: /ark-update cross-reference begin/end -->` HTML-comment anchors for merge-traceability.
+- **Repo-wide check-count phrasing** updated from various stale counts (19/20/21) to final **22** — `/ark-health` tier descriptions, `/ark-onboard` scorecard output, and all inline references. Remaining `checks 7–20` phrases are legitimate range descriptions (Checks 21 and 22 are CLAUDE.md-exempt).
+- **`README.md`** — `/ark-update` row added to skill table under Onboarding. Plugin skill count 18 → 19. Architecture diagram + Repository Structure table updated. Verification check regex comment updated.
+
+### Fixed
+
+- **Gate-flag test coverage** (`cf0ec41`, codex P1 + /ark-code-review P1-A). Gate-flag paths (`ARK_HAS_OMC`, `ARK_CENTRALIZED_VAULT`) added in Step 7 had no test coverage. New `tests/test_gate_flags.py` adds 23 tests pinning `_read_gate_flags` edge cases (unset/"1"/"0"/""/"true"/"yes"/whitespace) and `_iter_target_profile_entries` skip behavior across all gate combinations. Regression-safe for Step 7 wiring.
+
+### Security
+
+- **Path traversal hardening** (codex P1-1). All paths declared in `target-profile.yaml` `PATH_ARGS` tuples are dual-gated through `safe_resolve` — raises `PathTraversalError` if the resolved absolute path is outside the project root. Test coverage across all path-accepting ops.
+- **Symlink-target validation** (`create_file_from_template`). Pre-resolves the template target; refuses with `SymlinkTargetError` if the target resolves outside the project root.
+- **`.mcp.json` clobber guard.** `ensure_mcp_server` refuses to overwrite existing entries without an `_ark_managed: true` sentinel; `McpClobberError` with suggested repair path.
+
+### Testing Acceptance Criteria (Stage-5 ship gate)
+
+Mandatory manual self-test gate — PASSED:
+
+- Full pytest: **237/237 passing** in ~9s.
+- Fixture authenticity check: visual attestation that pre-v1.11, pre-v1.12, pre-v1.13 represent believable pre-v(N) project shape.
+- End-to-end convergence via `migrate.py` CLI on all three historical fixtures: post-state byte-exact to `expected-post/`; `.ark/plugin-version` = `1.14.0`; `.ark/migrations-applied.jsonl` correctly populated; zero `.ark/backups/` writes on non-drift fixtures.
+- Idempotency spot-check: second run on pre-v1.11 emits "clean — nothing to do" with zero file changes, zero JSONL append (codex P1-2 invariant held in the wild).
+- Evidence captured in `vault/Session-Logs/2026-04-14-stage5-self-test-evidence.md`.
+
+### Code Review (Step 11 — two-lane)
+
+- `/ark-code-review` multi-agent synthesis (code-reviewer, code-architect, test-coverage-checker, silent-failure-hunter, test-analyzer) and codex second-opinion pass. 1 consensus P1 fixed (gate-flag tests above). 1 codex-only P1 (non-atomic pointer/log writes — /ark-code-review rated P2) and 10 P2 + 10 P3 findings deferred to v1.1.0 ADR triage.
+- Findings captured in `vault/Session-Logs/2026-04-14-step11-review-findings.md` with ADR candidates (ADR-1 atomic filesystem writes, ADR-2 schema versioning, ADR-3 operational surface hardening).
+
+### Degradation contract
+
+- `/ark-update` is opt-in. Absence has zero impact on existing workflows. `/ark-onboard` repair and `/ark-update` convergence are **peers** — neither chains the other automatically; `/ark-update` refuses on malformed state and points users to `/ark-onboard`.
+- Gate flags degrade safely: unset env vars = unconditional application (backward-compat); non-`"1"`/`"0"` values degrade to "disabled." SKILL.md wrapper only emits `"0"` or `"1"`.
+
+### Spec & Plan
+
+- Deep-interview spec: `.omc/specs/deep-interview-ark-update-framework.md`
+- Ralplan consensus: `.omc/plans/ralplan-ark-update.md` (Architect + Critic APPROVE)
+- Epic: `vault/TaskNotes/Tasks/Epic/Arkskill-004-ark-update-framework.md`
+- Session log: `vault/Session-Logs/S008-Ark-Update-Framework.md`
+
+### Commit convention
+
+All 11-step Stream B commits and the combined release commit follow the intent-line + structured-trailer format (`Confidence:`, `Scope-risk:`, `Not-tested:`) from prior releases.
+
 ## [1.13.0] - 2026-04-13
 
 ### Added
