@@ -190,7 +190,7 @@ Derived values:
 
 ## Shared Diagnostic Checklist
 
-> **Sync note:** `/ark-health` is the authoritative source for all 21 check definitions. If this copy drifts from `/ark-health`, that skill is correct. This copy exists so `/ark-onboard` can run diagnostics without invoking a separate skill.
+> **Sync note:** `/ark-health` is the authoritative source for all 22 check definitions. If this copy drifts from `/ark-health`, that skill is correct. This copy exists so `/ark-onboard` can run diagnostics without invoking a separate skill.
 
 ### Plugins (Checks 1-3)
 
@@ -218,7 +218,7 @@ Derived values:
 | 10 | Index status | Standard | `index.md` exists (staleness is warning, not fail) |
 | 11 | Task counter | Standard | Counter file exists and contains valid integer |
 
-### Integrations (Checks 12-21)
+### Integrations (Checks 12-22)
 
 | # | Check | Tier | Pass Condition |
 |---|-------|------|----------------|
@@ -232,20 +232,22 @@ Derived values:
 | 19 | NotebookLM authenticated | Full | `notebooklm auth check --test` exits 0 |
 | 20 | Vault externalized | Standard (warn-only) | Symlink matches script VAULT_TARGET, OR CLAUDE.md `Vault layout` opt-out row present |
 | 21 | OMC plugin | Standard (tier-agnostic) | `omc` CLI on PATH OR `~/.claude/plugins/cache/omc/` exists; `ARK_SKIP_OMC=true` forces skip |
+| 22 | ark-skills version current? | Standard (warn-only) | `.ark/plugin-version` matches `$ARK_SKILLS_ROOT/VERSION`; `.ark/` is not gitignored |
 
 ### Running Diagnostics
 
-Run all 21 checks in sequence. Never abort on failure. Track results:
+Run all 22 checks in sequence. Never abort on failure. Track results:
 
 ```
 results = {
   1..19: pass|fail|warn|skip|upgrade,
   20: pass|warn,
   21: pass|upgrade|skip,
+  22: pass|warn,
 }
 ```
 
-- Checks 7-20 with CLAUDE.md missing (check 4 = fail): record `skip` — "cannot check — CLAUDE.md missing"; Check 21 is exempt (no CLAUDE.md dependency)
+- Checks 7-20 with CLAUDE.md missing (check 4 = fail): record `skip` — "cannot check — CLAUDE.md missing"; Checks 21 and 22 are exempt (no CLAUDE.md dependency)
 - Check 10 staleness: record `warn` (not fail)
 - Check 20 vault-externalized: record `warn` (not fail, never fails)
 - Checks 15, 16: if check 14 failed, record `skip` — "requires MemPalace (check 14)"
@@ -1689,7 +1691,7 @@ If `.mcp.json` or `.claude/settings.json` was modified (Standard+ tier), include
 
 > **You are at Step 18 of 18 — Final verification.**
 
-Run the full 21-check diagnostic (see Shared Diagnostic Checklist above). Show the scorecard (see Scorecard Output Format below).
+Run the full 22-check diagnostic (see Shared Diagnostic Checklist above). Show the scorecard (see Scorecard Output Format below).
 
 Then show follow-up reminders:
 
@@ -1948,7 +1950,7 @@ cd {vault_path} && python3 _meta/generate-index.py
 
 > **You are at Step 13 of 14 — Diagnostic check.**
 
-Run the full 21-check diagnostic. Show scorecard.
+Run the full 22-check diagnostic. Show scorecard.
 
 ### Migration Step 14: Final commit + reminders
 
@@ -2381,7 +2383,7 @@ After centralized-vault repairs complete, fall through to the generic 5-step rep
 
 > **You are at Step 1 — Diagnostic scan.**
 
-Run all 21 checks. Record which checks fail.
+Run all 22 checks. Record which checks fail.
 
 ### Repair Step 2: Show failures
 
@@ -2492,7 +2494,7 @@ If user accepts, execute Greenfield Steps 13-15 (MemPalace + hook + NotebookLM).
 
 > **You are at Step 5 — Before/after comparison.**
 
-Run all 21 checks again. Show before/after scorecard:
+Run all 22 checks again. Show before/after scorecard:
 
 ```
 Ark Health — Repair Complete
@@ -2502,6 +2504,10 @@ After:  14 pass, 0 fail, 5 upgrade
 
 {full scorecard here}
 ```
+
+<!-- stream-b: /ark-update cross-reference begin -->
+For version drift (plugin updated but project conventions out of date), run `/ark-update` — it replays additive conventions from the current target profile. /ark-update also refuses to run on malformed CLAUDE.md / `.mcp.json` / `.ark/migrations-applied.jsonl` and points back here; this coexistence is intentional. Note: if `.ark/` is gitignored in your project, remove the pattern and commit before running /ark-update.
+<!-- stream-b: /ark-update cross-reference end -->
 
 ---
 
@@ -2513,7 +2519,7 @@ For projects where all Critical + Standard checks pass.
 
 > **You are at Step 1 — Diagnostic scan.**
 
-Run all 21 checks. All Critical and Standard checks should pass.
+Run all 22 checks. All Critical and Standard checks should pass.
 
 ### Healthy Step 2: Show scorecard
 
@@ -2554,7 +2560,7 @@ If user accepts, execute Greenfield Steps 13-15. Then re-run diagnostic and show
 
 If already at Full tier:
 ```
-Checks 1-20 all pass. Full tier active. (Check 21 OMC is tier-agnostic — install separately if interested.)
+Checks 1-20 all pass. Full tier active. (Checks 21 and 22 are tier-agnostic — install OMC or run /ark-update separately if interested.)
 No upgrades available. Run /ark-health anytime to verify.
 ```
 
@@ -2580,6 +2586,7 @@ Use this exact format for all scorecard output:
 | MemPalace          --  not installed |
 | NotebookLM         --  not installed |
 | OMC plugin         --  not installed |
+| Plugin version     OK  v1.14.0       |
 +--------------------------------------+
 | Tier: Standard                       |
 | 0 fixes, 0 warnings, 3 upgrades     |
@@ -2590,7 +2597,7 @@ Use this exact format for all scorecard output:
 **Scorecard rules:**
 
 - Symbols: `OK` = pass, `!!` = fail (has fix), `~~` = warning, `--` = available upgrade
-- Always show all logical groups, never omit a group. Related checks are collapsed: checks 4+5+6 → "CLAUDE.md", checks 7+8 → "Vault structure", checks 14+15 → "MemPalace", checks 17+18+19 → "NotebookLM", check 21 → "OMC plugin"
+- Always show all logical groups, never omit a group. Related checks are collapsed: checks 4+5+6 → "CLAUDE.md", checks 7+8 → "Vault structure", checks 14+15 → "MemPalace", checks 17+18+19 → "NotebookLM", check 21 → "OMC plugin", check 22 → "Plugin version"
 - For `!!` rows: use a short failure description (e.g., `missing`, `malformed`, `not found`)
 - For `--` rows: use `not installed` or `not configured`
 - For `~~` rows: use a short warning (e.g., `stale (5 pages changed)`)
@@ -2608,7 +2615,7 @@ Use this exact format for all scorecard output:
 | Full | No Critical or Standard fail in checks 1-20 (warn is OK); Check 21 is tier-agnostic and does not affect Full tier in either direction |
 | Below Quick | Any critical check (1, 4-9) failing |
 
-**Warn and upgrade checks do not block tier classification.** Checks 10 (index staleness) and 20 (vault externalized) return `warn`; Checks 14/17/18/21 (MemPalace, NotebookLM CLI, NotebookLM config, OMC) return `upgrade` when not installed. All count as "no fail" for tier purposes and still surface in the scorecard.
+**Warn and upgrade checks do not block tier classification.** Checks 10 (index staleness), 20 (vault externalized), and 22 (plugin version) return `warn`; Checks 14/17/18/21 (MemPalace, NotebookLM CLI, NotebookLM config, OMC) return `upgrade` when not installed. All count as "no fail" for tier purposes and still surface in the scorecard.
 
 Note: `/ark-health` defines a "Minimal" tier (checks 1-9 pass, 10-11 skip). The wizard does not use Minimal because it always creates the vault — after `/ark-onboard` runs, the result is always Quick or higher.
 
