@@ -74,6 +74,15 @@ from state import (  # noqa: E402
 from plan import build_plan, render_plan_report  # noqa: E402
 from ops import OP_REGISTRY  # noqa: E402
 
+# Import concrete op modules so their @register_op decorators fire and
+# populate OP_REGISTRY before any phase runs.  Order matches declaration
+# order in target-profile.yaml.
+import ops.ensure_claude_md_section  # noqa: F401, E402
+import ops.ensure_routing_rules_block  # noqa: F401, E402
+import ops.ensure_gitignore_entry  # noqa: F401, E402
+import ops.create_file_from_template  # noqa: F401, E402
+import ops.ensure_mcp_server  # noqa: F401, E402
+
 
 # ---------------------------------------------------------------------------
 # Target-profile file-path keys that require safe_resolve (codex P1-1)
@@ -403,9 +412,21 @@ def _run_phase_2(
 
 
 def _iter_target_profile_entries(target_profile: dict):
-    """Yield all op-entry dicts from target_profile in declaration order."""
+    """Yield all op-entry dicts from target_profile in declaration order.
+
+    Injects ``op`` key for sections whose entries don't carry an explicit ``op``
+    field (e.g. ``ensured_gitignore`` uses ``entry`` + implicit op type).
+    """
+    _IMPLICIT_OPS = {
+        "ensured_gitignore": "ensure_gitignore_entry",
+        "ensured_mcp_servers": "ensure_mcp_server",
+    }
     for section_key in ("managed_regions", "ensured_files", "ensured_gitignore", "ensured_mcp_servers"):
+        implicit_op = _IMPLICIT_OPS.get(section_key)
         for entry in target_profile.get(section_key, []):
+            if implicit_op and not entry.get("op"):
+                entry = dict(entry)
+                entry["op"] = implicit_op
             yield entry
 
 

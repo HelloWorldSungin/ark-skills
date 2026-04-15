@@ -240,8 +240,19 @@ class CreateFileFromTemplate(TargetProfileOp):
         target.write_bytes(template_bytes)
 
         # Optional mode bits (e.g. 0o755 for executable scripts).
-        mode: int | None = args.get("mode")
-        if mode is not None:
+        # Target-profile YAML may supply mode as a string (e.g. "0o755") or
+        # as an integer (0o755 when the YAML parser recognises octal literals).
+        # We normalise both via int(str(mode), 0) which handles "0o755", "493",
+        # and plain int values uniformly.
+        mode_raw = args.get("mode")
+        if mode_raw is not None:
+            try:
+                mode: int = int(str(mode_raw), 0) if isinstance(mode_raw, str) else int(mode_raw)
+            except (ValueError, TypeError) as exc:
+                raise ValueError(
+                    f"Invalid mode value {mode_raw!r} in target-profile: {exc}. "
+                    f"Use an octal literal string (e.g. '0o755') or an integer."
+                ) from exc
             os.chmod(target, mode)
 
         return ApplyResult(
