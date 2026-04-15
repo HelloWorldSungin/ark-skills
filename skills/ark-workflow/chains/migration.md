@@ -81,7 +81,7 @@
 16. Session log
 17. `/claude-history-ingest`
 
-*Note: Path B uses `/team` as the execution engine (coordinated cross-module migration via `team-plan → team-prd → team-exec → team-verify`). Handback contract: `references/omc-integration.md` § Section 4.4 — `<<HANDBACK>>` fires after `team-verify`, **before** `team-fix`. Bounded remediation (`team-fix`) is reserved for Ark's review loop if `/ark-code-review` concurs with residual defects.*
+*Note: Path B uses `/team` as the execution engine (coordinated cross-module migration via `team-plan → team-prd → team-exec → team-verify`). Handback contract: `references/omc-integration.md` § Section 4.2 — `<<HANDBACK>>` fires after `team-verify`, **before** `team-fix`. Bounded remediation (`team-fix`) is reserved for Ark's review loop if `/ark-code-review` concurs with residual defects.*
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
@@ -90,6 +90,6 @@
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/team` — coordinated cross-module migration; follows omc-reference pipeline `team-plan → team-prd → team-exec → team-verify`. See `references/omc-integration.md` § Section 4.4 for the handback boundary.
+3. `/team` — coordinated cross-module migration; follows omc-reference pipeline `team-plan → team-prd → team-exec → team-verify`. See `references/omc-integration.md` § Section 4.2 for the handback boundary.
 4. `<<HANDBACK>>` — Ark resumes authority after `team-verify`, **before** `team-fix` (bounded remediation reserved for Ark's review). `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
 5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward. If Ark review concurs with residual defects from `team-verify`, invoke `team-fix` from within Ark's review; otherwise proceed to `/ship`. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (/team row).
