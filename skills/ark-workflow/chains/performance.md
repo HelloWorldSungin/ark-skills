@@ -21,7 +21,7 @@
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
 4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
 5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 
@@ -42,18 +42,18 @@
 10. `/wiki-update` (if vault)
 11. Session log
 
-*Note: Path B uses `/ralph` as the execution engine (loop-to-verified until benchmark target met). Handback contract: `references/omc-integration.md` § Section 4.2.*
+*Note: Path B uses `/autopilot` as the execution engine. Benchmark-target loops are handled inside autopilot's Phase 2 (Execution via internal /ralph + /ultrawork). Handback contract: `references/omc-integration.md` § Section 4.1.*
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
-*Front-loaded judgment + loop-to-verified execution + Ark closeout.*
+*Front-loaded judgment + autonomous execution + Ark closeout.*
 
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/ralph` — loop-to-verified against benchmark target; exits on success criterion met. See `references/omc-integration.md` § Section 4.2 for the handback boundary.
-4. `<<HANDBACK>>` — Ark resumes authority after `/ralph`'s success exit; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
-5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (/ralph row).
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
+5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 
 ## Heavy
 
@@ -84,15 +84,15 @@
 17. Session log
 18. `/claude-history-ingest`
 
-*Note: Path B uses `/ralph` as the execution engine (loop-to-verified until benchmark target met). Handback contract: `references/omc-integration.md` § Section 4.2.*
+*Note: Path B uses `/autopilot` as the execution engine. Benchmark-target loops are handled inside autopilot's Phase 2 (Execution via internal /ralph + /ultrawork). Handback contract: `references/omc-integration.md` § Section 4.1.*
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
-*Front-loaded judgment + loop-to-verified execution + Ark closeout.*
+*Front-loaded judgment + autonomous execution + Ark closeout.*
 
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/ralph` — loop-to-verified against benchmark target; exits on success criterion met. See `references/omc-integration.md` § Section 4.2 for the handback boundary.
-4. `<<HANDBACK>>` — Ark resumes authority after `/ralph`'s success exit; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
-5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (/ralph row).
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
+5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).

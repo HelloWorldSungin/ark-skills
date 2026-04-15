@@ -35,8 +35,12 @@ User-facing axis vs. implementation-side axis — these are orthogonal.
   decision point. User sees each step, approves each transition. This is the
   default and is never removed.
 - **OMC-powered (Path B):** front-loaded judgment (`/deep-interview`), consensus
-  planning (`/omc-plan --consensus`), autonomous execution (`/autopilot` | `/ralph`
-  | `/ultrawork` | `/team`), then handback to Ark for closeout.
+  planning (`/omc-plan --consensus`), autonomous execution via `/autopilot`
+  (uniform default, auto-skips Phase 0+1 when Path B's pre-placed artifacts
+  are present) or `/team` (Migration Heavy only — see § Section 4.2), then
+  handback to Ark for closeout. Per the 2026-04-14 uniformity decision, Path B
+  no longer routes directly to `/ralph` or `/ultrawork` as standalone engines;
+  those engines are invoked internally inside autopilot's Phase 2 (Execution).
 
 **Implementation-side axis: _checkpoint-density_.** Path A is high checkpoint-density
 (user approves every step); Path B is low checkpoint-density (user approves the
@@ -54,22 +58,23 @@ Which OMC engine is the natural fit per chain variant.
 | Variant | Primary OMC engine | Rationale |
 |---------|--------------------|-----------|
 | Greenfield Light / Medium | `/autopilot` | Vanilla pipeline; single module |
-| Greenfield Heavy | `/autopilot` or `/ultrawork` | Heavy multi-module benefits from parallel lanes |
+| Greenfield Heavy | `/autopilot` | Heavy multi-module parallelism handled inside autopilot's Phase 2 (Execution via internal /ultrawork) |
 | Bugfix Light / Medium | `/autopilot` | Linear investigation + fix |
-| Bugfix Heavy | `/autopilot` or `/ralph` | Loop-to-verified when reproduction is finicky |
+| Bugfix Heavy | `/autopilot` | Reproduction-finicky bugs handled inside autopilot's Phase 2 (Execution via internal /ralph loop) |
 | Hygiene Light / Medium / Heavy | `/autopilot` | Cleanup follows consensus plan deterministically |
 | Hygiene Audit-Only | `/autopilot` (findings mode) | Findings-only; no code mutation |
 | Ship Standalone | `/autopilot` | Discouraged but available; Ship is already mechanical |
 | Knowledge-Capture Light | `/autopilot` | Capture + synthesis fits consensus-then-execute |
 | Knowledge-Capture Full | — (no Path B) | Full capture is too broad/branchy for auto-routed single-engine execution; users invoke `/omc-teams 1:gemini` manually when desired |
 | Migration Light / Medium | `/autopilot` | Linear upgrade path |
-| Migration Heavy | `/team` | Cross-module coordination benefits from multi-agent |
+| Migration Heavy | `/team` | Cross-module coordination benefits from multi-agent (sole non-/autopilot chain variant) |
 | Performance Light | `/autopilot` | Discouraged but available |
-| Performance Medium / Heavy | `/ralph` | Loop until benchmark target met |
+| Performance Medium / Heavy | `/autopilot` | Benchmark-target loops handled inside autopilot's Phase 2 (Execution via internal /ralph loop) |
 
-When the engine differs from `/autopilot`, the chain's Path B block annotates the
-suggestion. All engines use the same `<<HANDBACK>>` marker but with
-engine-specific handback-boundary semantics (see Section 4).
+Migration Heavy uses `/team`; all other Path B variants use `/autopilot`
+(the 2026-04-14 uniformity decision — see memory file
+`project_ark_workflow_uniform_path_b.md` and audit R5). Engine-specific
+handback-boundary semantics are documented in § Section 4.
 
 ---
 
@@ -240,7 +245,9 @@ consult it for "is the chain complete" determination.
 ### Per-Variant Expected Closeout Table
 
 What `check_path_b_coverage.py` validates against — byte-identity on
-canonicalized blocks, 6 allowed shapes.
+canonicalized blocks, 4 allowed shapes (post-uniformity: Vanilla + /team +
+Special-A + Special-B; the previously-enumerated /ralph and /ultrawork
+shapes were retired in R2).
 
 Rows are grouped — variants sharing identical shape/engine/closeout collapse
 into a single row. Expand parenthetical labels against the variant column to
@@ -249,8 +256,7 @@ and therefore no row in this table.
 
 | Variants (grouped) | Shape | Engine (step 3) | Starts at | Ends at |
 |---|---|---|---|---|
-| Greenfield Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
-| Greenfield Heavy | /ultrawork | `/ultrawork` | `/ark-code-review --thorough` | `/claude-history-ingest` |
+| Greenfield Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Bugfix Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Hygiene Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Hygiene Audit-Only | Special-A | `/autopilot` | `/wiki-update` | STOP (findings-only) |
@@ -258,15 +264,15 @@ and therefore no row in this table.
 | Knowledge-Capture Light | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
 | Migration Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
 | Migration Heavy | /team | `/team` | `/ark-code-review --thorough` | `/claude-history-ingest` |
-| Performance Light | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
-| Performance Medium / Heavy | /ralph | `/ralph` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
+| Performance Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 
-11 rows representing **18 variants** across **6 distinct shapes** (Vanilla 12 +
-/ralph 2 + /ultrawork 1 + /team 1 + Special-A 1 + Special-B 1).
-`check_path_b_coverage.py` canonicalizes each block (strip scenario headers and
-weight markers) and hashes it; expected distinct hashes = 6; expected total
-blocks = 18. The CI script reads chain files directly, so row-grouping in this
-table does not affect coverage enforcement.
+9 rows representing **18 variants** across **4 distinct shapes** (Vanilla 15 +
+/team 1 + Special-A 1 + Special-B 1). `check_path_b_coverage.py` canonicalizes
+each block (strip scenario headers and weight markers) and hashes it;
+expected distinct hashes = 4; expected total blocks = 18. The CI script
+reads chain files directly, so row-grouping in this table does not affect
+coverage enforcement. (Ship Standalone's Path B block is removed in a
+subsequent commit; at that point the totals drop to 17 blocks / Vanilla 14.)
 
 ---
 
@@ -275,7 +281,7 @@ table does not affect coverage enforcement.
 Three templates the chain files copy in verbatim (with per-variant weight/headline
 substitution). These are what `check_path_b_coverage.py` hashes against.
 
-### Template Vanilla (16 variants)
+### Template Vanilla (15 variants; drops to 14 after Ship Standalone Path B removal)
 
 ```markdown
 ### Path B (OMC-powered — if HAS_OMC=true)
@@ -285,7 +291,7 @@ substitution). These are what `check_path_b_coverage.py` hashes against.
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
 4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
 5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --{weight}` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 ```
@@ -303,7 +309,7 @@ Heavy → `--thorough`. (Ship Standalone always uses `--thorough`.)
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on audit scope (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus audit plan
-3. `/autopilot` — execution only; produces findings document
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts; produces findings document
 4. `<<HANDBACK>>` — Ark resumes authority
 5. **Ark closeout (Special-A):** `/wiki-update` (record findings in vault) → STOP. No code review, no ship — findings-only chain. See `references/omc-integration.md` § Section 4 (Special-A row).
 ```
@@ -321,7 +327,7 @@ substitute `/claude-history-ingest` as step 1.
 0. `/ark-context-warmup` — same as Path A
 1. `/claude-history-ingest` — mine recent conversations as capture source (substitutes for `/deep-interview` since capture is reflective)
 2. `/omc-plan --consensus` — plan the capture (wiki pages, tags, cross-links)
-3. `/autopilot` — execution only; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
 4. `<<HANDBACK>>` — Ark resumes authority
 5. **Ark closeout (Special-B):** `/wiki-update` (finalize session log + epic) → `/claude-history-ingest` (final mining sweep). No code review, no ship — capture-only chain. See `references/omc-integration.md` § Section 4 (Special-B row).
 ```

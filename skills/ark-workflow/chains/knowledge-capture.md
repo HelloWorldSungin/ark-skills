@@ -17,7 +17,7 @@ Requires vault — if `HAS_VAULT=false`, tell the user to run `/wiki-setup` firs
 0. `/ark-context-warmup` — same as Path A
 1. `/claude-history-ingest` — mine recent conversations as capture source (substitutes for `/deep-interview` since capture is reflective)
 2. `/omc-plan --consensus` — plan the capture (wiki pages, tags, cross-links)
-3. `/autopilot` — execution only; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
 4. `<<HANDBACK>>` — Ark resumes authority
 5. **Ark closeout (Special-B):** `/wiki-update` (finalize session log + epic) → `/claude-history-ingest` (final mining sweep). No code review, no ship — capture-only chain. See `references/omc-integration.md` § Section 4 (Special-B row).
 
