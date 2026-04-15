@@ -9,13 +9,15 @@ tags:
   - dual-mode
   - ark-workflow
   - handback-boundary
-summary: "Dual-mode execution — Ark-native (Path A, high checkpoint-density) and OMC-powered (Path B, low checkpoint-density) — co-exists per chain variant with discoverability-biased surfacing, variant-inherited handback with enumerated special cases, and byte-identity CI gating. Patterns replicate to any orchestrator skill that wants to add an autonomous alternative without removing the user-in-the-loop default."
+summary: "Dual-mode execution — Ark-native (Path A, high checkpoint-density) and OMC-powered (Path B, low checkpoint-density) — co-exists per chain variant with discoverability-biased surfacing, variant-inherited handback with enumerated special cases, and byte-identity CI gating. Patterns replicate to any orchestrator skill that wants to add an autonomous alternative without removing the user-in-the-loop default. (Post-2026-04-15 refactor: variants dropped to 17 and classifier shapes to 4 under the uniformity decision — see [[Path-B-Canonicalization-Hash-vs-Shape]].)"
 source-sessions:
   - "[[S007-OMC-Integration-Design]]"
+  - "[[S010-Path-B-Uniformity-Refactor]]"
 source-tasks:
   - "[[Arkskill-003-omc-integration]]"
+  - "[[Arkskill-006-path-b-uniformity]]"
 created: 2026-04-13
-last-updated: 2026-04-13
+last-updated: 2026-04-15
 ---
 
 # Execution Philosophy — Dual-Mode Ark-Native ↔ OMC-Powered
@@ -29,8 +31,13 @@ Path B front-loads judgment (`/deep-interview`), delegates planning + execution
 to OMC, and hands control back to Ark for closeout. Discoverability is biased
 toward surfacing Path B when any of four signals fires (OR-any rule), mitigated
 by a 3-button UX that always offers `[Use Path A]`. Byte-identity CI
-(`check_path_b_coverage.py`) enforces that 19 variants collapse to ≤3 allowed
-canonicalized shapes — mechanical gate instead of hand-audit.
+(`check_path_b_coverage.py`) enforces variant count + shape distribution —
+mechanical gate instead of hand-audit. Post-2026-04-15 uniformity refactor
+the contract is 17 variants / 4 classifier shapes / 5 raw-text hashes (the
+classifier keys on engine + closeout markers; raw hashes diverge slightly
+when pre-steps like `/external-context` lengthen the block body — see
+[[Path-B-Canonicalization-Hash-vs-Shape]] for the classifier-vs-hash
+pattern).
 
 ## Key Insights
 
