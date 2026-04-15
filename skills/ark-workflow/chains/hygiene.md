@@ -76,7 +76,7 @@
 4. `/cso` — infrastructure, dependency, secrets audit (this IS the mandatory `/cso` run — no duplicate later)
 5. `/test-driven-development` — tests before restructuring
 6. Implement cleanup
-7. `/ark-code-review --thorough` + `/codex` → `/simplify`
+7. `/ark-code-review --thorough` + `/ask codex` → `/simplify`
 8. `/ship` → `/land-and-deploy`
 9. `/canary` (if deploy risk)
 10. `/wiki-update` (if vault)

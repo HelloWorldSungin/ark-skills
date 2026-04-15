@@ -64,7 +64,7 @@
 1. `/investigate` — deep profiling, identify systemic bottlenecks
 2. `/benchmark` — comprehensive baseline
 3. `/brainstorming` — optimization strategy (caching architecture, query redesign, etc.)
-4. `/codex` — review the optimization plan
+4. `/ccg` — multi-advisor optimization plan review
 5. Commit plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-5`)
 
 *Session 2 — Implementation:*
@@ -72,7 +72,7 @@
 7. `/test-driven-development` — performance regression tests
 8. Implement optimizations in stages
 9. `/benchmark` — verify improvement per stage
-10. `/ark-code-review --thorough` + `/codex` → `/simplify`
+10. `/ark-code-review --thorough` + `/ask codex` → `/simplify`
 11. `/cso` (if security-relevant)
 12. `/ship` → `/land-and-deploy`
 13. `/canary` — **mandatory for Heavy performance changes** (not conditional)

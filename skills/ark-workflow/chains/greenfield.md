@@ -28,7 +28,7 @@
 *Session 1 — Design:*
 0. `/ark-context-warmup` — load recent + relevant project context
 1. `/brainstorming` — explore intent, propose approaches, write spec
-2. `/codex` — review the spec
+2. `/ask codex` — single-advisor spec review
 3. Commit spec → **end session, start fresh for implementation** (set `handoff_marker: after-step-3`)
 
 *Session 2 — Implementation:*
@@ -63,9 +63,9 @@
 *Session 1 — Design & Planning:*
 0. `/ark-context-warmup` — load recent + relevant project context
 1. `/brainstorming` — explore intent, propose approaches, write spec
-2. `/codex` — review the spec
+2. `/ccg` — multi-advisor spec review (architecture + alternatives, synthesized)
 3. `/writing-plans` — break into phased implementation plan
-4. `/codex` — review the plan
+4. `/ccg` — multi-advisor plan review
 5. Commit spec + plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-5`)
 
 *Session 2 — Implementation:*
@@ -73,7 +73,7 @@
 7. `/executing-plans` with `/test-driven-development` per step
 8. `/subagent-driven-development` — parallelize independent modules
 9. `/checkpoint` (optional — if pausing mid-implementation)
-10. `/ark-code-review --thorough` + `/codex` → `/simplify`
+10. `/ark-code-review --thorough` + `/ask codex` → `/simplify`
 11. `/qa` (if UI)
 12. `/design-review` (if UI)
 13. `/cso` (if security-relevant)

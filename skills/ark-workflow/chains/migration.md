@@ -61,14 +61,14 @@
 0. `/ark-context-warmup` — load recent + relevant project context
 1. `/investigate` — audit all usage, map blast radius
 2. `/brainstorming` — migration strategy (big bang vs incremental, feature flags, rollback plan)
-3. `/codex` — review the migration plan
+3. `/ccg` — multi-advisor migration plan review
 4. Commit migration plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-4`)
 
 *Session 2 — Implementation:*
 5. Read migration plan
 6. `/test-driven-development` — tests for new platform/framework before migrating
 7. Implement migration in stages (per the plan)
-8. `/ark-code-review --thorough` + `/codex` → `/simplify`
+8. `/ark-code-review --thorough` + `/ask codex` → `/simplify`
 9. `/cso` (if security-relevant)
 10. `/ship` → `/land-and-deploy`
 11. `/canary` — **mandatory for Heavy migrations** (not conditional)
