@@ -1,6 +1,6 @@
 # Ark Skills Plugin
 
-Claude Code plugin providing 18 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
+Claude Code plugin providing 19 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
 
 ## Installation
 
@@ -66,6 +66,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 | `/data-ingest` | Vault Maintenance | Process logs, transcripts, exports into vault pages | Adapted from obsidian-wiki |
 | `/ark-onboard` | Onboarding | Interactive setup wizard — greenfield, migration, repair | New |
 | `/ark-health` | Onboarding | Diagnostic check for Ark ecosystem health | New |
+| `/ark-update` | Onboarding | Version-driven migration framework; converges downstream projects to the current ark-skills target profile; replays pending destructive migrations. Distinct from /ark-onboard repair (failure-driven). | New |
 
 ## Skill Documentation
 
@@ -105,7 +106,9 @@ Key operations: `/wiki-lint` audits vault health (broken links, missing frontmat
 
 **`/ark-onboard`** — Interactive setup wizard and single entry point for new Ark projects. Detects project state (greenfield, non-Ark vault, partial Ark, healthy) and guides setup through Quick, Standard, or Full tiers. Absorbs `/wiki-setup` functionality. Handles vault creation, CLAUDE.md configuration, Obsidian plugin setup, TaskNotes MCP, MemPalace, history hook, and NotebookLM.
 
-**`/ark-health`** — Diagnostic check that runs 20 checks across plugins, project configuration, vault structure, and integrations. Produces a scored scorecard with actionable fix and upgrade instructions. No auto-fix — always points to `/ark-onboard` for remediation.
+**`/ark-health`** — Diagnostic check that runs 22 checks across plugins, project configuration, vault structure, integrations, and plugin versioning. Produces a scored scorecard with actionable fix and upgrade instructions. No auto-fix — always points to `/ark-onboard` for remediation.
+
+**`/ark-update`** — Version-driven migration framework. Converges downstream projects to the current ark-skills target profile: replays additive conventions (managed CLAUDE.md regions, gitignore entries, MCP server rows, templated files) via HTML-comment-marker idempotency, then replays any pending destructive migrations declared in `skills/ark-update/migrations/*.yaml`. State is tracked in `.ark/plugin-version` and `.ark/migrations-applied.jsonl`. Drift inside managed regions is backed up with a `.bak.meta.json` provenance sidecar. POSIX-only. Refuses on malformed CLAUDE.md / `.mcp.json` / `.ark/migrations-applied.jsonl` and hands off to `/ark-onboard` repair. Distinct from `/ark-onboard` repair (which is failure-driven); `/ark-update` is version-driven.
 
 ## Context-Discovery Pattern
 
@@ -126,7 +129,7 @@ ark-skills (Claude Code plugin)
 ├── .claude-plugin/
 │   ├── plugin.json           # Plugin metadata (ark-skills v1.13.0)
 │   └── marketplace.json      # Repo-level plugin registry
-└── skills/                   # 18 shared skills
+└── skills/                   # 19 shared skills
       ↓ context-discovery
 Project CLAUDE.md → vault path, task prefix, deployment targets
       ↓
@@ -145,7 +148,7 @@ For manual setup, see [docs/onboarding-guide.md](docs/onboarding-guide.md).
 | Directory | Purpose |
 |-----------|---------|
 | `.claude-plugin/` | Plugin manifest (plugin.json, marketplace.json) |
-| `skills/` | 18 shared skill definitions (SKILL.md files) |
+| `skills/` | 19 shared skill definitions (SKILL.md files) |
 | `docs/` | Design specs, plans, onboarding guide |
 | `ArkNode-AI/` | Submodule: AI trading project (skill source for generalization) |
 | `ArkNode-Poly/` | Submodule: Polymarket project (skill source for generalization) |
@@ -170,8 +173,8 @@ For manual setup, see [docs/onboarding-guide.md](docs/onboarding-guide.md).
 ### Verification Checks
 
 ```bash
-# All 18 skills exist
-find skills -name SKILL.md | wc -l  # → 18
+# All 19 skills exist
+find skills -name SKILL.md | wc -l  # → 19
 
 # Zero hardcoded project references
 grep -rn "ArkPoly\|ArkSignal\|trading-signal-ai\|arknode-poly" skills/
