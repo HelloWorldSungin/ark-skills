@@ -266,7 +266,7 @@ shapes were retired in R2).
 Rows are grouped — variants sharing identical shape/engine/closeout collapse
 into a single row. Expand parenthetical labels against the variant column to
 recover the 17 per-variant assignments. Knowledge-Capture Full has no Path B
-(removed in v1.14.0); Ship Standalone has no Path B (removed in R17 of the
+(removed in v1.15.0); Ship Standalone has no Path B (removed in R17 of the
 2026-04-15 uniformity refactor) — neither has a row in this table.
 
 | Variants (grouped) | Shape | Engine (step 3) | Starts at | Ends at |
@@ -397,7 +397,7 @@ hard failure when either CLI is absent, every chain-level invocation is
 marked `[probe-gated §7]` skips with a one-line notice when its prerequisites
 are missing and the chain continues without that advisor.
 
-This back-ports the v1.14.0 internal probe contract from
+This back-ports the v1.15.0 internal probe contract from
 `skills/ark-code-review/SKILL.md` (External Second Opinion section) — chains
 gain the same graceful-degradation shape without the full synthesis layer.
 
@@ -440,7 +440,7 @@ Call sites of the form `/ark-code-review --thorough + /ask codex → /simplify`
 split the probe gate across two layers:
 
 - **`/ark-code-review --thorough`** handles its own internal codex/gemini
-  probe via the v1.14.0 External Second Opinion contract — chains do **not**
+  probe via the v1.15.0 External Second Opinion contract — chains do **not**
   gate it.
 - **`/ask codex`** appended after ark-code-review is a separate second-opinion
   invocation (vendor-only lens on the review itself) and IS probe-gated by
@@ -470,4 +470,4 @@ internal probe, not chain-level `/ask codex` / `/ccg` call sites.
 - Bash probe + Step 6 logic: `skills/ark-workflow/SKILL.md`
 - CI coverage check: `skills/ark-context-warmup/scripts/check_path_b_coverage.py`
 - CI drift lint: `skills/ark-context-warmup/scripts/check_chain_drift.py`
-- External Second Opinion v1.14.0 precedent: `skills/ark-code-review/SKILL.md` § External Second Opinion
+- External Second Opinion v1.15.0 precedent: `skills/ark-code-review/SKILL.md` § External Second Opinion
