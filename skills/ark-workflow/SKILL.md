@@ -61,6 +61,23 @@ fi
 [ "$ARK_SKIP_OMC" = "true" ] && HAS_OMC=false
 export HAS_OMC
 echo "HAS_OMC=$HAS_OMC"
+
+# Vendor CLI availability — gates `/ask codex` and `/ccg` chain steps
+# (see references/omc-integration.md § Section 7 External Advisor Probe Gates)
+# Canonical binary names in § Section 0 (CODEX_CLI_BIN, GEMINI_CLI_BIN)
+if command -v codex >/dev/null 2>&1; then
+  HAS_CODEX=true
+else
+  HAS_CODEX=false
+fi
+if command -v gemini >/dev/null 2>&1; then
+  HAS_GEMINI=true
+else
+  HAS_GEMINI=false
+fi
+export HAS_CODEX HAS_GEMINI
+echo "HAS_CODEX=$HAS_CODEX"
+echo "HAS_GEMINI=$HAS_GEMINI"
 ```
 
 6. Store these values for condition resolution in later steps.

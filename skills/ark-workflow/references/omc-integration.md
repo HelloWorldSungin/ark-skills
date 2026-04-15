@@ -17,6 +17,10 @@ no inline re-quotation.
 |----------|-------|---------|
 | `OMC_CACHE_DIR` | `~/.claude/plugins/cache/omc` | `skills/ark-workflow/SKILL.md` (bash), `skills/ark-context-warmup/scripts/availability.py` (Python) |
 | `OMC_CLI_BIN` | `omc` | `skills/ark-workflow/SKILL.md` (bash probe uses `command -v omc`) |
+| `CODEX_CLI_BIN` | `codex` | `skills/ark-workflow/SKILL.md` (bash probe uses `command -v codex`); gates `/ask codex` + `/ccg` chain steps |
+| `GEMINI_CLI_BIN` | `gemini` | `skills/ark-workflow/SKILL.md` (bash probe uses `command -v gemini`); gates `/ccg` chain steps |
+| `CODEX_INSTALL_URL` | `https://github.com/openai/codex` | `§ Section 7` skip-notice template |
+| `GEMINI_INSTALL_URL` | `https://github.com/google/gemini-cli` | `§ Section 7` skip-notice template |
 | `INSTALL_HINT_URL` | `https://github.com/anthropics/oh-my-claudecode` | `/ark-workflow` Step 6 degradation footer |
 | `HANDBACK_MARKER` | `<<HANDBACK>>` | Every Path B block in `skills/ark-workflow/chains/*.md` |
 
@@ -378,6 +382,85 @@ not compose through the same auto-skip mechanism.
 
 ---
 
+## Section 7 — External Advisor Probe Gates
+
+`/ark-workflow` chains invoke two families of external-advisor skills outside
+the `/ark-code-review` boundary:
+
+- **`/ask codex`** — single-vendor second opinion; requires `codex` CLI on PATH.
+- **`/ccg`** — tri-model orchestration (Claude + Codex + Gemini); requires
+  both `codex` AND `gemini` CLIs on PATH.
+
+These are opt-in power tools that many hosts will lack. To prevent mid-chain
+hard failure when either CLI is absent, every chain-level invocation is
+**probe-gated**: Step 1 of `/ark-workflow` probes for CLI presence; each step
+marked `[probe-gated §7]` skips with a one-line notice when its prerequisites
+are missing and the chain continues without that advisor.
+
+This back-ports the v1.14.0 internal probe contract from
+`skills/ark-code-review/SKILL.md` (External Second Opinion section) — chains
+gain the same graceful-degradation shape without the full synthesis layer.
+
+### Shell probe
+
+Extends the `HAS_OMC` probe in `skills/ark-workflow/SKILL.md` Step 1:
+
+```bash
+# Vendor CLI availability — checked alongside HAS_OMC in Step 1
+# Canonical binary names per § Section 0 (CODEX_CLI_BIN, GEMINI_CLI_BIN)
+if command -v codex >/dev/null 2>&1; then
+  HAS_CODEX=true
+else
+  HAS_CODEX=false
+fi
+if command -v gemini >/dev/null 2>&1; then
+  HAS_GEMINI=true
+else
+  HAS_GEMINI=false
+fi
+export HAS_CODEX HAS_GEMINI
+echo "HAS_CODEX=$HAS_CODEX"
+echo "HAS_GEMINI=$HAS_GEMINI"
+```
+
+### Gate resolution and skip notices
+
+| Step wording | Requires | Skip condition | Skip notice (one line, emitted in place of the invocation) |
+|---|---|---|---|
+| `/ask codex [probe-gated §7]` | `HAS_CODEX=true` | `HAS_CODEX=false` | `SKIP /ask codex — codex CLI not on PATH. Install: https://github.com/openai/codex` |
+| `/ccg [probe-gated §7]` | `HAS_CODEX=true` AND `HAS_GEMINI=true` | Either false | `SKIP /ccg — requires both codex and gemini on PATH. Missing: {list}. Install: https://github.com/openai/codex, https://github.com/google/gemini-cli` |
+
+After emitting the skip notice, the chain continues with the next step. No
+spec/plan quality gate is lowered — these advisors are additive second
+opinions, not blocking reviews.
+
+### Interaction with `/ark-code-review --thorough`
+
+Call sites of the form `/ark-code-review --thorough + /ask codex → /simplify`
+split the probe gate across two layers:
+
+- **`/ark-code-review --thorough`** handles its own internal codex/gemini
+  probe via the v1.14.0 External Second Opinion contract — chains do **not**
+  gate it.
+- **`/ask codex`** appended after ark-code-review is a separate second-opinion
+  invocation (vendor-only lens on the review itself) and IS probe-gated by
+  this section.
+
+When `HAS_CODEX=false`, the chain reduces to `/ark-code-review --thorough → /simplify`
+(ark-code-review still runs; its internal probe emits its own skip notice for
+the vendor fan-out inside `--thorough`).
+
+### Emergency rollback
+
+`ARK_SKIP_OMC=true` does **not** affect `HAS_CODEX` / `HAS_GEMINI` — vendor
+CLIs are independent of OMC installation. To force-disable external-advisor
+fan-out at the chain level, unset `codex` / `gemini` from `PATH` for the
+session, or uninstall the CLIs. The `--no-multi-vendor` / `--no-xv` flag
+documented in `skills/ark-code-review/SKILL.md` affects only that skill's
+internal probe, not chain-level `/ask codex` / `/ccg` call sites.
+
+---
+
 ## Cross-References
 
 - Implementation plan: `.omc/plans/2026-04-13-omc-ark-workflow-integration.md`
@@ -386,3 +469,5 @@ not compose through the same auto-skip mechanism.
 - Availability probe: `skills/ark-context-warmup/scripts/availability.py`
 - Bash probe + Step 6 logic: `skills/ark-workflow/SKILL.md`
 - CI coverage check: `skills/ark-context-warmup/scripts/check_path_b_coverage.py`
+- CI drift lint: `skills/ark-context-warmup/scripts/check_chain_drift.py`
+- External Second Opinion v1.14.0 precedent: `skills/ark-code-review/SKILL.md` § External Second Opinion
