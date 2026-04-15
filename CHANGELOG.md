@@ -2,6 +2,136 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.0] - 2026-04-15
+
+Two themes in one release: (1) **Path B uniformity** — every chain variant now
+routes to a single execution engine (`/autopilot`) in Path B, closing audit
+items R1, R2, R4, R10, R11, R15, R16, R17; and (2) **External advisor
+probe-gating** — the v1.15.0 `HAS_CODEX` / `HAS_GEMINI` probe contract from
+`/ark-code-review` is back-ported to chain-level `/ask codex` and `/ccg` call
+sites, closing audit item R3.
+
+Audit reference: `.ark-workflow/audits/omc-routing-audit-2026-04-14.md`
+(implementation addendum section "Completed recommendations").
+
+### Added
+
+- **§ Section 7 "External Advisor Probe Gates"** in
+  `skills/ark-workflow/references/omc-integration.md` — canonical probe
+  contract for chain-level `/ask codex` and `/ccg` invocations, including
+  shell probe, gate-resolution table, one-line skip-notice templates, and
+  documented interaction with `/ark-code-review --thorough`'s internal
+  v1.14.0 probe. Resolves audit **R3** (Medium).
+- **`HAS_CODEX` and `HAS_GEMINI` bash probes** in `skills/ark-workflow/SKILL.md`
+  Step 1, exported alongside `HAS_OMC`. Same `command -v` pattern; vendor
+  probes are independent of OMC (`ARK_SKIP_OMC=true` does NOT affect them).
+- **`[probe-gated §7]` markers** on all 10 chain-level `/ask codex` and
+  `/ccg` invocations across `bugfix.md`, `greenfield.md`, `performance.md`,
+  `migration.md`, `hygiene.md`. Distribution: bugfix:1, greenfield:4,
+  performance:2, migration:2, hygiene:1.
+- **Canonical constants** `CODEX_CLI_BIN`, `GEMINI_CLI_BIN`,
+  `CODEX_INSTALL_URL`, `GEMINI_INSTALL_URL` in `omc-integration.md` § 0.
+- **`/external-context` pre-step** for Migration Medium + Heavy Path B
+  (framework-migration contexts benefit from external documentation lookup
+  before autopilot execution). Resolves audit **R10** (Medium).
+- **`/visual-verdict` closeout step** for Greenfield Medium + Heavy Path B
+  when a UI design reference exists; added Condition Resolution entry for
+  "UI with design reference" in `skills/ark-workflow/SKILL.md`. Resolves
+  audit **R11** (Medium).
+- **`check_chain_drift.py`** CI lint at
+  `skills/ark-context-warmup/scripts/check_chain_drift.py` — scans chain
+  files + `omc-integration.md` for banned patterns (`OMC_EXECUTION_ONLY`,
+  incorrect autopilot phase wording, stale `/ralph` or `/ultrawork` as
+  step-3 engine). Pytest harness included; target globs: chains + integration
+  reference. Resolves audit **R4** (High).
+- **"External advisor CLI missing" entry** in
+  `skills/ark-workflow/references/troubleshooting.md` — points at § Section 7
+  for the probe contract, skip notices, and install URLs.
+
+### Changed
+
+- **Path B engine collapse.** All 17 Path B blocks across chain files now
+  route to `/autopilot` as the step-3 engine. Greenfield Heavy's direct
+  `/ultrawork` step-3 and Performance Medium + Heavy's direct `/ralph`
+  step-3 have been retired at the chain layer; those engines still run
+  **inside** autopilot's Phase 2 (Execution) per
+  `omc-integration.md` § Section 4.1. Resolves audit **R2** (High).
+- **Autopilot phase numbering** corrected in
+  `omc-integration.md` Section 4. Phase 2 is Execution, Phase 3 is QA,
+  Phase 4 is Validation, Phase 5 is Cleanup (authoritative source:
+  `~/.claude/plugins/cache/omc/oh-my-claudecode/4.11.5/skills/autopilot/SKILL.md:39-73`).
+  Deleted the fictional `OMC_EXECUTION_ONLY` env-var section and all
+  references to "Phase 5 (docs/ship)" or "internal Phase 4 (execution)".
+  Resolves audit **R1** (High).
+- **Section 4 "Verbatim"** changed to **"Superset of"** in the Per-Variant
+  Expected Closeout Table. Path B closeout does a superset of Path A for
+  the same variant (variant-inherited handback + additional Path-B-specific
+  steps like `/wiki-ingest` for newly-introduced concepts). Resolves audit
+  **R15** (Low).
+- **Signal #3 parenthetical** in § Section 3 updated to document
+  ark-added trigger keywords beyond the base OMC-native list. Resolves
+  audit **R16** (Low).
+- **Ship Standalone Path B** block retired (chain block + Section 2 table
+  row). Pure-Ship workflows (no bugfix, no greenfield) are Path A only;
+  the scenario no longer benefits from OMC's autonomous-execution shape.
+  Coverage footprint tightened from 18 → 17 Path B blocks. Resolves
+  audit **R17** (Low).
+
+### Removed
+
+- **OMC_EXECUTION_ONLY fictional env var** from `omc-integration.md`
+  (never implemented in OMC runtime; a cache-wide grep of v4.11.5 source
+  returns zero matches). See audit D6.1 for the origin-of-error trace.
+- **Ship Standalone Path B** block (retired under R17 per Changed section).
+
+### Coverage footprint
+
+- `check_path_b_coverage.py` now expects **17 Path B blocks** (was 18) across
+  chain files. Canonicalized shapes: 4 (`vanilla:14, team:1, special-a:1,
+  special-b:1`). Raw-text hashes: 5 — Migration Medium + Heavy diverge from
+  the vanilla hash because R10's `/external-context` pre-step lengthens their
+  block bodies without changing classifier shape. Assertion distribution
+  confirms 4 classifier shapes, 17 total blocks. See
+  `omc-integration.md` § Section 4 note on hash count vs shape count.
+
+### Rationale for uniformity
+
+The 2026-04-14 uniformity decision resolved the central engine-selection
+question from v1.13.0's design review: rather than ark-workflow routing
+**between** execution engines (`/autopilot`, `/ralph`, `/ultrawork`, `/team`)
+based on variant characteristics, it routes uniformly to `/autopilot` and
+lets autopilot compose the parallel/persistent sub-engines inside Phase 2.
+This removes two classes of chain-level drift (engine mismatch vs. variant,
+phase-numbering errors leaking from obsolete v1.13.0 drafts) and reduces
+the audit surface from per-engine-per-variant correctness to engine-composition
+correctness inside autopilot — which OMC tests independently. The uniformity
+premise (autopilot's auto-skip detects pre-placed artifacts and jumps to
+Phase 2) was verified both statically (grep of SKILL.md:41-42) and at
+runtime (live probe on 2026-04-15 — see audit addendum V1 subsection).
+
+### Verification
+
+```
+$ python3 skills/ark-context-warmup/scripts/check_path_b_coverage.py \
+    --chains skills/ark-workflow/chains
+  OK: 17 Path B block(s); 5 distinct canonicalized shape(s)
+
+$ python3 skills/ark-context-warmup/scripts/check_chain_drift.py --root .
+  OK: zero banned patterns found across 8 target file(s)
+
+$ python3 -m pytest skills/ark-context-warmup/scripts/ -q
+  179 passed
+```
+
+### Known pending items
+
+- **v1.14.0 session log backfill** — not blocking this release. Session 7
+  (v1.14.0 External Second Opinion shipping) did not produce a vault session
+  log; to be backfilled in a subsequent housekeeping pass.
+- **Audit recommendations R6, R7, R12, R13, R14, R18** — deferred per the
+  implementation addendum's "Pending recommendations" table. Low-to-medium
+  severity, low-to-medium effort; grouped for a future shipping cycle.
+
 ## [1.15.0] - 2026-04-15
 
 ### Added
