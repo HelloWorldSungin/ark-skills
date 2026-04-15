@@ -47,7 +47,7 @@ if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
 
 from markers import extract_regions, insert_region, replace_region, MarkerIntegrityError  # noqa: E402
-from state import backup_path  # noqa: E402
+from state import backup_path as _backup_path_unused  # noqa: F401, E402 — kept for API compat
 from ops import (  # noqa: E402
     TargetProfileOp,
     ApplyResult,
@@ -219,8 +219,29 @@ class EnsureClaudeMdSection(TargetProfileOp):
         backups_dir = ark_dir / "backups"
         backups_dir.mkdir(exist_ok=True)
 
-        bak_path = backup_path(backups_dir, target_file)
+        # Include region_id in the backup filename to prevent collision when
+        # multiple regions in the same file drift during a single run.
+        # Format: <basename>.<region_id>.<timestamp>.bak
+        from datetime import datetime, timezone as _tz
+        ts = datetime.now(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
+        bak_path = backups_dir / f"{target_file.name}.{region_id}.{ts}.bak"
+        pre_bytes = target_file.read_bytes()
         shutil.copy2(target_file, bak_path)
+
+        # Write .meta.json sidecar for backup provenance tracking.
+        # Schema: {op, region_id, run_id, pre_hash, reason}
+        import hashlib
+        import uuid
+        meta = {
+            "op": self.OP_TYPE,
+            "region_id": region_id,
+            "run_id": str(uuid.uuid4()),
+            "pre_hash": hashlib.sha256(pre_bytes).hexdigest(),
+            "reason": drift_summary or "drift detected",
+        }
+        meta_path = Path(str(bak_path) + ".meta.json")
+        import json as _json
+        meta_path.write_text(_json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
         replace_region(target_file, region_id, template_content, target_version)
 

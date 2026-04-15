@@ -61,6 +61,7 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
+from markers import MarkerIntegrityError  # noqa: E402
 from paths import PathTraversalError, safe_resolve  # noqa: E402
 from state import (  # noqa: E402
     acquire_lock,
@@ -298,6 +299,41 @@ def _check_git_clean(project_root: Path, force: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
+# .ark/ gitignored check (pre-mortem Scenario 3 mitigation)
+# ---------------------------------------------------------------------------
+
+def _check_ark_not_gitignored(project_root: Path) -> None:
+    """Refuse to run when ``.ark/`` is listed in .gitignore.
+
+    If ``.ark/`` is gitignored, migration log and pointer are excluded from
+    source control — subsequent clones and worktrees start from ``0.0.0``
+    and will re-apply all migrations, potentially corrupting state.
+
+    The check reads ``.gitignore`` at *project_root* level only (not nested
+    .gitignore files or global gitignore).  If ``.gitignore`` doesn't exist
+    the check passes silently.
+    """
+    gitignore = project_root / ".gitignore"
+    if not gitignore.exists():
+        return
+    lines = gitignore.read_text(encoding="utf-8").splitlines()
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#") or not stripped:
+            continue
+        # Match ".ark/" and ".ark" patterns
+        if stripped in (".ark/", ".ark"):
+            _die(
+                1,
+                f".ark/ is listed in {gitignore} (pattern: {stripped!r}).\n"
+                f"The .ark/ directory must be committed to source control so\n"
+                f"migration state is shared across clones and worktrees.\n"
+                f"Remove the pattern from .gitignore, commit the change, then\n"
+                f"re-run /ark-update.",
+            )
+
+
+# ---------------------------------------------------------------------------
 # Phase 1: destructive migrations
 # ---------------------------------------------------------------------------
 
@@ -395,6 +431,17 @@ def _run_phase_2(
                     "op_type": op_type,
                     "error": result.get("error", "unknown error"),
                 })
+        except MarkerIntegrityError as exc:
+            # Hard refusal: corrupted marker structure.  The engine cannot
+            # safely overwrite or insert regions when markers are malformed.
+            # Exit 1 and point user to /ark-onboard repair.
+            _die(
+                1,
+                f"Marker integrity error in {op_id!r} ({op_type}):\n"
+                f"  {exc}\n"
+                f"The file has corrupted ark markers. Run /ark-onboard repair "
+                f"to restore a valid state, then retry /ark-update.",
+            )
         except Exception as exc:  # noqa: BLE001
             apply_results.append({
                 "op_id": op_id,
@@ -531,6 +578,9 @@ def main(argv: list[str] | None = None) -> None:
 
     # 2. Git dirty-tree check.
     _check_git_clean(project_root, args.force)
+
+    # 2b. Refuse if .ark/ is gitignored (pre-mortem Scenario 3 mitigation).
+    _check_ark_not_gitignored(project_root)
 
     # 3. Acquire advisory lock.
     ark_dir = project_root / ".ark"
