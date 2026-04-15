@@ -17,6 +17,10 @@ no inline re-quotation.
 |----------|-------|---------|
 | `OMC_CACHE_DIR` | `~/.claude/plugins/cache/omc` | `skills/ark-workflow/SKILL.md` (bash), `skills/ark-context-warmup/scripts/availability.py` (Python) |
 | `OMC_CLI_BIN` | `omc` | `skills/ark-workflow/SKILL.md` (bash probe uses `command -v omc`) |
+| `CODEX_CLI_BIN` | `codex` | `skills/ark-workflow/SKILL.md` (bash probe uses `command -v codex`); gates `/ask codex` + `/ccg` chain steps |
+| `GEMINI_CLI_BIN` | `gemini` | `skills/ark-workflow/SKILL.md` (bash probe uses `command -v gemini`); gates `/ccg` chain steps |
+| `CODEX_INSTALL_URL` | `https://github.com/openai/codex` | `§ Section 7` skip-notice template |
+| `GEMINI_INSTALL_URL` | `https://github.com/google/gemini-cli` | `§ Section 7` skip-notice template |
 | `INSTALL_HINT_URL` | `https://github.com/anthropics/oh-my-claudecode` | `/ark-workflow` Step 6 degradation footer |
 | `HANDBACK_MARKER` | `<<HANDBACK>>` | Every Path B block in `skills/ark-workflow/chains/*.md` |
 
@@ -35,8 +39,12 @@ User-facing axis vs. implementation-side axis — these are orthogonal.
   decision point. User sees each step, approves each transition. This is the
   default and is never removed.
 - **OMC-powered (Path B):** front-loaded judgment (`/deep-interview`), consensus
-  planning (`/omc-plan --consensus`), autonomous execution (`/autopilot` | `/ralph`
-  | `/ultrawork` | `/team`), then handback to Ark for closeout.
+  planning (`/omc-plan --consensus`), autonomous execution via `/autopilot`
+  (uniform default, auto-skips Phase 0+1 when Path B's pre-placed artifacts
+  are present) or `/team` (Migration Heavy only — see § Section 4.2), then
+  handback to Ark for closeout. Per the 2026-04-14 uniformity decision, Path B
+  no longer routes directly to `/ralph` or `/ultrawork` as standalone engines;
+  those engines are invoked internally inside autopilot's Phase 2 (Execution).
 
 **Implementation-side axis: _checkpoint-density_.** Path A is high checkpoint-density
 (user approves every step); Path B is low checkpoint-density (user approves the
@@ -54,21 +62,23 @@ Which OMC engine is the natural fit per chain variant.
 | Variant | Primary OMC engine | Rationale |
 |---------|--------------------|-----------|
 | Greenfield Light / Medium | `/autopilot` | Vanilla pipeline; single module |
-| Greenfield Heavy | `/autopilot` or `/ultrawork` | Heavy multi-module benefits from parallel lanes |
+| Greenfield Heavy | `/autopilot` | Heavy multi-module parallelism handled inside autopilot's Phase 2 (Execution via internal /ultrawork) |
 | Bugfix Light / Medium | `/autopilot` | Linear investigation + fix |
-| Bugfix Heavy | `/autopilot` or `/ralph` | Loop-to-verified when reproduction is finicky |
+| Bugfix Heavy | `/autopilot` | Reproduction-finicky bugs handled inside autopilot's Phase 2 (Execution via internal /ralph loop) |
 | Hygiene Light / Medium / Heavy | `/autopilot` | Cleanup follows consensus plan deterministically |
 | Hygiene Audit-Only | `/autopilot` (findings mode) | Findings-only; no code mutation |
-| Ship Standalone | `/autopilot` | Discouraged but available; Ship is already mechanical |
-| Knowledge-Capture Light / Full | `/autopilot` | Capture + synthesis fits consensus-then-execute |
-| Migration Light / Medium | `/autopilot` | Linear upgrade path |
-| Migration Heavy | `/team` | Cross-module coordination benefits from multi-agent |
+| Knowledge-Capture Light | `/autopilot` | Capture + synthesis fits consensus-then-execute |
+| Knowledge-Capture Full | — (no Path B) | Full capture is too broad/branchy for auto-routed single-engine execution; users invoke `/omc-teams 1:gemini` manually when desired |
+| Migration Light | `/autopilot` | Linear upgrade path |
+| Migration Medium | `/autopilot` | Linear upgrade path; R10 prepends `/external-context` as pre-step 1 to gather authoritative framework migration guides (counters stale training-data reasoning) |
+| Migration Heavy | `/team` | Cross-module coordination benefits from multi-agent (sole non-/autopilot chain variant); R10 prepends `/external-context` as pre-step 1 for the same framework-doc authoritativeness reason |
 | Performance Light | `/autopilot` | Discouraged but available |
-| Performance Medium / Heavy | `/ralph` | Loop until benchmark target met |
+| Performance Medium / Heavy | `/autopilot` | Benchmark-target loops handled inside autopilot's Phase 2 (Execution via internal /ralph loop) |
 
-When the engine differs from `/autopilot`, the chain's Path B block annotates the
-suggestion. All engines use the same `<<HANDBACK>>` marker but with
-engine-specific handback-boundary semantics (see Section 4).
+Migration Heavy uses `/team`; all other Path B variants use `/autopilot`
+(the 2026-04-14 uniformity decision — see memory file
+`project_ark_workflow_uniform_path_b.md` and audit R5). Engine-specific
+handback-boundary semantics are documented in § Section 4.
 
 ---
 
@@ -80,12 +90,22 @@ Path B is recommended when **any** of these fires:
 
 1. **Keyword** — prompt contains an OMC keyword.
 2. **Heavy weight** — triaged class is Heavy.
-3. **Multi-module scope** — task touches ≥3 independent modules.
+3. **Multi-module scope** — task touches ≥3 independent modules (LLM-judgment
+   call during triage — no mechanical counter exists in SKILL.md or any
+   helper script; grep-verified).
 4. **Explicit autonomy** — user explicitly requests hands-off execution.
 
 ### Signal #1 detector specification
 
-Verbatim keyword list from `.claude/skills/omc-reference/SKILL.md` lines 89–101:
+Superset of the canonical keyword list at `.claude/skills/omc-reference/SKILL.md`
+lines 89–101. Ark adds the following non-canonical keywords to trigger Path B
+recommendation:
+
+- `team` / `/team` — explicit team-orchestration invocation
+- `ultrawork` — long-form of the canonical `ulw`
+- `deep-interview` — hyphenated form alongside the canonical `deep interview`
+
+Canonical omc-reference list (verbatim):
 
 > `"autopilot"→autopilot`
 > `"ralph"→ralph`
@@ -157,37 +177,46 @@ Every Path B chain uses `<<HANDBACK>>` after the OMC engine completes its
 autonomous portion. Control then returns to Ark, which resumes that variant's
 Path A tail starting at the variant-specific closeout step.
 
-Four engine-specific sub-contracts follow.
+Two engine-specific sub-contracts follow plus a crash-recovery procedure. The
+retired `/ralph` and `/ultrawork` subsections have been removed per the
+2026-04-14 uniformity decision; their handback boundaries are now
+encapsulated inside `/autopilot`'s internal Phase 2 (Execution via Ralph +
+Ultrawork).
 
-### 4.1 `/autopilot` handback (vanilla)
+### 4.1 `/autopilot` handback (uniform engine)
 
-**Used by:** Greenfield / Bugfix / Hygiene (non-Audit-Only) / Ship / Migration
-non-Heavy / Performance non-Medium-Heavy.
+**Used by:** all Path B chain variants except Migration Heavy. Engine-specific
+subsections for `/ralph` and `/ultrawork` have been retired — see the
+2026-04-14 uniformity decision at
+`~/.claude/projects/-Users-sunginkim--superset-projects-ark-skills/memory/project_ark_workflow_uniform_path_b.md`
+and audit recommendation R5 at `.ark-workflow/audits/omc-routing-audit-2026-04-14.md`.
 
-`<<HANDBACK>>` fires **after `/autopilot`'s internal Phase 4 (execution)
-completes**; `/autopilot`'s internal Phase 5 (docs/ship) is **SKIPPED**. Control
-returns to Ark at the variant's closeout:
+**Handback boundary.** `/autopilot` runs all six of its internal phases
+(0 Expansion → 1 Planning → 2 Execution → 3 QA → 4 Validation → 5 Cleanup
+per `~/.claude/plugins/cache/omc/oh-my-claudecode/4.11.5/skills/autopilot/SKILL.md:39-72`).
+Because every Path B in ark-workflow pre-places `.omc/specs/deep-interview-*.md`
+and `.omc/plans/ralplan-*.md` as steps 1 + 2, `/autopilot` **auto-skips its
+Phase 0 and Phase 1** (autopilot SKILL.md:41-42) and starts at Phase 2
+(Execution via Ralph + Ultrawork internally).
+
+`<<HANDBACK>>` fires **after `/autopilot`'s Phase 5 (Cleanup) completes** —
+i.e., after the full internal pipeline exits. Control returns to Ark at the
+variant's closeout:
 
 - Heavy → `/ark-code-review --thorough`
 - Light / Medium → `/ark-code-review --quick`
 
-### 4.2 `/ralph` handback
+**On intentional defense-in-depth.** Ark's closeout `/ark-code-review` is a
+**second-layer review** by design. Autopilot's internal Phase 4 (Validation)
+is an OMC-internal gate optimized for the consensus plan's invariants; Ark's
+`/ark-code-review` is Ark-project-specific and enforces Ark conventions
+(vault frontmatter, taxonomy, etc.) that OMC does not know about. The
+two-layer review is the canonical ark-workflow posture — it is not
+accidental duplication.
 
-**Used by:** Bugfix Heavy / Performance Medium+Heavy alternates.
+### 4.2 `/team` handback
 
-`<<HANDBACK>>` fires **after `/ralph`'s loop-to-verified exits with success**.
-Ark closeout inherits from the variant's Path A tail as in 4.1.
-
-### 4.3 `/ultrawork` handback
-
-**Used by:** Greenfield Heavy multi-module alternates.
-
-`<<HANDBACK>>` fires **after the last parallel lane's completion signal**. Ark
-closeout inherits as in 4.1.
-
-### 4.4 `/team` handback
-
-**Used by:** Migration Heavy alternate.
+**Used by:** Migration Heavy (sole `/team` chain variant).
 
 `<<HANDBACK>>` fires **after `team-verify`, before `team-fix`** (the bounded
 remediation loop per `.claude/skills/omc-reference/SKILL.md` lines 106–108).
@@ -198,7 +227,7 @@ remediation loop per `.claude/skills/omc-reference/SKILL.md` lines 106–108).
 - This keeps Ark as the last-word reviewer and avoids OMC-internal
   bounded-remediation running on the far side of the handback.
 
-### 4.5 Mid-execution crash recovery
+### 4.3 Mid-execution crash recovery
 
 If the OMC engine crashes, stalls, or exits abnormally before emitting
 `<<HANDBACK>>`, the chain is stuck at step 3 (or step 4 if `<<HANDBACK>>`
@@ -230,32 +259,42 @@ consult it for "is the chain complete" determination.
 ### Per-Variant Expected Closeout Table
 
 What `check_path_b_coverage.py` validates against — byte-identity on
-canonicalized blocks, 6 allowed shapes.
+canonicalized blocks, 4 allowed shapes (post-uniformity: Vanilla + /team +
+Special-A + Special-B; the previously-enumerated /ralph and /ultrawork
+shapes were retired in R2).
 
 Rows are grouped — variants sharing identical shape/engine/closeout collapse
 into a single row. Expand parenthetical labels against the variant column to
-recover the 19 per-variant assignments.
+recover the 17 per-variant assignments. Knowledge-Capture Full has no Path B
+(removed in v1.15.0); Ship Standalone has no Path B (removed in R17 of the
+2026-04-15 uniformity refactor) — neither has a row in this table.
 
 | Variants (grouped) | Shape | Engine (step 3) | Starts at | Ends at |
 |---|---|---|---|---|
-| Greenfield Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
-| Greenfield Heavy | /ultrawork | `/ultrawork` | `/ark-code-review --thorough` | `/claude-history-ingest` |
+| Greenfield Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Bugfix Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Hygiene Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 | Hygiene Audit-Only | Special-A | `/autopilot` | `/wiki-update` | STOP (findings-only) |
-| Ship Standalone | Vanilla | `/autopilot` | `/ark-code-review --thorough` | `/claude-history-ingest` |
-| Knowledge-Capture Light / Full | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
+| Knowledge-Capture Light | Special-B | `/autopilot` | `/wiki-update` | `/claude-history-ingest` |
 | Migration Light / Medium | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
 | Migration Heavy | /team | `/team` | `/ark-code-review --thorough` | `/claude-history-ingest` |
-| Performance Light | Vanilla | `/autopilot` | `/ark-code-review --quick` | `/claude-history-ingest` |
-| Performance Medium / Heavy | /ralph | `/ralph` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
+| Performance Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 
-11 rows representing **19 variants** across **6 distinct shapes** (Vanilla 12 +
-/ralph 2 + /ultrawork 1 + /team 1 + Special-A 1 + Special-B 2).
-`check_path_b_coverage.py` canonicalizes each block (strip scenario headers and
-weight markers) and hashes it; expected distinct hashes = 6; expected total
-blocks = 19. The CI script reads chain files directly, so row-grouping in this
-table does not affect coverage enforcement.
+8 rows representing **17 variants** across **4 distinct classifier shapes**
+(Vanilla 14 + /team 1 + Special-A 1 + Special-B 1). `check_path_b_coverage.py`
+canonicalizes each block (strip scenario headers and weight markers) and
+hashes it; expected total blocks = 17. The CI script reads chain files
+directly, so row-grouping in this table does not affect coverage enforcement.
+
+**Note on hash count vs shape count.** Raw-text canonicalized hashes
+currently total **5**, not 4. Migration Medium + Migration Heavy prepend
+`/external-context` as pre-step 1 (R10), making their block bodies one line
+longer than other variants — distinct hashes from the base vanilla/team
+forms. The `_classify_shape` classifier keys on engine + closeout markers
+(not step count), so classifier-visible shapes remain 4; hash ceiling in
+`check_path_b_coverage.py` is 5 to accommodate the raw-text variant. Adding
+more pre-step variants in the future would raise this ceiling further
+unless canonicalization is extended to strip step-count-variance.
 
 ---
 
@@ -264,7 +303,7 @@ table does not affect coverage enforcement.
 Three templates the chain files copy in verbatim (with per-variant weight/headline
 substitution). These are what `check_path_b_coverage.py` hashes against.
 
-### Template Vanilla (16 variants)
+### Template Vanilla (14 variants)
 
 ```markdown
 ### Path B (OMC-powered — if HAS_OMC=true)
@@ -274,13 +313,13 @@ substitution). These are what `check_path_b_coverage.py` hashes against.
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
 4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
 5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --{weight}` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 ```
 
 Variant-specific weight substitution: Light → `--quick`, Medium → `--quick`,
-Heavy → `--thorough`. (Ship Standalone always uses `--thorough`.)
+Heavy → `--thorough`.
 
 ### Template Special-A (Hygiene Audit-Only)
 
@@ -292,7 +331,7 @@ Heavy → `--thorough`. (Ship Standalone always uses `--thorough`.)
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on audit scope (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus audit plan
-3. `/autopilot` — execution only; produces findings document
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts; produces findings document
 4. `<<HANDBACK>>` — Ark resumes authority
 5. **Ark closeout (Special-A):** `/wiki-update` (record findings in vault) → STOP. No code review, no ship — findings-only chain. See `references/omc-integration.md` § Section 4 (Special-A row).
 ```
@@ -310,55 +349,115 @@ substitute `/claude-history-ingest` as step 1.
 0. `/ark-context-warmup` — same as Path A
 1. `/claude-history-ingest` — mine recent conversations as capture source (substitutes for `/deep-interview` since capture is reflective)
 2. `/omc-plan --consensus` — plan the capture (wiki pages, tags, cross-links)
-3. `/autopilot` — execution only; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts; runs `/wiki-ingest` + `/cross-linker` + `/tag-taxonomy`
 4. `<<HANDBACK>>` — Ark resumes authority
 5. **Ark closeout (Special-B):** `/wiki-update` (finalize session log + epic) → `/claude-history-ingest` (final mining sweep). No code review, no ship — capture-only chain. See `references/omc-integration.md` § Section 4 (Special-B row).
 ```
 
 ---
 
-## Section 6 — `/autopilot` Execution-Only Invocation
+## Section 6 — `/autopilot` Invocation (uniformity, no env var)
 
-Open Question #1 from the implementation plan. **The mechanism is unresolved
-in v1.13.0.** Until OMC exposes a first-class flag, this section ships a
-provisional fallback with a documented failure mode.
+**Open Question #1 from the v1.13.0 implementation plan is now resolved.**
+There is no need for an execution-only flag or env var. Under the 2026-04-14
+uniformity decision, Path B invokes `/autopilot` as a full-pipeline run; the
+artifacts pre-placed by steps 1 + 2 cause `/autopilot` to auto-skip its
+internal Phase 0 and Phase 1 (see § Section 4.1). Phase 5 (Cleanup)
+completes normally; `<<HANDBACK>>` fires after it, and Ark resumes for the
+closeout `/ark-code-review` as a second-layer review.
 
-**Provisional fallback (v1.13.0):** the chain's step 3 invokes `/autopilot` in
-an environment scope with `OMC_EXECUTION_ONLY=1` exported.
+**The fictional env-var fallback from v1.13.0** (an "execution-only" gate
+intended to keep autopilot from running its Phase 5) **is retired.** It was
+never implemented in OMC runtime — a cache-wide grep of OMC v4.11.5 source
+returns zero matches for the proposed env-var name. The mechanism never
+existed.
 
-**Known failure mode — autonomous execution is unsafe if OMC ignores the env
-var.** OMC has no obligation to honor an env var it doesn't own. If OMC
-ignores `OMC_EXECUTION_ONLY=1`, there is no reliable secondary safeguard;
-autopilot's internal Phase 5 (docs/ship) WILL run after Phase 4, meaning the
-chain duplicates the Ark closeout and Ark loses its single-source-of-truth
-guarantee at `<<HANDBACK>>`. The Path B block's "the chain relies on the user
-intercepting" language is **not a degraded-but-acceptable path — it is
-undefined behavior during autonomous execution** and requires manual
-interruption that Path B's core premise specifically tries to eliminate.
+**No operator burden.** No probe, no env export, no interactive verification
+is required before enabling Path B. The handback boundary is defined by
+autopilot's Phase 5 exit, which is engine-native exit semantics.
 
-**Operational guidance for v1.13.0:**
+**Migration Heavy exception.** `/team` has its own handback boundary (see
+§ Section 4.2 — handback after `team-verify`, before `team-fix`). It does
+not compose through the same auto-skip mechanism.
 
-- **Before enabling Path B for `/autopilot` variants** in a production
-  workflow, verify interactively that the installed OMC version respects
-  `OMC_EXECUTION_ONLY=1` — run `/autopilot` once under this env var and
-  confirm Phase 5 does not execute. Document the result in your project's
-  ops notes.
-- If OMC does not honor the env var, **do not enable Path B for Vanilla
-  variants on that OMC install.** Use `ARK_SKIP_OMC=true` as the rollback
-  or stick to Path A until a first-class mechanism ships.
-- Engine-specific variants (`/team`, `/ralph`, `/ultrawork`) do not depend
-  on this env var — their handback boundaries are defined by engine-native
-  exit semantics (team-verify completion, loop-to-verified exit, last-lane
-  completion). They ship unaffected by this caveat.
+---
 
-**Path B step 3 wording (current):** `/autopilot` — execution only; skips
-autopilot's internal Phase 5 (docs/ship). See § Section 4.1.
+## Section 7 — External Advisor Probe Gates
 
-**Post-Phase-2a ADR follow-up (blocks /autopilot-variant production use):**
-confirm whether OMC exposes a first-class flag (`--skip-phase-5`,
-`--execution-only`) or a session marker. If so, replace the env-var fallback
-with the first-class mechanism in v1.14.x. Until then, the "operational
-guidance" above governs safe use.
+`/ark-workflow` chains invoke two families of external-advisor skills outside
+the `/ark-code-review` boundary:
+
+- **`/ask codex`** — single-vendor second opinion; requires `codex` CLI on PATH.
+- **`/ccg`** — tri-model orchestration (Claude + Codex + Gemini); requires
+  both `codex` AND `gemini` CLIs on PATH.
+
+These are opt-in power tools that many hosts will lack. To prevent mid-chain
+hard failure when either CLI is absent, every chain-level invocation is
+**probe-gated**: Step 1 of `/ark-workflow` probes for CLI presence; each step
+marked `[probe-gated §7]` skips with a one-line notice when its prerequisites
+are missing and the chain continues without that advisor.
+
+This back-ports the v1.15.0 internal probe contract from
+`skills/ark-code-review/SKILL.md` (External Second Opinion section) — chains
+gain the same graceful-degradation shape without the full synthesis layer.
+
+### Shell probe
+
+Extends the `HAS_OMC` probe in `skills/ark-workflow/SKILL.md` Step 1:
+
+```bash
+# Vendor CLI availability — checked alongside HAS_OMC in Step 1
+# Canonical binary names per § Section 0 (CODEX_CLI_BIN, GEMINI_CLI_BIN)
+if command -v codex >/dev/null 2>&1; then
+  HAS_CODEX=true
+else
+  HAS_CODEX=false
+fi
+if command -v gemini >/dev/null 2>&1; then
+  HAS_GEMINI=true
+else
+  HAS_GEMINI=false
+fi
+export HAS_CODEX HAS_GEMINI
+echo "HAS_CODEX=$HAS_CODEX"
+echo "HAS_GEMINI=$HAS_GEMINI"
+```
+
+### Gate resolution and skip notices
+
+| Step wording | Requires | Skip condition | Skip notice (one line, emitted in place of the invocation) |
+|---|---|---|---|
+| `/ask codex [probe-gated §7]` | `HAS_CODEX=true` | `HAS_CODEX=false` | `SKIP /ask codex — codex CLI not on PATH. Install: https://github.com/openai/codex` |
+| `/ccg [probe-gated §7]` | `HAS_CODEX=true` AND `HAS_GEMINI=true` | Either false | `SKIP /ccg — requires both codex and gemini on PATH. Missing: {list}. Install: https://github.com/openai/codex, https://github.com/google/gemini-cli` |
+
+After emitting the skip notice, the chain continues with the next step. No
+spec/plan quality gate is lowered — these advisors are additive second
+opinions, not blocking reviews.
+
+### Interaction with `/ark-code-review --thorough`
+
+Call sites of the form `/ark-code-review --thorough + /ask codex → /simplify`
+split the probe gate across two layers:
+
+- **`/ark-code-review --thorough`** handles its own internal codex/gemini
+  probe via the v1.15.0 External Second Opinion contract — chains do **not**
+  gate it.
+- **`/ask codex`** appended after ark-code-review is a separate second-opinion
+  invocation (vendor-only lens on the review itself) and IS probe-gated by
+  this section.
+
+When `HAS_CODEX=false`, the chain reduces to `/ark-code-review --thorough → /simplify`
+(ark-code-review still runs; its internal probe emits its own skip notice for
+the vendor fan-out inside `--thorough`).
+
+### Emergency rollback
+
+`ARK_SKIP_OMC=true` does **not** affect `HAS_CODEX` / `HAS_GEMINI` — vendor
+CLIs are independent of OMC installation. To force-disable external-advisor
+fan-out at the chain level, unset `codex` / `gemini` from `PATH` for the
+session, or uninstall the CLIs. The `--no-multi-vendor` / `--no-xv` flag
+documented in `skills/ark-code-review/SKILL.md` affects only that skill's
+internal probe, not chain-level `/ask codex` / `/ccg` call sites.
 
 ---
 
@@ -370,3 +469,5 @@ guidance" above governs safe use.
 - Availability probe: `skills/ark-context-warmup/scripts/availability.py`
 - Bash probe + Step 6 logic: `skills/ark-workflow/SKILL.md`
 - CI coverage check: `skills/ark-context-warmup/scripts/check_path_b_coverage.py`
+- CI drift lint: `skills/ark-context-warmup/scripts/check_chain_drift.py`
+- External Second Opinion v1.15.0 precedent: `skills/ark-code-review/SKILL.md` § External Second Opinion

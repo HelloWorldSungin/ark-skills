@@ -61,6 +61,23 @@ fi
 [ "$ARK_SKIP_OMC" = "true" ] && HAS_OMC=false
 export HAS_OMC
 echo "HAS_OMC=$HAS_OMC"
+
+# Vendor CLI availability — gates `/ask codex` and `/ccg` chain steps
+# (see references/omc-integration.md § Section 7 External Advisor Probe Gates)
+# Canonical binary names in § Section 0 (CODEX_CLI_BIN, GEMINI_CLI_BIN)
+if command -v codex >/dev/null 2>&1; then
+  HAS_CODEX=true
+else
+  HAS_CODEX=false
+fi
+if command -v gemini >/dev/null 2>&1; then
+  HAS_GEMINI=true
+else
+  HAS_GEMINI=false
+fi
+export HAS_CODEX HAS_GEMINI
+echo "HAS_CODEX=$HAS_CODEX"
+echo "HAS_GEMINI=$HAS_GEMINI"
 ```
 
 6. Store these values for condition resolution in later steps.
@@ -327,6 +344,14 @@ When presenting a skill chain, resolve all conditions using Project Discovery va
 
 **UI triggers (for `/qa`, `/design-review`):**
 - Project has frontend dependencies (react, vue, svelte, next, angular, @remix, solid-js) AND the current task touches UI-facing code
+
+**UI-with-design-reference trigger (for `/visual-verdict`):**
+- All UI triggers above AND a design reference is present in the repo. Signals that indicate a design reference exists:
+  - A `design/`, `designs/`, `mocks/`, or `mockups/` directory at repo root
+  - A `DESIGN.md`, `design-system.md`, or similar design-spec file outside `docs/superpowers/`
+  - A Figma export file (`.fig`, `.sketch`, `.xd`) or PNG/SVG mockup linked from README or CONTRIBUTING
+  - An explicit design reference named in the user's task prompt
+- If UI is present but no design reference is found, output "Skipping `/visual-verdict` — no design reference found" and continue without the step.
 
 **Standard docs trigger (for `/document-release`):**
 - Project has README.md, ARCHITECTURE.md, CONTRIBUTING.md, or CHANGELOG.md outside of `docs/superpowers/`

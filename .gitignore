@@ -1,7 +1,12 @@
 .worktrees/
 
-# Ark workflow chain state (per-project ongoing work)
-.ark-workflow/
+# Ark workflow chain state (per-project ongoing work) — ignore files but
+# not the directory itself, so exceptions below can re-include specific
+# subdirectories like audit reports.
+.ark-workflow/*
+# Exception: audit reports are durable artifacts — track them.
+!.ark-workflow/audits
+!.ark-workflow/audits/**
 
 # OMC transient state (session-scoped, regenerated per run)
 # Keep .omc/specs/ and .omc/plans/ committable — durable artifacts.

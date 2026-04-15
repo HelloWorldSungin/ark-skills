@@ -1,10 +1,12 @@
-"""Unit tests for check_path_b_coverage.py — the v1.13.0 CI contract validator
-that enforces byte-identity canonicalization + shape distribution across the
-19 Path B blocks in /ark-workflow chains.
+"""Unit tests for check_path_b_coverage.py — the CI contract validator that
+enforces byte-identity canonicalization + shape distribution across the
+17 Path B blocks in /ark-workflow chains (post-2026-04-15 uniformity refactor).
 
-Backfilled for /ark-code-review --thorough pass 2 H4 finding — the 231 LOC
-script shipped in v1.13.0 with zero tests. These tests cover the six core
-functions + CLI integration.
+Originally backfilled for /ark-code-review --thorough pass 2 H4 finding —
+the script shipped in v1.13.0 with zero tests. Updated for the 2026-04-14
+uniformity refactor: /ralph and /ultrawork shapes retired (R2); Ship
+Standalone Path B block removed (R17). Resulting contract: 17 total blocks
+across 4 distinct canonicalized shapes (vanilla, team, special-a, special-b).
 
 Uses importlib.util to load the target module by path (matches the pattern
 used for synthesize/evidence/executor in test_warmup_helpers.py)."""
@@ -141,19 +143,19 @@ class TestClassifyShape:
         canonical = cpc._canonicalize(_team_block())
         assert cpc._classify_shape(canonical) == "team"
 
-    def test_ralph_block(self):
-        ralph_block = _vanilla_block().replace("/autopilot", "/ralph").replace(
-            "skips autopilot's internal Phase 5", "loops to verified benchmark"
+    def test_ralph_mention_inside_vanilla_still_classifies_as_vanilla(self):
+        """Post-uniformity invariant: /ralph and /ultrawork mentions inside a
+        vanilla block (e.g., 'Benchmark-target loops are handled inside
+        autopilot's Phase 2 via internal /ralph') must NOT cause the block
+        to misclassify as its old 'ralph' or 'ultrawork' shape. The retired
+        shapes no longer exist in ALLOWED_SHAPES and must not sneak back in
+        via descriptive text."""
+        vanilla_with_internal_ralph = _vanilla_block().replace(
+            "3. `/autopilot` — execution only; skips autopilot's internal Phase 5.",
+            "3. `/autopilot` — full pipeline; benchmark-target loops are handled via internal /ralph. Also internal /ultrawork.",
         )
-        canonical = cpc._canonicalize(ralph_block)
-        assert cpc._classify_shape(canonical) == "ralph"
-
-    def test_ultrawork_block(self):
-        ultrawork_block = _vanilla_block().replace("/autopilot", "/ultrawork").replace(
-            "skips autopilot's internal Phase 5", "parallel execution across lanes"
-        )
-        canonical = cpc._canonicalize(ultrawork_block)
-        assert cpc._classify_shape(canonical) == "ultrawork"
+        canonical = cpc._canonicalize(vanilla_with_internal_ralph)
+        assert cpc._classify_shape(canonical) == "vanilla"
 
     def test_special_a_block(self):
         canonical = cpc._canonicalize(_special_a_block())
@@ -189,15 +191,13 @@ class TestClassificationFlags:
         marker to classify without adding it here would silently leave the
         diagnostic incomplete."""
         expected_keys = {"wiki_ingest", "stop", "history_ingest", "code_review",
-                         "team", "ralph", "ultrawork", "autopilot"}
+                         "team", "autopilot"}
         flags = cpc._classification_flags(_vanilla_block())
         assert set(flags.keys()) == expected_keys
         # Vanilla has /autopilot + /ark-code-review, no engine-specific markers
         assert flags["autopilot"] is True
         assert flags["code_review"] is True
         assert flags["team"] is False
-        assert flags["ralph"] is False
-        assert flags["ultrawork"] is False
 
 
 # ── _extract_path_b_blocks ──────────────────────────────────────────────
@@ -299,11 +299,11 @@ class TestCLI:
 
     def test_unknown_shape_error_dumps_flag_set(self, tmp_path):
         """M1 regression: when a block fails to classify, the error must
-        include the 8-flag marker dump to help the developer diagnose."""
+        include the flag marker dump to help the developer diagnose."""
         chains = tmp_path / "chains"
         chains.mkdir()
-        # 19 blocks to hit the full-coverage classifier path (shape distribution
-        # assertion only runs when --expected-blocks == 19)
+        # 17 blocks to hit the full-coverage classifier path (shape distribution
+        # assertion only runs when --expected-blocks == 17)
         bad_block = (
             "### Path B (OMC-powered — if HAS_OMC=true)\n\n"
             "No markers match here.\n\n"
@@ -311,10 +311,10 @@ class TestCLI:
             "4. `<<HANDBACK>>` — required marker.\n"
             "5. `/deep-interview` — required marker.\n"
         )
-        # 18 good blocks to hit 19 total count + 1 bad block
-        body = "## Dummy\n" + "\n".join(_vanilla_block() for _ in range(18)) + bad_block
+        # 16 good blocks to hit 17 total count + 1 bad block
+        body = "## Dummy\n" + "\n".join(_vanilla_block() for _ in range(16)) + bad_block
         self._write_chain(chains, "foo", body)
-        result = self._run(chains)  # default --expected-blocks 19
+        result = self._run(chains)  # default --expected-blocks 17
         assert result.returncode == 1
         # Verify the flag dump appears in the error output
         assert "markers=" in result.stderr
@@ -322,7 +322,10 @@ class TestCLI:
 
     def test_real_repo_chains_pass(self, tmp_path):
         """End-to-end sanity: the live repo chains directory must pass the
-        default (19 blocks, 6 shapes) check. This pins the CI contract."""
+        default check (17 blocks; 5 distinct raw-text canonicalized hashes
+        post-R10 from the /external-context pre-step variant; still only
+        4 classifier-visible shapes via ALLOWED_SHAPES). This pins the
+        post-uniformity CI contract (2026-04-15)."""
         live_chains = Path(__file__).parent.parent.parent / "ark-workflow" / "chains"
         if not live_chains.is_dir():
             pytest.skip("live chains directory not accessible")
@@ -331,25 +334,28 @@ class TestCLI:
             capture_output=True, text=True,
         )
         assert result.returncode == 0, f"CI contract broken: {result.stderr}"
-        assert "19 Path B block" in result.stdout
-        assert "6 distinct canonicalized shape" in result.stdout
+        assert "17 Path B block" in result.stdout
+        assert "5 distinct canonicalized shape" in result.stdout
 
 
 # ── ALLOWED_SHAPES contract ─────────────────────────────────────────────
 
 class TestAllowedShapesContract:
-    def test_allowed_shapes_sum_to_19(self):
+    def test_allowed_shapes_sum_to_17(self):
         """ALLOWED_SHAPES distribution must sum to the total expected-blocks
         count. If someone adds a new engine shape without reducing vanilla,
-        this pins that invariant."""
-        assert sum(cpc.ALLOWED_SHAPES.values()) == 19
+        this pins that invariant. Post-2026-04-15 uniformity refactor the
+        sum is 17 (Ship Standalone Path B removed in R17)."""
+        assert sum(cpc.ALLOWED_SHAPES.values()) == 17
 
-    def test_allowed_shapes_contains_six_shapes(self):
-        """The 6-shape model is the current contract. Adding a 7th (e.g.,
-        /ccg) or removing one requires updating this test + the reference
-        doc's expected-closeout table + the classifier."""
-        assert len(cpc.ALLOWED_SHAPES) == 6
+    def test_allowed_shapes_contains_four_shapes(self):
+        """The 4-shape model is the post-uniformity contract (2026-04-14).
+        Retired shapes: `ralph`, `ultrawork` — their engines are now
+        invoked inside autopilot's Phase 2. Adding a 5th shape or removing
+        one requires updating this test + the reference doc's
+        expected-closeout table + the classifier."""
+        assert len(cpc.ALLOWED_SHAPES) == 4
         assert set(cpc.ALLOWED_SHAPES.keys()) == {
-            "vanilla", "ralph", "ultrawork", "team",
+            "vanilla", "team",
             "special-a-hygiene-audit-only", "special-b-knowledge-capture",
         }

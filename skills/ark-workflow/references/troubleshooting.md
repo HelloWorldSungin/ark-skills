@@ -20,9 +20,10 @@ If a step fails mid-workflow:
 
 - **Failed QA:** fix bugs in the current session, re-run `/qa` to verify, re-run `/ark-code-review` if fixes are substantial
 - **Failed deploy:** check CI logs for the failure. If test failure: fix and re-run `/ship`. If infra issue: investigate before retrying. Never force-merge past failing CI.
-- **Review disagreement (`/ark-code-review` vs `/codex`):** read both opinions — they see different things. If both flag the same area, it's almost certainly real. If they disagree, use your judgment. Document the resolution in the session log.
+- **Review disagreement (`/ark-code-review` vs external advisor [`/ask codex` or `/ccg`]):** read both opinions — they see different things. If both flag the same area, it's almost certainly real. If they disagree, use your judgment. If `/ccg` itself reports Codex–Gemini disagreement, that's its own signal — weigh it alongside Ark's internal review. Document the resolution in the session log.
+- **External advisor CLI missing (`codex` or `gemini` not on PATH):** Step 1 probes `HAS_CODEX` / `HAS_GEMINI`; chain call sites marked `[probe-gated §7]` skip with a one-line notice and the chain continues. `/ark-code-review --thorough` keeps running (its internal v1.15.0 probe handles its own vendor fan-out). No manual intervention needed — see `references/omc-integration.md` § Section 7 for the probe contract, skip notices, and install URLs.
 - **Flaky tests:** do not skip or retry blindly — `/investigate` the flake. If known and unrelated to your changes, note it and proceed. If new, treat as a bug.
-- **Spec invalidated during implementation:** stop implementing, update the spec, re-run `/codex` review on the updated spec, resume from the updated spec (this is a re-triage moment)
+- **Spec invalidated during implementation:** stop implementing, update the spec, re-run the design-phase external review (`/ask codex` for Medium, `/ccg` for Heavy) on the updated spec, resume from the updated spec (this is a re-triage moment)
 - **Canary failure:** investigate the specific failure signal. If it's your change: rollback or hotfix (new light-class bug cycle). If pre-existing: document and proceed.
 - **Vault tooling failure:** not blocking — don't let a `/wiki-update` failure hold up a ship. Note the failure, fix it in the next Knowledge Capture cycle.
 - **Hygiene reveals bugs:** If `/codebase-maintenance` audit or `/investigate` uncovers bugs during a Hygiene workflow, re-triage the broken items as Bugfix (see Re-triage: Scenario shift). Fix bugs before continuing cleanup.

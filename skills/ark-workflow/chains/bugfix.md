@@ -18,7 +18,7 @@
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
 4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
 5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 
@@ -44,7 +44,7 @@
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
 4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
 5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 
@@ -55,7 +55,7 @@
 2. Re-triage if deeper than expected. **If investigation reveals architectural redesign is needed: `/checkpoint` findings, end session, start fresh with a design phase (pivot to Heavy Greenfield from step 0 — the mandatory `/ark-context-warmup` still runs first).**
 3. `/test-driven-development` — write a failing test that reproduces the bug (if not reproducible, document why and proceed)
 4. Fix (structured, may require `/executing-plans`)
-5. `/ark-code-review --thorough` + `/codex` → `/simplify`
+5. `/ark-code-review --thorough` + `/ask codex` **[probe-gated §7]** → `/simplify`
 6. `/qa` (if UI)
 7. `/cso` (if security-relevant)
 8. `/ship` → `/land-and-deploy`
@@ -73,6 +73,6 @@
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
 2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — execution only; skips autopilot's internal Phase 5 (docs/ship). See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
 4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
 5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).

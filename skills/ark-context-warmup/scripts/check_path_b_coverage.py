@@ -6,10 +6,13 @@ skills/ark-workflow/references/omc-integration.md § Section 4.
 
 What this script checks:
   1. Total Path B blocks across chain files matches --expected-blocks.
-  2. Canonicalized blocks collapse to ≤3 distinct hashes (Vanilla, Special-A, Special-B).
+  2. Canonicalized blocks collapse to ≤ --max-distinct-shapes hashes (default 5
+     post-uniformity + R10 pre-step: 4 classifier shapes (Vanilla + /team +
+     Special-A + Special-B) plus 1 raw-text variant for the /external-context
+     pre-step used by Migration Medium+Heavy Path B).
   3. Every block contains the literal `<<HANDBACK>>` marker.
   4. Every block contains either `/deep-interview` OR `/claude-history-ingest`.
-  5. Distribution of shapes matches ALLOWED_SHAPES when --expected-blocks == 19.
+  5. Distribution of shapes matches ALLOWED_SHAPES when --expected-blocks == 17.
 
 Canonicalization strips:
   - The scenario-specific header line (`### Path B (OMC-powered...)`).
@@ -30,22 +33,34 @@ import re
 import sys
 from pathlib import Path
 
-# Expected distribution when --expected-blocks == 19 (the full plan target).
+# Expected distribution when --expected-blocks == 17 (the post-R17 target,
+# after Ship Standalone's Path B block was removed in the 2026-04-15
+# uniformity refactor).
 #
-# Six canonicalized shapes now allowed (was 3 prior to P2-1 hardening): the
-# base `vanilla` shape invokes `/autopilot` (Section 4.1). Three engine-specific
-# shapes wire the remaining Section 4 sub-contracts into real chains:
-#   - `ralph`      → Performance Medium + Heavy (Section 4.2)
-#   - `ultrawork`  → Greenfield Heavy (Section 4.3)
-#   - `team`       → Migration Heavy (Section 4.4, handback after team-verify/before team-fix)
-# Plus the two pre-existing special-case shapes.
+# Four canonicalized shapes allowed post-uniformity (2026-04-14 decision):
+#   - `vanilla`    → every Path B variant except Migration Heavy, Hygiene
+#                    Audit-Only, and Knowledge-Capture Light. `/autopilot`
+#                    engine + `/ark-code-review` closeout (Section 4.1).
+#                    The retired `/ralph` and `/ultrawork` shapes are now
+#                    rolled into vanilla — those engines are invoked
+#                    internally by autopilot's Phase 2 (Execution).
+#   - `team`       → Migration Heavy (Section 4.2, handback after
+#                    team-verify/before team-fix).
+#   - `special-a-hygiene-audit-only` — Hygiene Audit-Only (findings, no ship).
+#   - `special-b-knowledge-capture`  — Knowledge-Capture Light (/autopilot
+#                    capture with /wiki-ingest as a real step).
+#
+# Knowledge-Capture Full has NO Path B (removed in v1.14.0): full-variant capture
+# is too broad and branchy for auto-routed single-engine execution. Users who want
+# autonomous bulk capture invoke `/omc-teams 1:gemini "<task>"` manually.
+# Ship Standalone has NO Path B (removed in R17): Ship is already mechanical,
+# so the OMC-powered pipeline added no value. Together these exclusions bring
+# the total to 17 (not 19).
 ALLOWED_SHAPES = {
-    "vanilla": 12,
-    "ralph": 2,
-    "ultrawork": 1,
+    "vanilla": 14,
     "team": 1,
     "special-a-hygiene-audit-only": 1,
-    "special-b-knowledge-capture": 2,
+    "special-b-knowledge-capture": 1,
 }
 
 _PATH_B_HEADING_RE = re.compile(
@@ -95,18 +110,26 @@ def _hash(canonical: str) -> str:
 
 
 def _classify_shape(canonical: str) -> str:
-    """Return one of: 'vanilla', 'ralph', 'ultrawork', 'team',
-    'special-a-hygiene-audit-only', 'special-b-knowledge-capture', or 'unknown'.
+    """Return one of: 'vanilla', 'team', 'special-a-hygiene-audit-only',
+    'special-b-knowledge-capture', or 'unknown'.
 
     Order matters:
       1. Special-B is the distinctive-marker variant (has `/wiki-ingest` as an
          actual step); check first because its block mentions `/deep-interview`
          in a parenthetical ("substitutes for `/deep-interview`").
       2. Special-A: `STOP` + no `/claude-history-ingest` (findings-only).
-      3. Engine-specific shapes key on the step-3 engine keyword. `/team`,
-         `/ralph`, `/ultrawork` each appear only in their own shape; vanilla
-         contains none of them.
+      3. `/team` engine is unique to Migration Heavy (sole non-/autopilot
+         chain variant under the 2026-04-14 uniformity decision).
       4. Vanilla: `/autopilot` present + `/ark-code-review` in closeout.
+
+    The retired `ralph` and `ultrawork` shapes have been rolled into
+    vanilla. Those engines are now invoked INSIDE autopilot's Phase 2
+    (Execution) rather than as standalone chain engines. Descriptive
+    mentions of `/ralph` or `/ultrawork` inside a vanilla block (e.g.,
+    "Benchmark-target loops are handled inside autopilot's Phase 2 via
+    internal /ralph") are expected and must NOT cause misclassification —
+    that's why this classifier keys on the step-3 engine (/autopilot vs
+    /team) plus closeout markers, not on any /ralph or /ultrawork mention.
 
     We do NOT rely on `/deep-interview` absence for classification because
     Special-B mentions it in a parenthetical.
@@ -116,8 +139,6 @@ def _classify_shape(canonical: str) -> str:
     has_history_ingest = "/claude-history-ingest" in canonical
     has_code_review = "/ark-code-review" in canonical
     has_team = "/team" in canonical
-    has_ralph = "/ralph" in canonical
-    has_ultrawork = "/ultrawork" in canonical
     has_autopilot = "/autopilot" in canonical
     # Special-B has /wiki-ingest as an actual step (unique to reflective capture).
     if has_wiki_ingest:
@@ -125,13 +146,9 @@ def _classify_shape(canonical: str) -> str:
     # Special-A: findings-only, STOP in closeout, no further mining.
     if has_stop and not has_history_ingest:
         return "special-a-hygiene-audit-only"
-    # Engine-specific vanillas — each engine keyword is unique to its own shape.
+    # Migration Heavy — the sole /team chain variant.
     if has_team:
         return "team"
-    if has_ralph:
-        return "ralph"
-    if has_ultrawork:
-        return "ultrawork"
     # Vanilla: default /autopilot engine + closeout inherits Path A.
     if has_autopilot and has_code_review:
         return "vanilla"
@@ -151,8 +168,6 @@ def _classification_flags(canonical: str) -> dict:
         "history_ingest": "/claude-history-ingest" in canonical,
         "code_review": "/ark-code-review" in canonical,
         "team": "/team" in canonical,
-        "ralph": "/ralph" in canonical,
-        "ultrawork": "/ultrawork" in canonical,
         "autopilot": "/autopilot" in canonical,
     }
 
@@ -171,10 +186,15 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--chains", required=True, type=Path,
                     help="Directory containing chain *.md files")
-    ap.add_argument("--expected-blocks", type=int, default=19,
-                    help="Expected total Path B blocks (default 19)")
-    ap.add_argument("--max-distinct-shapes", type=int, default=6,
-                    help="Max distinct canonicalized hashes (default 6 — see ALLOWED_SHAPES)")
+    ap.add_argument("--expected-blocks", type=int, default=17,
+                    help="Expected total Path B blocks (default 17 — Knowledge-Capture Full and Ship Standalone have no Path B)")
+    ap.add_argument("--max-distinct-shapes", type=int, default=5,
+                    help=("Max distinct canonicalized hashes (default 5: 4 "
+                          "from ALLOWED_SHAPES classifier + 1 for the "
+                          "/external-context pre-step variant hash used by "
+                          "Migration Medium+Heavy Path B per R10). "
+                          "Classifier still maps to 4 distinct SHAPES — this "
+                          "ceiling is on raw text canonicalization."))
     args = ap.parse_args()
 
     errors: list[str] = []
@@ -214,7 +234,7 @@ def main() -> int:
         )
 
     # Assertion 5: shape distribution (only when full coverage expected).
-    if args.expected_blocks == 19:
+    if args.expected_blocks == 17:
         distribution: dict[str, int] = {}
         unknown_details: list[str] = []
         for path, _, canonical in canonicals:

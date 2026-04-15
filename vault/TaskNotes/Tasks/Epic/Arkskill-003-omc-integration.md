@@ -123,3 +123,16 @@ Follow-ups captured in the plan's ADR § Follow-ups:
    enters Path B as its own execution engine.
 4. Downstream grep-pinning detection — find consumer CLAUDE.md files that
    hardcode `HAS_OMC=false`; proactively notify maintainers.
+
+## Follow-up landed — 2026-04-15
+
+Follow-up #1 ("Pin `/autopilot` execution-only mechanism") was resolved by
+[[Arkskill-006-path-b-uniformity]] via the 2026-04-14 uniformity decision.
+The fictional `OMC_EXECUTION_ONLY=1` env var was retired; under uniformity,
+`/autopilot` runs its full pipeline and auto-skips Phase 0+1 when the Path
+B artifacts are pre-placed. See [[S010-Path-B-Uniformity-Refactor]] for
+the implementation (7 atomic commits on branch `ark-workflow-improve-OMC`).
+
+Post-refactor the CI contract is 17 blocks / 4 classifier shapes / 5
+raw-text hashes (not 19 / 3 as documented under "Tests" above — those
+numbers reflect the v1.13.0 state).
