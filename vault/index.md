@@ -4,7 +4,7 @@ type: meta
 tags:
   - meta
 summary: "Machine-generated flat catalog of all vault pages."
-last-updated: 2026-04-13
+last-updated: 2026-04-14
 ---
 
 # Index
@@ -30,6 +30,8 @@ last-updated: 2026-04-13
 | [[Compiled-Insights/TaskNotes-Status-Triage-Design.md|TaskNotes Status & Triage — Design Decisions]] | compiled-insight | ark-tasknotes status uses MCP-first data gathering with LLM triage — no algorithmic scoring. Six-section report with opinionated work plan recommendations. |
 | [[Compiled-Insights/Vault-Hosting-Evolution.md|Vault Hosting Evolution — Submodules to Standalone Repos]] | compiled-insight | Vaults evolved from submodules in ark-skills to standalone repos at ~/.superset/vaults/, symlinked from projects. As of v1.11.0 this is /ark-onboard's greenfield default; embedded is an explicit escape hatch. |
 | [[Compiled-Insights/Vault-Retrieval-Tier-Architecture.md|Vault Retrieval Tier Architecture — T1-T4 Design]] | compiled-insight | Four-tier retrieval: NotebookLM (T1, ~500 tokens), MemPalace (T2, ~2500), Obsidian-CLI (T3, ~119+reads), index.md (T4, ~2100). Routing by query type, not corpus. Key finding: MemPalace on vault pages scored 8/10 vs 0/10 on conversations alone. |
+| [[Session-Logs/2026-04-14-stage5-self-test-evidence.md|Stage-5 Self-Test Gate Evidence — ark-update v1.14.0 pre-release]] | session-log | Complete Stage-5 self-test gate evidence for /ark-update v1.14.0 pre-release. All parts passed. |
+| [[Session-Logs/2026-04-14-step11-review-findings.md|Step 11 — /codex + /ark-code-review findings + triage]] | session-log | Two-lane review of shipped /ark-update framework. 1 P1 fixed (gate-flag test coverage), 2 P1 codex-only deferred (atomic writes — bounded blast radius), 11 P2/P3 deferred to v1.1 ADR. |
 | [[Session-Logs/S001-MemPalace-Integration.md|Session: MemPalace Integration for claude-history-ingest]] | session-log | Implemented MemPalace (ChromaDB) backend for claude-history-ingest: Stop hook, installer, SKILL.md rewrite, shipped v1.1.0-1.1.2. |
 | [[Session-Logs/S002-Ark-Workflow-Skill.md|Session: /ark-workflow Skill Implementation]] | session-log | Implemented /ark-workflow skill: task triage, scenario detection, weight-class skill chains. 11 tasks via subagent-driven-development, shipped v1.2.0. |
 | [[Session-Logs/S002-Vault-Retrieval-Tiers-Phase1.md|Session: Vault Retrieval Tiers Phase 1 Implementation]] | session-log | Implemented T1-T4 multi-backend retrieval for wiki-query: mine-vault.sh, CLAUDE.md tier table, wiki-query rewrite, README update. 4 commits, all reviews passed. |
@@ -38,7 +40,9 @@ last-updated: 2026-04-13
 | [[Session-Logs/S005-Ark-Onboard-Centralized-Vault.md|Session 5: /ark-onboard Centralized Vault Recommendation (v1.11.0)]] | session-log | Shipped /ark-onboard centralized-vault default (symlinked vault repo at $HOME/.superset/vaults/<project>), externalization plan-file generator, check #20 (warn-only), downstream skill notes. v1.10.1 → v1.11.0. PR #13. |
 | [[Session-Logs/S006-Ark-Context-Warmup-Ship.md|Session 6: /ark-context-warmup Ship + Codex Harden (v1.12.0)]] | session-log | Shipped /ark-context-warmup as step 0 of every chain. Fixed 13 codex-raised findings across 5 review passes (YAML safety, shell-escape, shel-path resolution, 2-layer interp, availability probes, evidence pipeline, index table parser). Tests 107→143. v1.11.0 → v1.12.0. PR #14. |
 | [[Session-Logs/S007-OMC-Integration-Design.md|Session 7: OMC ↔ /ark-workflow Dual-Mode Integration (v1.13.0)]] | session-log | Shipped dual-mode /ark-workflow routing. Every chain variant now has Path A (Ark-native) and Path B (OMC-powered) when HAS_OMC=true. 19 variants across 7 chain files; 3 canonicalized shapes (vanilla + special-a + special-b). HAS_OMC probe + omc-integration reference doc + check_path_b_coverage.py CI. v1.12.0 → v1.13.0. |
+| [[Session-Logs/S008-Ark-Update-Framework.md|Session 8: /ark-update Version-Driven Migration Framework (v1.14.0 Stream B)]] | session-log | Shipped /ark-update — version-driven migration framework that converges projects to the current ark-skills target profile. 19-skill plugin, 237 tests, ~2000 LOC. Combined v1.14.0 release with Stream A (OMC detection). |
 | [[TaskNotes/00-Project-Management-Guide.md|Project Management Guide]] | moc | How task IDs, statuses, and task notes work in the ark-skills project. |
 | [[TaskNotes/Tasks/Epic/Arkskill-001-vault-retrieval-tiers.md|Multi-Backend Vault Retrieval Tiers]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-002-ark-context-warmup.md|/ark-context-warmup — Automatic Context Loader]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-003-omc-integration.md|OMC ↔ /ark-workflow Dual-Mode Integration]] |  |  |
+| [[TaskNotes/Tasks/Epic/Arkskill-004-ark-update-framework.md|/ark-update Version-Driven Migration Framework]] |  |  |
