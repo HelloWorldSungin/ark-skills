@@ -3,11 +3,16 @@
 Each test copies the fixture pre-state to a temp directory, runs migrate.py,
 then compares every file in expected-post/ byte-exact against the actual output.
 
-NOTE: The ``only_if_centralized_vault`` gate is NOT wired in v1.0 (Step 7
-follow-up). migrate.py applies gated entries unconditionally, so
-expected-post/ for ALL fixtures includes scripts/setup-vault-symlink.sh
-even for projects that would skip it once the gate is wired. This is
-intentional and documented here per the Step 6 handoff guidance.
+Gate-flag wiring note (Step 7, commit a9958c8):
+  Gate-flag resolution IS wired in migrate.py (_read_gate_flags / _iter_target_profile_entries).
+  These convergence tests intentionally run with ARK_HAS_OMC and ARK_CENTRALIZED_VAULT
+  UNSET so the engine falls back to backward-compat (unconditional-apply) mode.
+  As a result, expected-post/ for ALL fixtures includes both the omc-routing managed
+  region AND scripts/setup-vault-symlink.sh — this preserves full coverage of the
+  unconditional code path.
+
+  Gate-specific behaviour (skip paths) is covered by test_gate_flags.py, which runs
+  the engine with explicit env-var overrides and asserts inline (not against expected-post/).
 """
 from __future__ import annotations
 

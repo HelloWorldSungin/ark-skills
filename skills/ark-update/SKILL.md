@@ -131,9 +131,10 @@ Read the project's CLAUDE.md and look for a "Vault layout" row. Detection heuris
 # Centralized-vault detection: look for 'Vault layout' row in CLAUDE.md.
 # Heuristic: if CLAUDE.md exists AND contains a line matching 'Vault layout'
 # (case-insensitive, as a table row or standalone heading), treat as standalone
-# (project explicitly declared its layout, and standalone is the default).
+# (project explicitly declared its layout via /ark-onboard → opted into standalone).
 # If CLAUDE.md is absent OR has no 'Vault layout' row, treat as centralized
-# (older projects pre-dating the layout row, or new projects using symlink layout).
+# (the conservative default — older projects pre-dating the layout row, or new
+# projects that have not yet run /ark-onboard and therefore have no opt-out row).
 #
 # Rationale: the 'Vault layout' row was introduced in /ark-onboard v1.11 to let
 # projects opt into standalone mode. Projects without the row are presumed to use
