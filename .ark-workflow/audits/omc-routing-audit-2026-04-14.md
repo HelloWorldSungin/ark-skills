@@ -289,17 +289,41 @@ that R15+R16+R17 ran before R4 so the drift lint had clean input.
 | 5 | R10 | `5856c2c` | /external-context pre-step for Migration Medium + Heavy Path B; classifier-vs-hash distinction documented; max_distinct_shapes 4→5 |
 | 6 | R11 + addendum | *(this commit)* | /visual-verdict closeout for Greenfield Medium + Heavy UI variants; SKILL.md Condition Resolution entry for "UI with design reference"; audit addendum |
 
-### V1 — Runtime probe: STATIC VERIFICATION, runtime deferred
+### V1 — Runtime probe: CONFIRMED (static + runtime, 2026-04-15)
 
-Grep of `~/.claude/plugins/cache/omc/oh-my-claudecode/4.11.5/skills/autopilot/SKILL.md`
-confirmed the auto-skip premise is explicit at lines 41, 42, 173–189. The
-probe artifact fixtures (`.omc/specs/deep-interview-probe.md` and
-`.omc/plans/ralplan-probe.md`) were created and removed during R2. Full
-runtime probe (invoking `/autopilot` with a trivial task) was deferred —
-invoking it would hijack the agent session. Per memory file classification
-the runtime-deviation risk is "low but non-zero", and the refactor is fully
-reversible via `git revert` if a later probe shows runtime deviates from
-the documented spec.
+**Static verification (session 8, 2026-04-14).** Grep of
+`~/.claude/plugins/cache/omc/oh-my-claudecode/4.11.5/skills/autopilot/SKILL.md`
+confirmed the auto-skip premise is explicit at lines 41, 42, 173–189.
+
+**Runtime probe (session 9, 2026-04-15).** Probe fixtures
+(`.omc/specs/deep-interview-probe.md`, `.omc/plans/ralplan-probe.md`) were
+placed, then `/oh-my-claudecode:autopilot` invoked with task
+`probe — print hello world`. The skill detected both artifacts on first
+file check; ralplan rule (line 41) took precedence over the spec-only
+branch (line 42) as documented. Observed Phase 0 announcement verbatim:
+
+> Detected `.omc/plans/ralplan-probe.md` (matches `ralplan-*.md` glob).
+> Per 3-stage pipeline contract, the plan has already been
+> Planner/Architect/Critic validated.
+>
+> **Skipping Phase 0 (Expansion)** — ralplan consensus plan exists;
+> analyst+architect expansion unnecessary.
+>
+> **Skipping Phase 1 (Planning)** — ralplan consensus plan exists;
+> architect plan creation and critic validation already done.
+>
+> **Jumping directly to Phase 2 (Execution)** with plan
+> `.omc/plans/ralplan-probe.md`.
+>
+> Also noted: `.omc/specs/deep-interview-probe.md` present (matches
+> `deep-interview-*.md`). Superseded by ralplan rule at line 41, which
+> takes precedence over line 42's spec-only branch.
+
+Runtime behavior matches the documented spec. The static premise
+underlying R5 closure and the R2 engine collapse holds. Probe was
+cancelled via `/oh-my-claudecode:cancel` before Phase 2 execution
+(state_write `active=false`, state_clear `skill-active`). Probe
+fixtures removed post-confirmation.
 
 ### V2 — Coverage check: PASS (17 blocks, 5 hashes → 4 classifier shapes)
 
@@ -339,7 +363,7 @@ OK: zero banned patterns found across 8 target file(s)
 
 | # | Status | Reason |
 |---|--------|--------|
-| R5 | ✓ RESOLVED 2026-04-14 | Uniformity decision captured in memory file; static verification of auto-skip premise complete |
+| R5 | ✓ RESOLVED 2026-04-14 (static) + 2026-04-15 (runtime) | Uniformity decision captured in memory file; auto-skip premise verified both statically (session 8) and at runtime via live probe (session 9) |
 | R8 | ✗ OBSOLETE | "/omc-plan --direct for Light variants" is redundant under uniformity — the front-end stays /deep-interview across all variants |
 | R9 | ✗ OBSOLETE | "/ai-slop-cleaner as alternate engine for Hygiene" — Signal #1 keyword trigger handles the explicit-deslop case without chain-level branching |
 
