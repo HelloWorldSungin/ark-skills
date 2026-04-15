@@ -44,14 +44,15 @@
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
-*Front-loaded judgment + autonomous execution + Ark closeout.*
+*Front-loaded judgment + authoritative external docs + autonomous execution + Ark closeout.*
 
 0. `/ark-context-warmup` — same as Path A
-1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
-2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 1+2. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
-4. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
-5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
+1. `/external-context` — fan-out doc-specialist agents for the target framework's migration guide (authoritative external docs; counters stale training-data reasoning)
+2. `/deep-interview` — converge on spec (ambiguity threshold 20%), informed by external-context findings
+3. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
+4. `/autopilot` — full pipeline; auto-skips Phase 0+1 when it detects the pre-placed artifacts from steps 2+3. See `references/omc-integration.md` § Section 4.1 for the handback boundary.
+5. `<<HANDBACK>>` — Ark resumes authority; `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
+6. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --quick` onward for this same variant. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (Vanilla row).
 
 ## Heavy
 
@@ -85,11 +86,12 @@
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
-*Front-loaded judgment + coordinated multi-agent execution + Ark closeout.*
+*Front-loaded judgment + authoritative external docs + coordinated multi-agent execution + Ark closeout.*
 
 0. `/ark-context-warmup` — same as Path A
-1. `/deep-interview` — converge on spec (ambiguity threshold 20%)
-2. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
-3. `/team` — coordinated cross-module migration; follows omc-reference pipeline `team-plan → team-prd → team-exec → team-verify`. See `references/omc-integration.md` § Section 4.2 for the handback boundary.
-4. `<<HANDBACK>>` — Ark resumes authority after `team-verify`, **before** `team-fix` (bounded remediation reserved for Ark's review). `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
-5. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward. If Ark review concurs with residual defects from `team-verify`, invoke `team-fix` from within Ark's review; otherwise proceed to `/ship`. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (/team row).
+1. `/external-context` — fan-out doc-specialist agents for the target framework/platform migration guide (authoritative external docs; counters stale training-data reasoning on major framework changes)
+2. `/deep-interview` — converge on spec (ambiguity threshold 20%), informed by external-context findings
+3. `/omc-plan --consensus` — multi-agent consensus plan (Planner → Architect → Critic)
+4. `/team` — coordinated cross-module migration; follows omc-reference pipeline `team-plan → team-prd → team-exec → team-verify`. See `references/omc-integration.md` § Section 4.2 for the handback boundary.
+5. `<<HANDBACK>>` — Ark resumes authority after `team-verify`, **before** `team-fix` (bounded remediation reserved for Ark's review). `.ark-workflow/current-chain.md` remains SoT. `.omc/state/sessions/{id}/` annotated in Notes; never consumed by Ark resume logic.
+6. **Ark closeout** — run Path A's closeout steps from `/ark-code-review --thorough` onward. If Ark review concurs with residual defects from `team-verify`, invoke `team-fix` from within Ark's review; otherwise proceed to `/ship`. Closeout terminates at `/claude-history-ingest`. See `references/omc-integration.md` § Section 4 expected-closeout table (/team row).

@@ -322,8 +322,10 @@ class TestCLI:
 
     def test_real_repo_chains_pass(self, tmp_path):
         """End-to-end sanity: the live repo chains directory must pass the
-        default (17 blocks, 4 shapes) check. This pins the post-uniformity
-        CI contract (2026-04-15)."""
+        default check (17 blocks; 5 distinct raw-text canonicalized hashes
+        post-R10 from the /external-context pre-step variant; still only
+        4 classifier-visible shapes via ALLOWED_SHAPES). This pins the
+        post-uniformity CI contract (2026-04-15)."""
         live_chains = Path(__file__).parent.parent.parent / "ark-workflow" / "chains"
         if not live_chains.is_dir():
             pytest.skip("live chains directory not accessible")
@@ -333,7 +335,7 @@ class TestCLI:
         )
         assert result.returncode == 0, f"CI contract broken: {result.stderr}"
         assert "17 Path B block" in result.stdout
-        assert "4 distinct canonicalized shape" in result.stdout
+        assert "5 distinct canonicalized shape" in result.stdout
 
 
 # ── ALLOWED_SHAPES contract ─────────────────────────────────────────────

@@ -65,8 +65,9 @@ Which OMC engine is the natural fit per chain variant.
 | Hygiene Audit-Only | `/autopilot` (findings mode) | Findings-only; no code mutation |
 | Knowledge-Capture Light | `/autopilot` | Capture + synthesis fits consensus-then-execute |
 | Knowledge-Capture Full | — (no Path B) | Full capture is too broad/branchy for auto-routed single-engine execution; users invoke `/omc-teams 1:gemini` manually when desired |
-| Migration Light / Medium | `/autopilot` | Linear upgrade path |
-| Migration Heavy | `/team` | Cross-module coordination benefits from multi-agent (sole non-/autopilot chain variant) |
+| Migration Light | `/autopilot` | Linear upgrade path |
+| Migration Medium | `/autopilot` | Linear upgrade path; R10 prepends `/external-context` as pre-step 1 to gather authoritative framework migration guides (counters stale training-data reasoning) |
+| Migration Heavy | `/team` | Cross-module coordination benefits from multi-agent (sole non-/autopilot chain variant); R10 prepends `/external-context` as pre-step 1 for the same framework-doc authoritativeness reason |
 | Performance Light | `/autopilot` | Discouraged but available |
 | Performance Medium / Heavy | `/autopilot` | Benchmark-target loops handled inside autopilot's Phase 2 (Execution via internal /ralph loop) |
 
@@ -275,12 +276,21 @@ recover the 17 per-variant assignments. Knowledge-Capture Full has no Path B
 | Migration Heavy | /team | `/team` | `/ark-code-review --thorough` | `/claude-history-ingest` |
 | Performance Light / Medium / Heavy | Vanilla | `/autopilot` | `/ark-code-review --{quick\|thorough}` | `/claude-history-ingest` |
 
-8 rows representing **17 variants** across **4 distinct shapes** (Vanilla 14 +
-/team 1 + Special-A 1 + Special-B 1). `check_path_b_coverage.py` canonicalizes
-each block (strip scenario headers and weight markers) and hashes it;
-expected distinct hashes = 4; expected total blocks = 17. The CI script
-reads chain files directly, so row-grouping in this table does not affect
-coverage enforcement.
+8 rows representing **17 variants** across **4 distinct classifier shapes**
+(Vanilla 14 + /team 1 + Special-A 1 + Special-B 1). `check_path_b_coverage.py`
+canonicalizes each block (strip scenario headers and weight markers) and
+hashes it; expected total blocks = 17. The CI script reads chain files
+directly, so row-grouping in this table does not affect coverage enforcement.
+
+**Note on hash count vs shape count.** Raw-text canonicalized hashes
+currently total **5**, not 4. Migration Medium + Migration Heavy prepend
+`/external-context` as pre-step 1 (R10), making their block bodies one line
+longer than other variants — distinct hashes from the base vanilla/team
+forms. The `_classify_shape` classifier keys on engine + closeout markers
+(not step count), so classifier-visible shapes remain 4; hash ceiling in
+`check_path_b_coverage.py` is 5 to accommodate the raw-text variant. Adding
+more pre-step variants in the future would raise this ceiling further
+unless canonicalization is extended to strip step-count-variance.
 
 ---
 

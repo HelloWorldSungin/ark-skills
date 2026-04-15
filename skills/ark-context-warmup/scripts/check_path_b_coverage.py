@@ -6,8 +6,10 @@ skills/ark-workflow/references/omc-integration.md § Section 4.
 
 What this script checks:
   1. Total Path B blocks across chain files matches --expected-blocks.
-  2. Canonicalized blocks collapse to ≤ --max-distinct-shapes hashes (default 4
-     post-uniformity: Vanilla + /team + Special-A + Special-B).
+  2. Canonicalized blocks collapse to ≤ --max-distinct-shapes hashes (default 5
+     post-uniformity + R10 pre-step: 4 classifier shapes (Vanilla + /team +
+     Special-A + Special-B) plus 1 raw-text variant for the /external-context
+     pre-step used by Migration Medium+Heavy Path B).
   3. Every block contains the literal `<<HANDBACK>>` marker.
   4. Every block contains either `/deep-interview` OR `/claude-history-ingest`.
   5. Distribution of shapes matches ALLOWED_SHAPES when --expected-blocks == 17.
@@ -186,8 +188,13 @@ def main() -> int:
                     help="Directory containing chain *.md files")
     ap.add_argument("--expected-blocks", type=int, default=17,
                     help="Expected total Path B blocks (default 17 — Knowledge-Capture Full and Ship Standalone have no Path B)")
-    ap.add_argument("--max-distinct-shapes", type=int, default=4,
-                    help="Max distinct canonicalized hashes (default 4 — see ALLOWED_SHAPES)")
+    ap.add_argument("--max-distinct-shapes", type=int, default=5,
+                    help=("Max distinct canonicalized hashes (default 5: 4 "
+                          "from ALLOWED_SHAPES classifier + 1 for the "
+                          "/external-context pre-step variant hash used by "
+                          "Migration Medium+Heavy Path B per R10). "
+                          "Classifier still maps to 4 distinct SHAPES — this "
+                          "ceiling is on raw text canonicalization."))
     args = ap.parse_args()
 
     errors: list[str] = []
