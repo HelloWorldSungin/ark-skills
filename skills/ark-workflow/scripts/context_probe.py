@@ -2,10 +2,19 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 
-def probe(state_path, *, nudge_pct: int = 20, strong_pct: int = 35):
+def probe(
+    state_path,
+    *,
+    nudge_pct: int = 20,
+    strong_pct: int = 35,
+    max_age_seconds=None,
+    expected_cwd=None,
+    expected_session_id=None,
+):
     """Read Claude Code statusline cache and return a budget recommendation."""
     p = Path(state_path)
 
@@ -17,15 +26,34 @@ def probe(state_path, *, nudge_pct: int = 20, strong_pct: int = 35):
 
     try:
         raw = p.read_text()
-    except PermissionError:
-        return _unknown("permission_error")
-    except OSError:
+    except (PermissionError, OSError):
         return _unknown("permission_error")
 
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
         return _unknown("parse_error")
+
+    # Session-id check supersedes everything else when provided.
+    cache_session_id = data.get("session_id") or data.get("sessionId")
+    if expected_session_id is not None:
+        if cache_session_id != expected_session_id:
+            return _unknown("session_mismatch")
+    else:
+        # Mtime-based staleness fallback only when session-id wasn't checked.
+        if max_age_seconds is not None:
+            try:
+                mtime = p.stat().st_mtime
+            except OSError:
+                return _unknown("permission_error")
+            if (time.time() - mtime) > max_age_seconds:
+                return _unknown("stale_file")
+
+    # Cwd check (independent of session-id).
+    if expected_cwd is not None:
+        cache_cwd = data.get("cwd") or data.get("workspace", {}).get("current_dir")
+        if cache_cwd != expected_cwd:
+            return _unknown("session_mismatch")
 
     cw = data.get("context_window", {})
     pct = cw.get("used_percentage")

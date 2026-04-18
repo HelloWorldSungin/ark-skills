@@ -125,3 +125,58 @@ class TestProbeErrors:
             os.chmod(f, original_mode)
         assert result["level"] == "unknown"
         assert result["reason"] == "permission_error"
+
+
+import time
+
+
+class TestProbeSession:
+    def test_cwd_mismatch(self):
+        result = cp.probe(FIXTURES / "cwd-mismatch.json", expected_cwd="/tmp/test-project")
+        assert result["level"] == "unknown"
+        assert result["reason"] == "session_mismatch"
+
+    def test_cwd_match_passes(self):
+        result = cp.probe(FIXTURES / "ok-fresh.json", expected_cwd="/tmp/test-project")
+        assert result["level"] == "ok"
+
+    def test_workspace_falls_back_when_cwd_absent(self):
+        result = cp.probe(FIXTURES / "workspace-mismatch.json", expected_cwd="/tmp/test-project")
+        assert result["level"] == "unknown"
+        assert result["reason"] == "session_mismatch"
+
+    def test_session_id_mismatch(self):
+        result = cp.probe(FIXTURES / "ok-fresh.json", expected_session_id="DIFFERENT-SESSION")
+        assert result["level"] == "unknown"
+        assert result["reason"] == "session_mismatch"
+
+    def test_session_id_match_passes(self):
+        result = cp.probe(FIXTURES / "ok-fresh.json", expected_session_id="test-session-ok-fresh")
+        assert result["level"] == "ok"
+
+    def test_session_id_check_supersedes_mtime(self, tmp_path):
+        # When expected_session_id is provided, mtime check is bypassed.
+        f = tmp_path / "fresh.json"
+        f.write_text((FIXTURES / "ok-fresh.json").read_text())
+        os.utime(f, (time.time() - 999999, time.time() - 999999))  # very old
+        result = cp.probe(
+            f,
+            expected_session_id="test-session-ok-fresh",
+            max_age_seconds=60,
+        )
+        assert result["level"] == "ok"  # session match wins
+
+    def test_stale_file_rejected_when_no_session_id(self, tmp_path):
+        f = tmp_path / "stale.json"
+        f.write_text((FIXTURES / "ok-fresh.json").read_text())
+        os.utime(f, (time.time() - 999999, time.time() - 999999))
+        result = cp.probe(f, max_age_seconds=60)
+        assert result["level"] == "unknown"
+        assert result["reason"] == "stale_file"
+
+    def test_fresh_file_passes_ttl(self, tmp_path):
+        f = tmp_path / "fresh.json"
+        f.write_text((FIXTURES / "ok-fresh.json").read_text())
+        # mtime defaults to "now" — should pass.
+        result = cp.probe(f, max_age_seconds=60)
+        assert result["level"] == "ok"
