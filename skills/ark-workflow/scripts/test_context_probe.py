@@ -579,3 +579,42 @@ class TestCliStepBoundary:
         assert rc == 0
         # Degraded menu still warns at the right level even with no chain context.
         assert "Context at 28%" in out
+
+
+class TestCliPathBAcceptance:
+    def test_ok_level_prints_nothing(self):
+        rc, out, _ = _run_cli(
+            "--format", "path-b-acceptance",
+            "--state-path", str(FIXTURES / "ok-fresh.json"),
+        )
+        assert rc == 0
+        assert out == ""
+
+    def test_nudge_level_prints_one_line_warning(self):
+        rc, out, _ = _run_cli(
+            "--format", "path-b-acceptance",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+        )
+        assert rc == 0
+        assert "Context at 28%" in out
+        assert "Path B" in out
+        assert "/clear" in out or "/compact" in out
+        # Should be a single line of output (plus terminating newline).
+        assert out.count("\n") <= 2
+
+    def test_strong_level_prints_warning(self):
+        rc, out, _ = _run_cli(
+            "--format", "path-b-acceptance",
+            "--state-path", str(FIXTURES / "strong-low.json"),
+        )
+        assert rc == 0
+        assert "Context at 35%" in out
+
+    def test_session_mismatch_silent(self):
+        rc, out, _ = _run_cli(
+            "--format", "path-b-acceptance",
+            "--state-path", str(FIXTURES / "cwd-mismatch.json"),
+            "--expected-cwd", "/tmp/test-project",
+        )
+        assert rc == 0
+        assert out == ""

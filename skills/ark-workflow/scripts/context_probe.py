@@ -412,6 +412,31 @@ def _cmd_step_boundary(args) -> int:
     return 0
 
 
+def _cmd_path_b_acceptance(args) -> int:
+    result = probe(
+        Path(args.state_path),
+        nudge_pct=args.nudge_pct,
+        strong_pct=args.strong_pct,
+        max_age_seconds=args.max_age_seconds,
+        expected_cwd=args.expected_cwd,
+        expected_session_id=args.expected_session_id,
+    )
+    if result["level"] in ("ok", "unknown"):
+        return 0
+    pct = result["pct"]
+    tokens = result["tokens"]
+    if isinstance(tokens, int):
+        suffix = f"(~{tokens // 1000}k)"
+    else:
+        suffix = ""
+    msg = (
+        f"⚠ Context at {pct}% {suffix}. Path B adds parent-session coordination "
+        f"on top — consider /clear or /compact before accepting."
+    ).replace("  ", " ").strip()
+    sys.stdout.write(msg + "\n")
+    return 0
+
+
 def _cmd_raw(args) -> int:
     result = probe(
         Path(args.state_path),
@@ -446,6 +471,8 @@ def main(argv=None) -> int:
         return _cmd_raw(args)
     if args.format == "step-boundary":
         return _cmd_step_boundary(args)
+    if args.format == "path-b-acceptance":
+        return _cmd_path_b_acceptance(args)
     if args.format == "check-off":
         return _cmd_check_off(args)
     if args.format == "record-proceed":
