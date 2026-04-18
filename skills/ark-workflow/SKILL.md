@@ -311,7 +311,30 @@ recommendation, path_selected, variant}`. No prompt text, no user identifier.
   ## Notes
 
 - Add `.ark-workflow/` to `.gitignore` if not already present
-- After each step: check off the step in the file (`[ ]` → `[x]`), update the TodoWrite task to `completed`, announce `Next: [skill] — [purpose]`, mark next task `in_progress`
+- After each step:
+  1. Check off the step in `.ark-workflow/current-chain.md` via the atomic helper (not by hand-editing):
+     ```bash
+     python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" \
+       --format check-off --step-index {N} \
+       --chain-path .ark-workflow/current-chain.md
+     ```
+  2. Update the TodoWrite task to `completed`
+  3. **Run the step-boundary probe** (only when `HAS_OMC=true`):
+     ```bash
+     MENU=$(python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" \
+       --format step-boundary \
+       --state-path .omc/state/hud-stdin-cache.json \
+       --chain-path .ark-workflow/current-chain.md \
+       --expected-cwd "$(pwd)" \
+       "${SESSION_FLAG[@]}" 2>/dev/null)
+     ```
+     If `$MENU` is non-empty, display it verbatim and pause for user decision. Then:
+     - If `proceed`: invoke `--format record-proceed` (no extra args; helper self-detects current level and persists `proceed_past_level: nudge` only when current level is `nudge`; strong is never silenced).
+     - If `(a)` or `(b)`: after `/compact` or `/clear`, invoke `--format record-reset` to explicitly clear `proceed_past_level: null` so the next boundary probes fresh.
+     - If `(c)`: no state write; subagent wraps Next step.
+     If `$MENU` is empty, proceed silently.
+  4. Mark the next TodoWrite task `in_progress`
+  5. Announce `Next: [skill] — [purpose]`
 - For batch-mode chain file format, cross-session resume, `handoff_marker` semantics, stale-chain detection, and compaction recovery: see `references/continuity.md`
 
 ### Step 7: Hand Off
