@@ -15,3 +15,43 @@ class TestProbeLevels:
         result = cp.probe(FIXTURES / "ok-fresh.json")
         assert result["level"] == "ok"
         assert result["pct"] == 5
+
+    def test_ok_warm_just_below_nudge(self):
+        result = cp.probe(FIXTURES / "ok-warm.json")
+        assert result["level"] == "ok"
+        assert result["pct"] == 19
+
+    def test_nudge_low_inclusive_boundary(self):
+        result = cp.probe(FIXTURES / "nudge-low.json")
+        assert result["level"] == "nudge"
+        assert result["pct"] == 20
+
+    def test_nudge_mid(self):
+        result = cp.probe(FIXTURES / "nudge-mid.json")
+        assert result["level"] == "nudge"
+        assert result["pct"] == 28
+
+    def test_nudge_high_just_below_strong(self):
+        result = cp.probe(FIXTURES / "nudge-high.json")
+        assert result["level"] == "nudge"
+        assert result["pct"] == 34
+
+    def test_strong_low_inclusive_boundary(self):
+        result = cp.probe(FIXTURES / "strong-low.json")
+        assert result["level"] == "strong"
+        assert result["pct"] == 35
+
+    def test_strong_high(self):
+        result = cp.probe(FIXTURES / "strong-high.json")
+        assert result["level"] == "strong"
+        assert result["pct"] == 72
+
+    def test_over_100_clamped(self):
+        result = cp.probe(FIXTURES / "over-100.json")
+        assert result["level"] == "strong"
+        assert result["pct"] == 100  # clamped
+
+    def test_threshold_overrides(self):
+        # Custom thresholds: 10/25 instead of 20/35.
+        result = cp.probe(FIXTURES / "nudge-mid.json", nudge_pct=10, strong_pct=25)
+        assert result["level"] == "strong"  # 28 >= 25 with custom strong
