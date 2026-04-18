@@ -271,6 +271,41 @@ recommendation, path_selected, variant}`. No prompt text, no user identifier.
 `.ark-workflow/` ignore line).
 
 ### Step 6.5: Activate Continuity
+
+**Resolve the current session id once for all probe invocations in this section** (only when `HAS_OMC=true`):
+
+```bash
+SESSION_ID="${CLAUDE_SESSION_ID:-$(python3 -c '
+import json, pathlib
+p = pathlib.Path(".omc/state/hud-state.json")
+try:
+    data = json.loads(p.read_text())
+    sid = data.get("sessionId") or data.get("session_id") or ""
+    if isinstance(sid, str) and sid.strip():
+        print(sid.strip())
+except Exception:
+    pass
+' 2>/dev/null)}"
+SESSION_FLAG=()
+if [ -n "$SESSION_ID" ]; then
+  SESSION_FLAG=(--expected-session-id "$SESSION_ID")
+fi
+```
+
+**Chain-entry probe** — run before executing step 1 of the chain (only when `HAS_OMC=true`):
+
+```bash
+ENTRY=$(python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" \
+  --format step-boundary \
+  --state-path .omc/state/hud-stdin-cache.json \
+  --chain-path .ark-workflow/current-chain.md \
+  --expected-cwd "$(pwd)" \
+  "${SESSION_FLAG[@]}" \
+  --max-age-seconds 300 2>/dev/null)
+```
+
+If `$ENTRY` is non-empty, display it verbatim and pause for user decision before executing step 1. Apply the same proceed/reset/(c) handling as the per-step probe in the "after each step" bullet below. Entry-time probes pass `--max-age-seconds 300` (5 minutes) so a stale cache file from a previous session is rejected; the helper still prefers `--expected-session-id` when available. The step-boundary mode is reused at entry; the helper auto-detects "zero completed steps" and renders the entry menu (option (a) shown unavailable, answer set `[b/c/proceed]`).
+
 - Create TodoWrite tasks for each step in the resolved chain
 - Compute task fields for `/ark-context-warmup` (step 0 of every chain). `/ark-workflow` needs the same `ARK_SKILLS_ROOT` resolution as the warm-up skill — mirror `/ark-context-warmup` SKILL.md's Project Discovery section verbatim so dev-mode runs inside the ark-skills worktree resolve helpers from the branch under test rather than a stale installed copy:
   ```bash
