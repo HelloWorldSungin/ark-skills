@@ -158,6 +158,99 @@ import sys
 _CHECKLIST_LINE_RE = re.compile(r"^(- \[)([ x])(\] .*)$", re.MULTILINE)
 
 
+def _parse_chain_file(text: str):
+    """Return dict: scenario, weight, completed, next_skill, remaining, all_steps, proceed_past_level."""
+    fm = {}
+    body = text
+    if text.startswith("---"):
+        lines = text.split("\n")
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                for fl in lines[1:i]:
+                    if ":" in fl:
+                        k, _, v = fl.partition(":")
+                        fm[k.strip()] = v.strip()
+                body = "\n".join(lines[i + 1:])
+                break
+
+    completed = []
+    remaining = []
+    all_steps = []
+    for line in body.split("\n"):
+        m = _CHECKLIST_LINE_RE.match(line)
+        if not m:
+            continue
+        label = m.group(3)[2:].strip()  # everything after "] "
+        all_steps.append(label)
+        if m.group(2) == "x":
+            completed.append(label)
+        else:
+            remaining.append(label)
+    next_skill = remaining[0] if remaining else None
+    rest = remaining[1:] if remaining else []
+    return {
+        "scenario": fm.get("scenario", "unknown"),
+        "weight": fm.get("weight", "unknown"),
+        "completed": completed,
+        "next_skill": next_skill,
+        "remaining": rest,
+        "all_steps": all_steps,
+        "proceed_past_level": fm.get("proceed_past_level", "null"),
+    }
+
+
+def render_step_boundary_menu(*, level: str, pct: int, tokens, chain_text: str) -> str:
+    """Render the three-option mitigation menu for mid-chain step boundaries.
+
+    Task 10 only handles the mid-chain case (>=1 [x] step). Task 11 adds the
+    zero-completed entry branch.
+    """
+    info = _parse_chain_file(chain_text)
+    return _render_midchain_menu(level=level, pct=pct, tokens=tokens, info=info)
+
+
+def _format_pct_tokens(pct: int, tokens) -> str:
+    if isinstance(tokens, int):
+        return f"Context at {pct}% (~{tokens // 1000}k)"
+    return f"Context at {pct}%"
+
+
+def _render_midchain_menu(*, level, pct, tokens, info) -> str:
+    completed = ", ".join(info["completed"]) or "(none)"
+    remaining = ", ".join(info["remaining"]) or "(none)"
+    next_skill = info["next_skill"] or "(unknown)"
+    next_step_num = len(info["completed"]) + 1
+    scenario = info["scenario"]
+    weight = info["weight"]
+    pct_tokens = _format_pct_tokens(pct, tokens)
+
+    if level == "strong":
+        header = (
+            f"⚠ {pct_tokens} — entering the attention-rot zone (~300k+ tokens) "
+            f"where reasoning quality degrades. One of (a)/(b)/(c) is strongly "
+            f"recommended before continuing."
+        )
+    else:
+        header = f"⚠ {pct_tokens}. Options before continuing to Next:"
+
+    forward_brief = (
+        f'  "Resuming {scenario} chain ({weight}). Completed: {completed}.\n'
+        f'   Next: step {next_step_num} — {next_skill}. Remaining: {remaining}.\n'
+        f'   Key findings so far: <fill in>."'
+    )
+
+    return (
+        f"{header}\n\n"
+        f"Forward brief (auto-assembled from current-chain.md):\n"
+        f"{forward_brief}\n\n"
+        f"  (a) /compact focus on the forward brief above.\n"
+        f"  (b) /clear, then paste the forward brief above as your opening message.\n"
+        f"  (c) Delegate Next step to a subagent (keeps this session lean — only the\n"
+        f"      subagent's conclusion returns, not its tool output).\n\n"
+        f"Which option? [a/b/c/proceed]"
+    )
+
+
 def _set_proceed_past_level(text: str, value: str) -> str:
     """Set proceed_past_level in YAML frontmatter to 'nudge' or 'null'.
 
