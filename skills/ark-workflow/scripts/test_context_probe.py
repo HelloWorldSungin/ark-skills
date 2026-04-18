@@ -55,3 +55,24 @@ class TestProbeLevels:
         # Custom thresholds: 10/25 instead of 20/35.
         result = cp.probe(FIXTURES / "nudge-mid.json", nudge_pct=10, strong_pct=25)
         assert result["level"] == "strong"  # 28 >= 25 with custom strong
+
+
+class TestProbeTokens:
+    def test_tokens_summed_when_all_subfields_present(self):
+        result = cp.probe(FIXTURES / "ok-fresh.json")
+        # 6 + 100 + 1000 + 50000 = 51106
+        assert result["tokens"] == 51106
+        assert result["warnings"] == []
+
+    def test_tokens_unavailable_when_current_usage_missing(self):
+        result = cp.probe(FIXTURES / "missing-current-usage.json")
+        assert result["level"] == "nudge"
+        assert result["pct"] == 28
+        assert result["tokens"] is None
+        assert "tokens_unavailable" in result["warnings"]
+
+    def test_tokens_unavailable_when_subfield_non_integer(self):
+        result = cp.probe(FIXTURES / "non-integer-token.json")
+        assert result["level"] == "nudge"
+        assert result["tokens"] is None
+        assert "tokens_unavailable" in result["warnings"]
