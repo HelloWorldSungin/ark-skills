@@ -491,3 +491,91 @@ class TestCliRecordReset:
         chain.write_text(body_with_progress)
         _run_cli("--format", "record-reset", "--chain-path", str(chain))
         assert "- [x] /ark-context-warmup" in chain.read_text()
+
+
+class TestCliStepBoundary:
+    def test_ok_level_prints_nothing(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        rc, out, _ = _run_cli(
+            "--format", "step-boundary",
+            "--state-path", str(FIXTURES / "ok-fresh.json"),
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert out == ""
+
+    def test_nudge_level_prints_menu(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN.replace(
+            "- [ ] /ark-context-warmup", "- [x] /ark-context-warmup"
+        ).replace(
+            "- [ ] /investigate", "- [x] /investigate"
+        ))
+        rc, out, err = _run_cli(
+            "--format", "step-boundary",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+            "--chain-path", str(chain),
+        )
+        assert rc == 0, f"stderr: {err}"
+        assert "Context at 28%" in out
+        assert "Which option? [a/b/c/proceed]" in out
+
+    def test_nudge_suppressed_by_proceed_past_level(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN.replace("proceed_past_level: null",
+                                              "proceed_past_level: nudge"))
+        rc, out, _ = _run_cli(
+            "--format", "step-boundary",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert out == ""
+
+    def test_strong_not_suppressed_by_proceed_past_level(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN.replace("proceed_past_level: null",
+                                              "proceed_past_level: nudge"))
+        rc, out, _ = _run_cli(
+            "--format", "step-boundary",
+            "--state-path", str(FIXTURES / "strong-low.json"),
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert "Context at 35%" in out
+        assert "attention-rot zone" in out
+
+    def test_zero_completed_uses_entry_render(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)  # all unchecked
+        rc, out, _ = _run_cli(
+            "--format", "step-boundary",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert "before chain has started" in out
+        assert "(a) /compact — unavailable" in out
+
+    def test_session_mismatch_silent(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        rc, out, _ = _run_cli(
+            "--format", "step-boundary",
+            "--state-path", str(FIXTURES / "cwd-mismatch.json"),
+            "--expected-cwd", "/tmp/test-project",
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert out == ""
+
+    def test_missing_chain_file_emits_degraded_menu(self, tmp_path):
+        rc, out, _ = _run_cli(
+            "--format", "step-boundary",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+            "--chain-path", str(tmp_path / "does-not-exist.md"),
+        )
+        assert rc == 0
+        # Degraded menu still warns at the right level even with no chain context.
+        assert "Context at 28%" in out

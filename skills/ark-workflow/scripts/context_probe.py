@@ -375,6 +375,43 @@ def _cmd_check_off(args) -> int:
     return 0
 
 
+def _cmd_step_boundary(args) -> int:
+    result = probe(
+        Path(args.state_path),
+        nudge_pct=args.nudge_pct,
+        strong_pct=args.strong_pct,
+        max_age_seconds=args.max_age_seconds,
+        expected_cwd=args.expected_cwd,
+        expected_session_id=args.expected_session_id,
+    )
+    if result["level"] in ("ok", "unknown"):
+        return 0  # silent
+
+    # Read chain file (degraded if missing).
+    try:
+        chain_text = Path(args.chain_path).read_text()
+    except FileNotFoundError:
+        chain_text = "---\nscenario: unknown\nweight: unknown\n---\n## Steps\n"
+        sys.stderr.write(f"chain file missing: {args.chain_path}\n")
+    except Exception as exc:
+        chain_text = "---\nscenario: unknown\nweight: unknown\n---\n## Steps\n"
+        sys.stderr.write(f"chain file unreadable: {exc}\n")
+
+    # Suppression: if proceed_past_level == 'nudge' and current level is 'nudge', skip.
+    info = _parse_chain_file(chain_text)
+    if result["level"] == "nudge" and info.get("proceed_past_level") == "nudge":
+        return 0
+
+    menu = render_step_boundary_menu(
+        level=result["level"],
+        pct=result["pct"],
+        tokens=result["tokens"],
+        chain_text=chain_text,
+    )
+    sys.stdout.write(menu + "\n")
+    return 0
+
+
 def _cmd_raw(args) -> int:
     result = probe(
         Path(args.state_path),
@@ -407,6 +444,8 @@ def main(argv=None) -> int:
     args = _build_parser().parse_args(argv)
     if args.format == "raw":
         return _cmd_raw(args)
+    if args.format == "step-boundary":
+        return _cmd_step_boundary(args)
     if args.format == "check-off":
         return _cmd_check_off(args)
     if args.format == "record-proceed":
