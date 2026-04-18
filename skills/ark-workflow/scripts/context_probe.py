@@ -148,3 +148,47 @@ def _do_update(chain_path: Path, mutator_fn):
         except FileNotFoundError:
             pass
         raise
+
+
+import argparse
+import sys
+
+
+def _cmd_raw(args) -> int:
+    result = probe(
+        Path(args.state_path),
+        max_age_seconds=args.max_age_seconds,
+        expected_cwd=args.expected_cwd,
+        expected_session_id=args.expected_session_id,
+    )
+    sys.stdout.write(json.dumps(result) + "\n")
+    return 0
+
+
+def _build_parser():
+    p = argparse.ArgumentParser(description="Ark Workflow context-budget probe")
+    p.add_argument("--format", required=True,
+                   choices=["raw", "step-boundary", "path-b-acceptance",
+                            "record-proceed", "record-reset", "check-off"])
+    p.add_argument("--state-path", default=".omc/state/hud-stdin-cache.json")
+    p.add_argument("--chain-path", default=".ark-workflow/current-chain.md")
+    p.add_argument("--expected-cwd", default=None)
+    p.add_argument("--expected-session-id", default=None)
+    p.add_argument("--max-age-seconds", type=int, default=None)
+    p.add_argument("--step-index", type=int, default=None,
+                   help="1-based step index for --format check-off")
+    p.add_argument("--nudge-pct", type=int, default=20)
+    p.add_argument("--strong-pct", type=int, default=35)
+    return p
+
+
+def main(argv=None) -> int:
+    args = _build_parser().parse_args(argv)
+    if args.format == "raw":
+        return _cmd_raw(args)
+    sys.stderr.write(f"format {args.format!r} not implemented\n")
+    return 0  # spec: all modes exit 0 even on missing implementation
+
+
+if __name__ == "__main__":
+    sys.exit(main())

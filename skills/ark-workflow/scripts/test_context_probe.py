@@ -220,3 +220,60 @@ class TestAtomicUpdate:
         for t in threads:
             t.join()
         assert int(f.read_text().strip()) == 20
+
+
+import subprocess
+import json as _json
+
+SCRIPT_PATH = SCRIPTS_DIR / "context_probe.py"
+
+
+def _run_cli(*args):
+    """Run context_probe.py CLI; return (returncode, stdout, stderr)."""
+    proc = subprocess.run(
+        ["python3", str(SCRIPT_PATH), *args],
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+class TestCliRaw:
+    def test_raw_ok_fixture(self):
+        rc, out, err = _run_cli(
+            "--format", "raw",
+            "--state-path", str(FIXTURES / "ok-fresh.json"),
+        )
+        assert rc == 0, f"stderr: {err}"
+        result = _json.loads(out)
+        assert result["level"] == "ok"
+        assert result["pct"] == 5
+
+    def test_raw_strong_fixture(self):
+        rc, out, _ = _run_cli(
+            "--format", "raw",
+            "--state-path", str(FIXTURES / "strong-low.json"),
+        )
+        assert rc == 0
+        result = _json.loads(out)
+        assert result["level"] == "strong"
+
+    def test_raw_with_expected_cwd_mismatch(self):
+        rc, out, _ = _run_cli(
+            "--format", "raw",
+            "--state-path", str(FIXTURES / "cwd-mismatch.json"),
+            "--expected-cwd", "/tmp/test-project",
+        )
+        assert rc == 0
+        result = _json.loads(out)
+        assert result["level"] == "unknown"
+        assert result["reason"] == "session_mismatch"
+
+    def test_raw_missing_file_exits_zero(self):
+        rc, out, _ = _run_cli(
+            "--format", "raw",
+            "--state-path", "/tmp/__definitely_does_not_exist__.json",
+        )
+        assert rc == 0
+        result = _json.loads(out)
+        assert result["reason"] == "file_missing"
