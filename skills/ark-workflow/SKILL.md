@@ -262,6 +262,13 @@ Walk through the chain and resolve every conditional using Condition Resolution 
 ### Step 6: Present the Resolved Chain
 Output the numbered skill chain with all conditions resolved. Include the session handoff marker if applicable.
 
+**Substitution rendering rule (Path A Heavy only):** when a step carries an inline substitution note (pattern: `*(substitution: replaced by X when HAS_GSTACK_PLANNING=true — ...)*`), render per `HAS_GSTACK_PLANNING`:
+
+- **`HAS_GSTACK_PLANNING=true`:** rewrite the step text to show the substituted skill (e.g., Greenfield Heavy step 4 renders as `` `/autoplan` — plan review (gstack multi-persona bundle) `` rather than `/ccg ...`). Drop the substitution note from user-facing output — the substitution has already been applied.
+- **`HAS_GSTACK_PLANNING=false`:** render the default skill (`/ccg`) without the substitution note. The note is an agent-only rendering hint, not user-visible metadata.
+
+Chain-file storage stays canonical (one authoritative text with the substitution note), and the user-facing render shows exactly one skill per step. No ambiguity about which skill will actually execute.
+
 ### Step 6 (continued): Dual-path presentation when HAS_OMC=true
 
 When `HAS_OMC=true`, every chain variant has both a `## Path A` (Ark-native) and a

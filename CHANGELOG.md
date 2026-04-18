@@ -39,6 +39,18 @@ New **Brainstorm** scenario + **gstack planning integration** in `/ark-workflow`
 
 Phase 1 was patched in place (semantic detection change, substitution rule, Brainstorm pivot) before Phase 2 chain edits. Both advisors' raw outputs and the synthesis are preserved in `.omc/artifacts/ask/` for the 2026-04-18 design session.
 
+### Post-commit review fixes (pre-push)
+
+Ran a second `/ccg` review against the v1.18.0 commit diff before pushing. Codex flagged two HIGH contract bugs and one MEDIUM rendering concern; Gemini flagged one UX red flag. All addressed in a follow-up commit on the same 1.18.0 release (not pushed yet at review time — no version bump needed).
+
+- **Brainstorm archive path aligned with `references/continuity.md` convention** — changed from `.ark-workflow/archive/{chain_id}.md` to `.ark-workflow/archive/YYYY-MM-DD-brainstorm.md`. Two different archive contracts for the same operation would have produced drift between continuity.md's stale-chain logic and Brainstorm's pivot.
+- **Brainstorm pivot Y-branch reframed as inline re-triage**, not a recursive `/ark-workflow` skill invocation. Reconciles with SKILL.md Step 7's core contract ("ark-workflow does not invoke downstream skills itself"). The agent continues applying the triage algorithm inline against the new spec and writes a fresh `current-chain.md` — no recursion.
+- **Substitution render rule** added to SKILL.md Step 6: when `HAS_GSTACK_PLANNING=true`, the resolved chain rewrites substituted step text (`/ccg` → `/autoplan` / `/plan-eng-review`) and drops the substitution note from user-facing output. Chain-file storage stays canonical; the user sees exactly one skill per step.
+- **Misleading "Path B exception" note removed** from `chains/brainstorm.md` — Brainstorm Path B uses OMC skills (`/deep-interview`, `/ralplan`, `/ccg`), not gstack. No actual exception to the Path B gstack-independence rule; the note was residue.
+- **Non-interactive pivot-gate fallback** documented in `chains/brainstorm.md`: in auto-mode, CI, or unattended background execution, default to Y (continue to triage) without prompting. Addresses Gemini's red flag that the `[Y/n]` prompt would hang in backgrounded contexts.
+
+Known follow-ups for a future minor release: semantic probe silent misclassification (low-severity — relies on agent correctly reading skill-list names), Brainstorm trigger rigidity for "explore new feature idea" (false-negative by design), substitution note verbosity in chain-file storage.
+
 ## [1.17.0] - 2026-04-17
 
 ### Added

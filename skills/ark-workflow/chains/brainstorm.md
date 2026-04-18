@@ -14,15 +14,15 @@
 
    > *"Spec finalized at `docs/superpowers/specs/{filename}`. Ready to triage implementation now? [Y/n]"*
 
-   **If Y (default):** archive this chain file — move `.ark-workflow/current-chain.md` to `.ark-workflow/archive/{chain_id}.md` — then invoke `/ark-workflow` internally with the committed spec as the task. The implementation chain creates its own fresh `current-chain.md` keyed to the refined task.
+   **If Y (default):** archive this chain file — move `.ark-workflow/current-chain.md` to `.ark-workflow/archive/YYYY-MM-DD-brainstorm.md` (matches `references/continuity.md` archive convention). Then **continue applying `/ark-workflow`'s triage algorithm inline** against the committed spec as the new task prompt: re-run Project Discovery, Scenario Detection (the spec now carries creation intent, so likely Greenfield/Migration/Performance), Weight Classification, Chain Lookup, Condition Resolution, Presentation. Write a fresh `.ark-workflow/current-chain.md` for the resolved implementation chain. **Not a recursive `/ark-workflow` skill invocation** — Brainstorm's pivot is the single authorized inline re-triage per Step 7's handoff contract.
 
-   **If N:** archive this chain file (same move). The user can re-invoke `/ark-workflow` later with the spec to enter Greenfield/Migration/Performance chains. Archival prevents session-start rehydration from offering to "continue" a finished Brainstorm (zombie-chain avoidance).
+   **If N:** archive this chain file to `.ark-workflow/archive/YYYY-MM-DD-brainstorm.md`. The user can re-invoke `/ark-workflow` later with the spec to enter an implementation chain. Archival prevents session-start rehydration from offering to "continue" a finished Brainstorm (zombie-chain avoidance).
+
+   **Non-interactive mode:** the pivot gate assumes an interactive response. In auto-mode, CI, unattended background execution, or any context where user input cannot be collected, default to **Y** (continue to triage). Archival still happens; the inline re-triage proceeds without the prompt.
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
-*Deep ambiguity crystallization + multi-model consensus for scope exploration — no execution, no ship.*
-
-*Note: Brainstorm is the one exception to Path B's gstack-independence rule (SKILL.md § Path B gstack-independence). That rule prohibits stacking gstack planning on top of OMC autonomous execution — but Brainstorm is a pre-triage scenario, not a Heavy implementation chain, so the "don't layer reviews" concern doesn't apply.*
+*Deep ambiguity crystallization + multi-model consensus for scope exploration — no execution, no ship. Uses only OMC skills (`/deep-interview`, `/ralplan`, optional `/ccg`) — fully consistent with Path B gstack-independence.*
 
 0. `/ark-context-warmup` — same as Path A
 1. `/deep-interview` — crystallize ambiguity (ambiguity threshold 20%)
