@@ -254,6 +254,19 @@ Recommended: Path B (OMC-powered — autonomous execution, ~1–4 hours, ~3 chec
   [Accept Path B]   [Use Path A]   [Show me both]
 ```
 
+**Path B acceptance probe** (only when `HAS_OMC=true`): before rendering the `[Accept Path B]` button, run:
+
+```bash
+PATHB_WARN=$(python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" \
+  --format path-b-acceptance \
+  --state-path .omc/state/hud-stdin-cache.json \
+  --expected-cwd "$(pwd)" \
+  "${SESSION_FLAG[@]}" \
+  --max-age-seconds 300 2>/dev/null)
+```
+
+If `$PATHB_WARN` is non-empty, display it on its own line above the `[Accept Path B]` button. (`SESSION_FLAG` is resolved in Step 6.5 below; if Step 6.5 hasn't run yet for this invocation, resolve it inline using the same snippet.) Example output: `⚠ Context at 32% (~320k). Path B adds parent-session coordination on top — consider /clear or /compact before accepting.`
+
 Include an inline one-line checkpoint-density + duration estimate next to the
 recommendation so users know what Path B costs before accepting.
 
