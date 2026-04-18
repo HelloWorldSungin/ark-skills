@@ -151,7 +151,36 @@ def _do_update(chain_path: Path, mutator_fn):
 
 
 import argparse
+import re
 import sys
+
+
+_CHECKLIST_LINE_RE = re.compile(r"^(- \[)([ x])(\] .*)$", re.MULTILINE)
+
+
+def _cmd_check_off(args) -> int:
+    if args.step_index is None or args.step_index < 1:
+        return 0  # silent no-op
+
+    target_index = args.step_index
+
+    def mutator(text: str) -> str:
+        lines = text.split("\n")
+        count = 0
+        for i, line in enumerate(lines):
+            m = _CHECKLIST_LINE_RE.match(line)
+            if m:
+                count += 1
+                if count == target_index:
+                    if m.group(2) == "x":
+                        return text  # already checked, no-op
+                    lines[i] = m.group(1) + "x" + m.group(3)
+                    return "\n".join(lines)
+        # Index too large — silent no-op.
+        return text
+
+    chain_file.atomic_update(Path(args.chain_path), mutator)
+    return 0
 
 
 def _cmd_raw(args) -> int:
@@ -186,6 +215,8 @@ def main(argv=None) -> int:
     args = _build_parser().parse_args(argv)
     if args.format == "raw":
         return _cmd_raw(args)
+    if args.format == "check-off":
+        return _cmd_check_off(args)
     sys.stderr.write(f"format {args.format!r} not implemented\n")
     return 0  # spec: all modes exit 0 even on missing implementation
 

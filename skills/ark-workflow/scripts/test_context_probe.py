@@ -277,3 +277,81 @@ class TestCliRaw:
         assert rc == 0
         result = _json.loads(out)
         assert result["reason"] == "file_missing"
+
+
+SAMPLE_CHAIN = """\
+---
+scenario: bugfix
+weight: medium
+chain_id: TEST123
+proceed_past_level: null
+---
+# Current Chain: bugfix-medium
+## Steps
+- [ ] /ark-context-warmup
+- [ ] /investigate
+- [ ] Fix
+- [ ] /ship
+## Notes
+"""
+
+
+class TestCliCheckOff:
+    def test_check_off_first_step(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        rc, _, err = _run_cli(
+            "--format", "check-off",
+            "--step-index", "1",
+            "--chain-path", str(chain),
+        )
+        assert rc == 0, f"stderr: {err}"
+        body = chain.read_text()
+        assert "- [x] /ark-context-warmup" in body
+        assert "- [ ] /investigate" in body  # untouched
+
+    def test_check_off_third_step(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        rc, _, _ = _run_cli(
+            "--format", "check-off",
+            "--step-index", "3",
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        body = chain.read_text()
+        assert "- [x] Fix" in body
+        assert "- [ ] /ark-context-warmup" in body
+        assert "- [ ] /ship" in body
+
+    def test_check_off_index_zero_no_op(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        rc, _, err = _run_cli(
+            "--format", "check-off",
+            "--step-index", "0",
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert chain.read_text() == SAMPLE_CHAIN  # unchanged
+
+    def test_check_off_index_too_large_no_op(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        rc, _, _ = _run_cli(
+            "--format", "check-off",
+            "--step-index", "99",
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert chain.read_text() == SAMPLE_CHAIN
+
+    def test_check_off_idempotent_on_already_checked(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        # First check-off
+        _run_cli("--format", "check-off", "--step-index", "1", "--chain-path", str(chain))
+        first = chain.read_text()
+        # Second check-off of the same step
+        _run_cli("--format", "check-off", "--step-index", "1", "--chain-path", str(chain))
+        assert chain.read_text() == first
