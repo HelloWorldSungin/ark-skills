@@ -38,7 +38,7 @@ managed_regions:
     op: ensure_routing_rules_block
     file: CLAUDE.md
     since: 1.3.0
-    version: 1.12.0
+    version: 1.17.0
 
 ensured_gitignore:
   # v1.13.0 — .ark-workflow/ state dir (telemetry.log, current-chain.md, archive/).
