@@ -76,3 +76,52 @@ class TestProbeTokens:
         assert result["level"] == "nudge"
         assert result["tokens"] is None
         assert "tokens_unavailable" in result["warnings"]
+
+
+import os
+import stat
+import tempfile
+
+
+class TestProbeErrors:
+    def test_malformed_json(self):
+        result = cp.probe(FIXTURES / "malformed.json")
+        assert result["level"] == "unknown"
+        assert result["reason"] == "parse_error"
+
+    def test_truncated_json(self):
+        result = cp.probe(FIXTURES / "truncated.json")
+        assert result["level"] == "unknown"
+        assert result["reason"] == "parse_error"
+
+    def test_missing_used_percentage(self):
+        result = cp.probe(FIXTURES / "missing-field.json")
+        assert result["level"] == "unknown"
+        assert result["reason"] == "schema_mismatch"
+
+    def test_wrong_type_used_percentage(self):
+        result = cp.probe(FIXTURES / "wrong-type.json")
+        assert result["level"] == "unknown"
+        assert result["reason"] == "schema_mismatch"
+
+    def test_missing_file(self, tmp_path):
+        result = cp.probe(tmp_path / "does-not-exist.json")
+        assert result["level"] == "unknown"
+        assert result["reason"] == "file_missing"
+
+    def test_directory_instead_of_file(self, tmp_path):
+        result = cp.probe(tmp_path)  # tmp_path is a directory
+        assert result["level"] == "unknown"
+        assert result["reason"] == "not_a_file"
+
+    def test_permission_denied(self, tmp_path):
+        f = tmp_path / "noperm.json"
+        f.write_text('{"context_window": {"used_percentage": 5}}')
+        original_mode = f.stat().st_mode
+        try:
+            os.chmod(f, 0)
+            result = cp.probe(f)
+        finally:
+            os.chmod(f, original_mode)
+        assert result["level"] == "unknown"
+        assert result["reason"] == "permission_error"

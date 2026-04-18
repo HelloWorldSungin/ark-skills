@@ -7,9 +7,31 @@ from pathlib import Path
 
 def probe(state_path, *, nudge_pct: int = 20, strong_pct: int = 35):
     """Read Claude Code statusline cache and return a budget recommendation."""
-    data = json.loads(Path(state_path).read_text())
-    cw = data["context_window"]
-    pct = max(0, min(100, cw["used_percentage"]))
+    p = Path(state_path)
+
+    # Filesystem-level checks first.
+    if not p.exists():
+        return _unknown("file_missing")
+    if p.is_dir():
+        return _unknown("not_a_file")
+
+    try:
+        raw = p.read_text()
+    except PermissionError:
+        return _unknown("permission_error")
+    except OSError:
+        return _unknown("permission_error")
+
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return _unknown("parse_error")
+
+    cw = data.get("context_window", {})
+    pct = cw.get("used_percentage")
+    if not isinstance(pct, int):
+        return _unknown("schema_mismatch")
+    pct = max(0, min(100, pct))
 
     tokens, warnings = _sum_tokens(cw.get("current_usage"))
 
@@ -21,6 +43,10 @@ def probe(state_path, *, nudge_pct: int = 20, strong_pct: int = 35):
         level = "ok"
 
     return {"level": level, "pct": pct, "tokens": tokens, "warnings": warnings, "reason": None}
+
+
+def _unknown(reason: str):
+    return {"level": "unknown", "pct": None, "tokens": None, "warnings": [], "reason": reason}
 
 
 def _sum_tokens(current_usage):
