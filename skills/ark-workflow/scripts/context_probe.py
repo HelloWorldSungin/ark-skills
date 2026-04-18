@@ -158,6 +158,72 @@ import sys
 _CHECKLIST_LINE_RE = re.compile(r"^(- \[)([ x])(\] .*)$", re.MULTILINE)
 
 
+def _set_proceed_past_level(text: str, value: str) -> str:
+    """Set proceed_past_level in YAML frontmatter to 'nudge' or 'null'.
+
+    Only matches lines that start at column 0 with `proceed_past_level:` — this
+    avoids clobbering an indented content line inside a block scalar (e.g.,
+    `task_summary: |-` followed by indented text containing the literal string
+    `proceed_past_level:`). Top-level YAML keys never have leading whitespace.
+
+    If the field is missing from the frontmatter, insert it before the closing '---'.
+    Operates only on the frontmatter region (text between the first two '---' lines).
+    """
+    if not text.startswith("---"):
+        return text  # no frontmatter; refuse to mutate
+
+    lines = text.split("\n")
+    end_idx = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            end_idx = i
+            break
+    if end_idx is None:
+        return text  # malformed; refuse
+
+    fm_lines = lines[1:end_idx]
+    new_field = f"proceed_past_level: {value}"
+    found = False
+    for i, line in enumerate(fm_lines):
+        # Anchor at column 0 — top-level YAML keys have no leading whitespace.
+        # `line.startswith(...)` (NOT `line.strip().startswith(...)`) so that an
+        # indented occurrence inside a block scalar like `task_summary: |-` is
+        # never matched.
+        if line.startswith("proceed_past_level:"):
+            fm_lines[i] = new_field
+            found = True
+            break
+    if not found:
+        fm_lines.append(new_field)
+
+    return "\n".join([lines[0]] + fm_lines + lines[end_idx:])
+
+
+def _cmd_record_proceed(args) -> int:
+    result = probe(Path(args.state_path),
+                   nudge_pct=args.nudge_pct,
+                   strong_pct=args.strong_pct)
+    # Probe failure (missing/stale/malformed cache) -> silent no-op so existing
+    # suppression state is preserved. Spec: probe failures degrade silently.
+    if result["level"] == "unknown":
+        return 0
+    # Strong or ok -> persist null. Only nudge persists "nudge".
+    value = "nudge" if result["level"] == "nudge" else "null"
+    chain_file.atomic_update(
+        Path(args.chain_path),
+        lambda text: _set_proceed_past_level(text, value),
+    )
+    return 0
+
+
+def _cmd_record_reset(args) -> int:
+    chain_file.atomic_update(
+        Path(args.chain_path),
+        lambda text: _set_proceed_past_level(text, "null"),
+    )
+    return 0
+
+
 def _cmd_check_off(args) -> int:
     if args.step_index is None or args.step_index < 1:
         return 0  # silent no-op
@@ -217,6 +283,10 @@ def main(argv=None) -> int:
         return _cmd_raw(args)
     if args.format == "check-off":
         return _cmd_check_off(args)
+    if args.format == "record-proceed":
+        return _cmd_record_proceed(args)
+    if args.format == "record-reset":
+        return _cmd_record_reset(args)
     sys.stderr.write(f"format {args.format!r} not implemented\n")
     return 0  # spec: all modes exit 0 even on missing implementation
 

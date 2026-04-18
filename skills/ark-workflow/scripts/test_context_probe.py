@@ -355,3 +355,139 @@ class TestCliCheckOff:
         # Second check-off of the same step
         _run_cli("--format", "check-off", "--step-index", "1", "--chain-path", str(chain))
         assert chain.read_text() == first
+
+
+class TestCliRecordProceed:
+    def test_record_proceed_at_nudge_writes_nudge(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        rc, _, err = _run_cli(
+            "--format", "record-proceed",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+            "--chain-path", str(chain),
+        )
+        assert rc == 0, f"stderr: {err}"
+        assert "proceed_past_level: nudge" in chain.read_text()
+
+    def test_record_proceed_at_strong_writes_null(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        _run_cli(
+            "--format", "record-proceed",
+            "--state-path", str(FIXTURES / "strong-low.json"),
+            "--chain-path", str(chain),
+        )
+        body = chain.read_text()
+        assert "proceed_past_level: null" in body  # strong never silenced
+
+    def test_record_proceed_at_ok_writes_null(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        _run_cli(
+            "--format", "record-proceed",
+            "--state-path", str(FIXTURES / "ok-fresh.json"),
+            "--chain-path", str(chain),
+        )
+        assert "proceed_past_level: null" in chain.read_text()
+
+    def test_record_proceed_no_stdout(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)
+        _, out, _ = _run_cli(
+            "--format", "record-proceed",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+            "--chain-path", str(chain),
+        )
+        assert out == ""
+
+    def test_record_proceed_idempotent(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN.replace("proceed_past_level: null",
+                                              "proceed_past_level: nudge"))
+        before = chain.read_text()
+        _run_cli(
+            "--format", "record-proceed",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+            "--chain-path", str(chain),
+        )
+        assert chain.read_text() == before
+
+    def test_record_proceed_unknown_level_preserves_existing(self, tmp_path):
+        # Spec: probe failures degrade silently; record-proceed must not
+        # destroy existing suppression state when the cache is gone.
+        chain = tmp_path / "current-chain.md"
+        initial = SAMPLE_CHAIN.replace("proceed_past_level: null",
+                                       "proceed_past_level: nudge")
+        chain.write_text(initial)
+        rc, _, _ = _run_cli(
+            "--format", "record-proceed",
+            "--state-path", str(tmp_path / "no-such-cache.json"),
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert chain.read_text() == initial  # unchanged
+
+    def test_set_proceed_past_level_block_scalar_safe(self, tmp_path):
+        # Regression: a chain file whose frontmatter has a block scalar
+        # (`task_summary: |-`) with an indented line that literally contains
+        # "proceed_past_level:" must NOT have that indented line clobbered.
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(
+            "---\n"
+            "scenario: bugfix\n"
+            "weight: medium\n"
+            "task_summary: |-\n"
+            "  Mention proceed_past_level: in user prose — must stay verbatim\n"
+            "proceed_past_level: null\n"
+            "---\n"
+            "## Steps\n"
+            "- [ ] /investigate\n"
+        )
+        rc, _, _ = _run_cli(
+            "--format", "record-proceed",
+            "--state-path", str(FIXTURES / "nudge-mid.json"),
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        body = chain.read_text()
+        assert "proceed_past_level: nudge" in body
+        # The indented block-scalar line must be preserved exactly.
+        assert "  Mention proceed_past_level: in user prose — must stay verbatim" in body
+
+
+class TestCliRecordReset:
+    def test_reset_clears_nudge(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN.replace("proceed_past_level: null",
+                                              "proceed_past_level: nudge"))
+        rc, _, _ = _run_cli(
+            "--format", "record-reset",
+            "--chain-path", str(chain),
+        )
+        assert rc == 0
+        assert "proceed_past_level: null" in chain.read_text()
+        assert "proceed_past_level: nudge" not in chain.read_text()
+
+    def test_reset_idempotent_on_null(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN)  # already null
+        before = chain.read_text()
+        _run_cli("--format", "record-reset", "--chain-path", str(chain))
+        assert chain.read_text() == before
+
+    def test_reset_no_stdout(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        chain.write_text(SAMPLE_CHAIN.replace("proceed_past_level: null",
+                                              "proceed_past_level: nudge"))
+        _, out, _ = _run_cli("--format", "record-reset", "--chain-path", str(chain))
+        assert out == ""
+
+    def test_reset_preserves_checklist_body(self, tmp_path):
+        chain = tmp_path / "current-chain.md"
+        body_with_progress = SAMPLE_CHAIN.replace("- [ ] /ark-context-warmup",
+                                                  "- [x] /ark-context-warmup") \
+                                         .replace("proceed_past_level: null",
+                                                  "proceed_past_level: nudge")
+        chain.write_text(body_with_progress)
+        _run_cli("--format", "record-reset", "--chain-path", str(chain))
+        assert "- [x] /ark-context-warmup" in chain.read_text()
