@@ -1,0 +1,14 @@
+{
+  "session_id": "test-workspace-mismatch",
+  "workspace": {"current_dir": "/tmp/some-other-project"},
+  "context_window": {
+    "used_percentage": 28,
+    "current_usage": {
+      "input_tokens": 6,
+      "output_tokens": 100,
+      "cache_creation_input_tokens": 1000,
+      "cache_read_input_tokens": 50000
+    },
+    "context_window_size": 1000000
+  }
+}

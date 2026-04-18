@@ -1,0 +1,9 @@
+{
+  "session_id": "test-session-missing-usage",
+  "cwd": "/tmp/test-project",
+  "workspace": {"current_dir": "/tmp/test-project"},
+  "context_window": {
+    "used_percentage": 28,
+    "context_window_size": 1000000
+  }
+}

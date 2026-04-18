@@ -254,6 +254,19 @@ Recommended: Path B (OMC-powered — autonomous execution, ~1–4 hours, ~3 chec
   [Accept Path B]   [Use Path A]   [Show me both]
 ```
 
+**Path B acceptance probe** (only when `HAS_OMC=true`): before rendering the `[Accept Path B]` button, run:
+
+```bash
+PATHB_WARN=$(python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" \
+  --format path-b-acceptance \
+  --state-path .omc/state/hud-stdin-cache.json \
+  --expected-cwd "$(pwd)" \
+  "${SESSION_FLAG[@]}" \
+  --max-age-seconds 300 2>/dev/null)
+```
+
+If `$PATHB_WARN` is non-empty, display it on its own line above the `[Accept Path B]` button. (`SESSION_FLAG` is resolved in Step 6.5 below; if Step 6.5 hasn't run yet for this invocation, resolve it inline using the same snippet.) Example output: `⚠ Context at 32% (~320k). Path B adds parent-session coordination on top — consider /clear or /compact before accepting.`
+
 Include an inline one-line checkpoint-density + duration estimate next to the
 recommendation so users know what Path B costs before accepting.
 
@@ -271,6 +284,41 @@ recommendation, path_selected, variant}`. No prompt text, no user identifier.
 `.ark-workflow/` ignore line).
 
 ### Step 6.5: Activate Continuity
+
+**Resolve the current session id once for all probe invocations in this section** (only when `HAS_OMC=true`):
+
+```bash
+SESSION_ID="${CLAUDE_SESSION_ID:-$(python3 -c '
+import json, pathlib
+p = pathlib.Path(".omc/state/hud-state.json")
+try:
+    data = json.loads(p.read_text())
+    sid = data.get("sessionId") or data.get("session_id") or ""
+    if isinstance(sid, str) and sid.strip():
+        print(sid.strip())
+except Exception:
+    pass
+' 2>/dev/null)}"
+SESSION_FLAG=()
+if [ -n "$SESSION_ID" ]; then
+  SESSION_FLAG=(--expected-session-id "$SESSION_ID")
+fi
+```
+
+**Chain-entry probe** — run before executing step 1 of the chain (only when `HAS_OMC=true`):
+
+```bash
+ENTRY=$(python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" \
+  --format step-boundary \
+  --state-path .omc/state/hud-stdin-cache.json \
+  --chain-path .ark-workflow/current-chain.md \
+  --expected-cwd "$(pwd)" \
+  "${SESSION_FLAG[@]}" \
+  --max-age-seconds 300 2>/dev/null)
+```
+
+If `$ENTRY` is non-empty, display it verbatim and pause for user decision before executing step 1. Apply the same proceed/reset/(c) handling as the per-step probe in the "after each step" bullet below. Entry-time probes pass `--max-age-seconds 300` (5 minutes) so a stale cache file from a previous session is rejected; the helper still prefers `--expected-session-id` when available. The step-boundary mode is reused at entry; the helper auto-detects "zero completed steps" and renders the entry menu (option (a) shown unavailable, answer set `[b/c/proceed]`).
+
 - Create TodoWrite tasks for each step in the resolved chain
 - Compute task fields for `/ark-context-warmup` (step 0 of every chain). `/ark-workflow` needs the same `ARK_SKILLS_ROOT` resolution as the warm-up skill — mirror `/ark-context-warmup` SKILL.md's Project Discovery section verbatim so dev-mode runs inside the ark-skills worktree resolve helpers from the branch under test rather than a stale installed copy:
   ```bash
@@ -311,7 +359,30 @@ recommendation, path_selected, variant}`. No prompt text, no user identifier.
   ## Notes
 
 - Add `.ark-workflow/` to `.gitignore` if not already present
-- After each step: check off the step in the file (`[ ]` → `[x]`), update the TodoWrite task to `completed`, announce `Next: [skill] — [purpose]`, mark next task `in_progress`
+- After each step:
+  1. Check off the step in `.ark-workflow/current-chain.md` via the atomic helper (not by hand-editing):
+     ```bash
+     python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" \
+       --format check-off --step-index {N} \
+       --chain-path .ark-workflow/current-chain.md
+     ```
+  2. Update the TodoWrite task to `completed`
+  3. **Run the step-boundary probe** (only when `HAS_OMC=true`):
+     ```bash
+     MENU=$(python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" \
+       --format step-boundary \
+       --state-path .omc/state/hud-stdin-cache.json \
+       --chain-path .ark-workflow/current-chain.md \
+       --expected-cwd "$(pwd)" \
+       "${SESSION_FLAG[@]}" 2>/dev/null)
+     ```
+     If `$MENU` is non-empty, display it verbatim and pause for user decision. Then:
+     - If `proceed`: invoke `--format record-proceed` (no extra args; helper self-detects current level and persists `proceed_past_level: nudge` only when current level is `nudge`; strong is never silenced).
+     - If `(a)` or `(b)`: after `/compact` or `/clear`, invoke `--format record-reset` to explicitly clear `proceed_past_level: null` so the next boundary probes fresh.
+     - If `(c)`: no state write; subagent wraps Next step.
+     If `$MENU` is empty, proceed silently.
+  4. Mark the next TodoWrite task `in_progress`
+  5. Announce `Next: [skill] — [purpose]`
 - For batch-mode chain file format, cross-session resume, `handoff_marker` semantics, stale-chain detection, and compaction recovery: see `references/continuity.md`
 
 ### Step 7: Hand Off
@@ -361,6 +432,23 @@ When presenting a skill chain, resolve all conditions using Project Discovery va
 - **Mid-flight re-triage** (weight escalation or scenario shift): stop at the current step, reclassify using the Triage section above, pick up the remaining phases from the new class. For scenario-shift pivot examples, see `references/troubleshooting.md`.
 - **Design-phase session handoffs**: chain files specify inline `handoff_marker` values where applicable. For per-scenario handoff points and guidance on when to break sessions mid-implementation, see `references/troubleshooting.md`.
 - **Step failure or unexpected state**: see `references/troubleshooting.md` for per-failure guidance (failed QA, failed deploy, review disagreement, flaky tests, spec invalidation, canary failure, vault tooling failure, hygiene reveals bugs, migration breaks tests, batch item blocks others).
+
+## Session Habits
+
+Three habits shape context longevity across a chain. The probe in Step 6.5
+surfaces them contextually; keep the underlying habits in mind between probes:
+
+- **Rewind beats correction.** When a step produces a wrong result, prefer
+  `/rewind` (double-Esc) over replying "that didn't work, try X." Rewind drops
+  the failed attempt from context; correction stacks it. The parent context
+  stays lean, and the second try gets a cleaner prompt.
+- **New task, new session.** When the current chain completes and the next
+  task is unrelated, `/clear` and start fresh. Grey area: closely-coupled
+  follow-ups (e.g., documenting a feature you just shipped) may reuse context.
+- **`/compact` with a forward brief.** When compacting mid-chain, steer the
+  summary: `/compact focus on the auth refactor; drop the test debugging`.
+  The probe's mitigation menu pre-fills this template using the current chain
+  state — use it verbatim or edit.
 
 ## Routing Rules Template
 

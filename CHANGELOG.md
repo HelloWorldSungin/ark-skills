@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.17.0] - 2026-04-17
+
+### Added
+
+- **Context-budget probe in `/ark-workflow`.** New helper `skills/ark-workflow/scripts/context_probe.py` reads the Claude Code statusline cache at `.omc/state/hud-stdin-cache.json` and surfaces a three-option mitigation menu (compact / clear / subagent) at chain entry, each step boundary (Path A only), and Path B acceptance. Six CLI modes: `raw`, `step-boundary`, `path-b-acceptance`, `record-proceed`, `record-reset`, `check-off`. Stdlib only. Thresholds: nudge at 20%, strong at 35% of `context_window.used_percentage`.
+- **Atomic chain-file mutation helper.** All `.ark-workflow/current-chain.md` mutations (frontmatter writes via `record-proceed`/`record-reset`, checklist `[ ]` → `[x]` writes via `check-off`) now go through one shared `chain_file.atomic_update(path, mutator_fn)` helper using `fcntl.flock(LOCK_EX)` + temp-file + `os.replace` to prevent torn writes and lost updates between concurrent frontmatter and checklist edits.
+- **Nudge-fatigue suppression** via new optional `proceed_past_level` field in `current-chain.md` frontmatter. `record-proceed` self-detects the current level and persists `proceed_past_level: nudge` only when current level is `nudge`; strong-level proceed never persists suppression. Lifecycle is explicit (no inference) — caller invokes `record-reset` after the user takes option (a) `/compact` or (b) `/clear`.
+- **Session / freshness rejection layers.** Probe accepts `--expected-cwd`, `--expected-session-id`, and `--max-age-seconds`. Session-id (when resolvable from `$CLAUDE_SESSION_ID` or `.omc/state/hud-state.json`) is the primary check; cwd is the secondary check; mtime-based TTL (300s for entry-time probes) is the tertiary fallback. All session/freshness mismatches degrade to silent no-op via `level: unknown`.
+- **"Session Habits" coaching block** in `/ark-workflow` SKILL.md (between "When Things Change" and "Routing Rules Template") and as a "### Session habits" subsection in `references/routing-template.md`. Three habits: rewind-before-correction, new-task-means-new-session, compact-with-forward-brief. Pushed to downstream projects via `/ark-update`.
+- **Manual smoke-test runbook** at `skills/ark-workflow/scripts/smoke-test.md` for hands-on validation when bats is not installed.
+- **Bats integration suite** at `skills/ark-workflow/scripts/integration/test_probe_skill_invocation.bats` covering all six CLI modes, end-to-end reset lifecycle, atomic-write stress test (concurrent check-off + record-proceed for ~2 seconds), and exit-0-on-missing-state guarantee.
+
+### Changed
+
+- **`/ark-workflow` Step 6.5** "Activate Continuity" now resolves `SESSION_ID` once at the top, runs a chain-entry probe (with `--max-age-seconds 300`) before executing step 1, and replaces the single-line "after each step" bullet with a 5-substep block that calls the atomic `check-off` helper, runs the step-boundary probe, and handles the proceed/reset/(c) decision.
+- **`/ark-workflow` Step 6** dual-path presentation now invokes the `path-b-acceptance` probe and renders a one-line warning above the `[Accept Path B]` button when the session is already at nudge or strong level.
+- **`/ark-update` `routing-rules` managed region** version bumped from `1.12.0` → `1.17.0` because `references/routing-template.md` gained the Session habits subsection. Downstream projects pull the block via `/ark-update`.
+
+### Degradation contract
+
+- Probe is gated behind `HAS_OMC=true`. When OMC is not installed, Step 6.5 falls back to today's behavior (no menu, no probe call). All probe failure modes (missing file, malformed JSON, schema mismatch, session mismatch, stale file, permission denied) degrade silently to no menu.
+
+### Spec & Plan
+
+- Spec: `docs/superpowers/specs/2026-04-17-ark-workflow-context-probe-design.md`
+- Plan: `docs/superpowers/plans/2026-04-17-ark-workflow-context-probe.md`
+
 ## [1.16.0] - 2026-04-15
 
 Two themes in one release: (1) **Path B uniformity** — every chain variant now

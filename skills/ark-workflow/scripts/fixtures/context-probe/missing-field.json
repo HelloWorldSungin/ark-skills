@@ -1,0 +1,14 @@
+{
+  "session_id": "test-missing-field",
+  "cwd": "/tmp/test-project",
+  "workspace": {"current_dir": "/tmp/test-project"},
+  "context_window": {
+    "current_usage": {
+      "input_tokens": 6,
+      "output_tokens": 100,
+      "cache_creation_input_tokens": 1000,
+      "cache_read_input_tokens": 50000
+    },
+    "context_window_size": 1000000
+  }
+}
