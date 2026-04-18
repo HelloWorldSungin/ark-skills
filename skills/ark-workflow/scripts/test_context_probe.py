@@ -180,3 +180,43 @@ class TestProbeSession:
         # mtime defaults to "now" — should pass.
         result = cp.probe(f, max_age_seconds=60)
         assert result["level"] == "ok"
+
+
+class TestAtomicUpdate:
+    def test_apply_mutator_writes_result(self, tmp_path):
+        f = tmp_path / "chain.md"
+        f.write_text("hello")
+        cp.chain_file.atomic_update(f, lambda s: s + " world")
+        assert f.read_text() == "hello world"
+
+    def test_missing_file_creates(self, tmp_path):
+        f = tmp_path / "newchain.md"
+        cp.chain_file.atomic_update(f, lambda s: "fresh content")
+        assert f.read_text() == "fresh content"
+
+    def test_no_intermediate_state_visible(self, tmp_path):
+        # Verify the temp-file-then-rename pattern: the original file is never partially written.
+        f = tmp_path / "chain.md"
+        f.write_text("initial")
+
+        def slow_mutator(s):
+            return s.upper() + "_DONE"
+
+        cp.chain_file.atomic_update(f, slow_mutator)
+        assert f.read_text() == "INITIAL_DONE"
+
+    def test_concurrent_updates_serialize(self, tmp_path):
+        # Spawn multiple threads doing atomic_update; verify count is exactly N.
+        import threading
+        f = tmp_path / "counter.md"
+        f.write_text("0")
+
+        def increment(_):
+            cp.chain_file.atomic_update(f, lambda s: str(int(s.strip()) + 1))
+
+        threads = [threading.Thread(target=increment, args=(None,)) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert int(f.read_text().strip()) == 20

@@ -2,8 +2,16 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import time
 from pathlib import Path
+
+try:
+    import fcntl
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
 
 
 def probe(
@@ -89,3 +97,54 @@ def _sum_tokens(current_usage):
             return None, ["tokens_unavailable"]
         total += v
     return total, []
+
+
+class chain_file:
+    """Namespace for atomic chain-file mutations."""
+
+    @staticmethod
+    def atomic_update(chain_path, mutator_fn):
+        """Read chain_path, apply mutator_fn(text) -> text, write atomically.
+
+        Uses fcntl.flock(LOCK_EX) on a sibling .lock file to serialize concurrent
+        read-modify-write sequences (prevents lost updates), plus temp-file +
+        os.replace for torn-write protection.
+
+        Falls back to temp-file + rename without locking on platforms lacking fcntl.
+        """
+        chain_path = Path(chain_path)
+        chain_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = chain_path.with_suffix(chain_path.suffix + ".lock")
+
+        if _HAS_FCNTL:
+            with open(lock_path, "w") as lock_fd:
+                fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+                try:
+                    _do_update(chain_path, mutator_fn)
+                finally:
+                    fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+        else:
+            _do_update(chain_path, mutator_fn)
+
+
+def _do_update(chain_path: Path, mutator_fn):
+    try:
+        original = chain_path.read_text()
+    except FileNotFoundError:
+        original = ""
+    new_content = mutator_fn(original)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=chain_path.name + ".",
+        suffix=".tmp",
+        dir=str(chain_path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w") as tmp_f:
+            tmp_f.write(new_content)
+        os.replace(tmp_name, chain_path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+        raise
