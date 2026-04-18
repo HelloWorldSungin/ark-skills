@@ -62,6 +62,39 @@ fi
 export HAS_OMC
 echo "HAS_OMC=$HAS_OMC"
 
+# Has gstack planning? — SEMANTIC probe (agent-executed, not bash).
+#
+# CANONICAL SIGNAL: session skill-list. This matches the detection pattern used by
+# /ark-health and /ark-onboard (plugin availability = "skill loadable in current session",
+# not filesystem inspection).
+#
+# Procedure for the agent:
+#   Read the skill list in your current session's system-reminder context.
+#   Search for any of these gstack planning skills by name:
+#     - autoplan
+#     - office-hours
+#     - plan-ceo-review
+#     - plan-design-review
+#     - plan-eng-review
+#     - plan-devex-review
+#   If at least one is present, set HAS_GSTACK_PLANNING=true.
+#   Otherwise set HAS_GSTACK_PLANNING=false.
+#
+# ADVISORY cross-check (filesystem, non-authoritative — used only to distinguish
+# "gstack absent" from "gstack installed but broken"):
+GSTACK_STATE_PRESENT=false
+if [ -d "$HOME/.gstack" ] && [ -f "$HOME/.gstack/config.yaml" ]; then
+  GSTACK_STATE_PRESENT=true
+fi
+[ "$ARK_SKIP_GSTACK" = "true" ] && GSTACK_STATE_PRESENT=false
+export GSTACK_STATE_PRESENT
+echo "GSTACK_STATE_PRESENT=$GSTACK_STATE_PRESENT"
+# Agent then records HAS_GSTACK_PLANNING (from the semantic probe above) alongside
+# GSTACK_STATE_PRESENT. The combination gives three operator states:
+#   - absent:  HAS_GSTACK_PLANNING=false AND GSTACK_STATE_PRESENT=false  → silent
+#   - healthy: HAS_GSTACK_PLANNING=true                                  → use gstack
+#   - broken:  HAS_GSTACK_PLANNING=false AND GSTACK_STATE_PRESENT=true   → emit notice
+
 # Vendor CLI availability — gates `/ask codex` and `/ccg` chain steps
 # (see references/omc-integration.md § Section 7 External Advisor Probe Gates)
 # Canonical binary names in § Section 0 (CODEX_CLI_BIN, GEMINI_CLI_BIN)
@@ -99,6 +132,7 @@ Identify which scenario applies based on the user's request. Ask if ambiguous.
 | **Hygiene** | "cleanup", "refactor", "audit", "hygiene", "dead code", "maintenance" | Cleanup, refactor, code quality |
 | **Migration** | "upgrade", "migrate", "bump major", "framework upgrade", "version bump" | Upgrading dependencies, frameworks, or platform versions |
 | **Performance** | "slow", "optimize", "latency", "benchmark", "profile", "performance" | Improving speed, reducing resource usage |
+| **Brainstorm** | "brainstorm", "I have an idea", "should I build", "should we build", "worth building", "shape this idea", "is this worth" | Pre-triage exploration — turn fuzzy intent into a crisp spec/plan ready to re-triage (creation-intent only; "explore"/"think through" alone are NOT Brainstorm triggers — too generic) |
 
 **Security routing — two distinct paths:**
 
@@ -127,6 +161,7 @@ If no pattern matches clearly, ask:
 > E) Hygiene — cleanup, refactor, audit
 > F) Migration — upgrading dependencies or platforms
 > G) Performance — optimizing speed or resources
+> H) Brainstorm — shape a fuzzy idea before classifying (produces a spec, no implementation)
 
 ## Triage
 
@@ -186,6 +221,7 @@ If decision density is unclear:
 - Ship — no weight class needed
 - Knowledge Capture — uses Light/Full split
 - Hygiene Audit-Only — no weight class (it's always findings-only)
+- Brainstorm — no weight class (produces spec/plan artifact, stops before implementation)
 
 **Knowledge Capture classification:** Light if syncing recent changes or updating a few pages. Full if catching up after extended period, rebuilding tags, or ingesting external documents.
 
@@ -196,7 +232,7 @@ If decision density is unclear:
 This is the concrete algorithm. Follow these steps in order:
 
 ### Step 1: Run Project Discovery
-Execute the Project Discovery section above. Record: `HAS_UI`, `HAS_VAULT`, `HAS_STANDARD_DOCS`, `HAS_CI`.
+Execute the Project Discovery section above. Record: `HAS_UI`, `HAS_VAULT`, `HAS_STANDARD_DOCS`, `HAS_CI`, `HAS_GSTACK_PLANNING` (from session skill-list probe), `GSTACK_STATE_PRESENT` (from filesystem cross-check).
 Check early exits — if the user's request is clearly Knowledge Capture AND `HAS_VAULT=false`, stop and tell the user to run `/wiki-setup` first.
 
 ### Step 2: Detect Scenario
@@ -208,7 +244,7 @@ Classify using risk-primary triage with decision-density escalation. Ship skips 
 ### Step 4: Look Up Skill Chain
 Read `chains/{scenario}.md` (e.g., `chains/bugfix.md`). Each chain file contains sections for the applicable weight variants — Light/Medium/Heavy, or Light/Full for Knowledge Capture, or Audit-Only/Light/Medium/Heavy for Hygiene. Select the section matching your triaged weight class.
 
-**Filename mapping:** `greenfield.md`, `bugfix.md`, `ship.md` (standalone — no weight class), `knowledge-capture.md`, `hygiene.md`, `migration.md`, `performance.md`.
+**Filename mapping:** `greenfield.md`, `bugfix.md`, `ship.md` (standalone — no weight class), `knowledge-capture.md`, `hygiene.md`, `migration.md`, `performance.md`, `brainstorm.md` (standalone — no weight class).
 
 If security hardening triggered mandatory early `/cso`, apply the Dedup rule documented at the bottom of `chains/hygiene.md`.
 
@@ -217,8 +253,10 @@ Walk through the chain and resolve every conditional using Condition Resolution 
 - `(if UI)` → check `HAS_UI`. If false, output "Skipping `/qa` — no UI detected"
 - `(if vault)` → check `HAS_VAULT`. If false, skip the step silently
 - `(if standard docs exist)` → check `HAS_STANDARD_DOCS`. If false, output "Skipping `/document-release` — no standard docs found"
+- `(if gstack)` → check `HAS_GSTACK_PLANNING`. If true, include the step. If false AND `GSTACK_STATE_PRESENT=false`: skip **silently** (gstack absent — not an error, no notice). If false AND `GSTACK_STATE_PRESENT=true`: emit the broken-install notice once per chain and skip the step (see Condition Resolution § gstack planning availability trigger).
 - `(if security-relevant)` → evaluate against the security triggers in Condition Resolution
 - `(if deploy risk)` → evaluate against the deploy risk triggers in Condition Resolution
+- `(if developer-facing surface)` → evaluate against the developer-facing triggers in Condition Resolution
 - `(if any item involves broken/unexpected behavior)` → evaluate against the investigation triggers in Condition Resolution
 
 ### Step 6: Present the Resolved Chain
@@ -416,7 +454,7 @@ When presenting a skill chain, resolve all conditions using Project Discovery va
 **UI triggers (for `/qa`, `/design-review`):**
 - Project has frontend dependencies (react, vue, svelte, next, angular, @remix, solid-js) AND the current task touches UI-facing code
 
-**UI-with-design-reference trigger (for `/visual-verdict`):**
+**UI-with-design-reference trigger (for `/visual-verdict`, `/plan-design-review`):**
 - All UI triggers above AND a design reference is present in the repo. Signals that indicate a design reference exists:
   - A `design/`, `designs/`, `mocks/`, or `mockups/` directory at repo root
   - A `DESIGN.md`, `design-system.md`, or similar design-spec file outside `docs/superpowers/`
@@ -424,12 +462,57 @@ When presenting a skill chain, resolve all conditions using Project Discovery va
   - An explicit design reference named in the user's task prompt
 - If UI is present but no design reference is found, output "Skipping `/visual-verdict` — no design reference found" and continue without the step.
 
+**Developer-facing surface trigger (for `/plan-devex-review`):**
+- Task adds or modifies any of:
+  - Public APIs (REST, gRPC, GraphQL endpoints consumed by external clients or other internal services)
+  - CLIs, command-line tools, or shell interfaces users run directly
+  - SDKs, client libraries, or language bindings
+  - Plugin interfaces or extension points
+  - Developer documentation for any of the above
+- Not triggered by: purely internal module APIs, private helpers, or refactors that don't change external surface area.
+- If no developer-facing surface is involved, output "Skipping `/plan-devex-review` — no developer-facing surface" and continue without the step.
+
+**gstack planning availability trigger (for `/office-hours`, `/plan-ceo-review`, `/plan-design-review`, `/plan-eng-review`, `/plan-devex-review`, `/autoplan`):**
+
+Detection is session-capability — see Project Discovery step 6. Three operator states:
+
+- **Healthy** (`HAS_GSTACK_PLANNING=true`): include the skill as a step.
+- **Absent** (`HAS_GSTACK_PLANNING=false` AND `GSTACK_STATE_PRESENT=false`): **silent skip**. No notice. Users without gstack shouldn't be reminded every chain.
+- **Broken-install** (`HAS_GSTACK_PLANNING=false` AND `GSTACK_STATE_PRESENT=true`): gstack state dir exists but planning skills are not loadable in this session. Emit **once per chain** (not once per skipped step): "⚠ gstack detected at `$HOME/.gstack` but planning skills are not loadable in this session. Run `/ark-health` to diagnose, or set `ARK_SKIP_GSTACK=true` to suppress." Then skip the step.
+
+Brainstorm scenario is the sole exception — it has a dedicated fallback to superpowers `/brainstorming` and emits a pivot-specific message. See `chains/brainstorm.md` § Degradation.
+
+**Heavy planning authority substitution (Path A, when `HAS_GSTACK_PLANNING=true`):**
+
+Heavy chains already include a `/ccg` plan-review step. When gstack planning is available, **replace** that `/ccg` step with the gstack planning authority — do not stack. This prevents redundant review committees (the "Review Hell" anti-pattern).
+
+| Chain | Replaced step | Gstack substitute | Rationale |
+|-------|---------------|-------------------|-----------|
+| Greenfield Heavy | step 4 (`/ccg` plan review) | `/autoplan` (CEO+design+eng+DX bundle) | Greenfield has the broadest decision surface — full multi-persona review pays off |
+| Migration Heavy | step 3 (`/ccg` migration plan review) | `/plan-eng-review` | Migrations are architecture-dominant; CEO/design/DX reviews rarely add value |
+| Performance Heavy | step 4 (`/ccg` optimization plan review) | `/plan-eng-review` | Same as Migration — architecture-dominant |
+
+**Spec-review `/ccg` stays:** the earlier `/ccg` step in each Heavy chain reviews the SPEC (correctness sanity-check, multi-model), not the PLAN. It serves a different purpose and is not replaced.
+
+**Scope:** This substitution applies to **Path A only**. Path B is gstack-independent by design.
+
+**Path B gstack-independence (product decision):**
+
+Path B (OMC-powered) chains deliberately do NOT incorporate gstack planning skills:
+
+- Path B's execution engines (`/autopilot`, `/team`) include their own internal review phases.
+- Layering gstack planning on top would reintroduce stacked-committee ceremony — the exact anti-pattern Heavy Path A substitution avoids.
+- Users who want gstack multi-persona review should select Path A.
+
+When `HAS_OMC=true` AND `HAS_GSTACK_PLANNING=true`, both paths render. Users choose based on desired style: multi-persona alignment via gstack (Path A) vs autonomous execution via OMC (Path B).
+
 **Standard docs trigger (for `/document-release`):**
 - Project has README.md, ARCHITECTURE.md, CONTRIBUTING.md, or CHANGELOG.md outside of `docs/superpowers/`
 
 ## When Things Change
 
 - **Mid-flight re-triage** (weight escalation or scenario shift): stop at the current step, reclassify using the Triage section above, pick up the remaining phases from the new class. For scenario-shift pivot examples, see `references/troubleshooting.md`.
+- **Scope-retreat pivot (Greenfield → Brainstorm):** if step 1 `/brainstorming` reveals the user isn't sure the feature should be built at all (scope-uncertainty signals: "I don't know if this is the right thing", "should we even build this", "what's the real problem here", extended re-framing of the goal), stop, `/checkpoint` any discovery, and pivot to the Brainstorm scenario — re-invoke `/ark-workflow` with a Brainstorm-framed prompt. Brainstorm's `/office-hours` (gstack) or `/brainstorming` fallback will do the scope-challenging work, then the Continuous Brainstorm pivot gate re-triages into an implementation chain once scope is clear. This is a *downshift*, distinct from the upshift rule above — Greenfield is implementation-committed; Brainstorm is scope-challenging.
 - **Design-phase session handoffs**: chain files specify inline `handoff_marker` values where applicable. For per-scenario handoff points and guidance on when to break sessions mid-implementation, see `references/troubleshooting.md`.
 - **Step failure or unexpected state**: see `references/troubleshooting.md` for per-failure guidance (failed QA, failed deploy, review disagreement, flaky tests, spec invalidation, canary failure, vault tooling failure, hygiene reveals bugs, migration breaks tests, batch item blocks others).
 
@@ -457,7 +540,7 @@ See `references/routing-template.md` for the copy-paste block to add to project 
 ## File Map
 
 **Chain files (`chains/`)** — loaded once per triage after scenario detection:
-- `chains/greenfield.md`, `chains/bugfix.md`, `chains/ship.md`, `chains/knowledge-capture.md`, `chains/hygiene.md`, `chains/migration.md`, `chains/performance.md`
+- `chains/greenfield.md`, `chains/bugfix.md`, `chains/ship.md`, `chains/knowledge-capture.md`, `chains/hygiene.md`, `chains/migration.md`, `chains/performance.md`, `chains/brainstorm.md`
 
 **References (`references/`)** — loaded only when their trigger fires:
 - `batch-triage.md` — multi-item algorithm (trigger: Step 2 multi-item detection)

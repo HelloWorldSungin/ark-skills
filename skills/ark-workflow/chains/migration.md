@@ -62,7 +62,7 @@
 0. `/ark-context-warmup` — load recent + relevant project context
 1. `/investigate` — audit all usage, map blast radius
 2. `/brainstorming` — migration strategy (big bang vs incremental, feature flags, rollback plan)
-3. `/ccg` **[probe-gated §7]** — multi-advisor migration plan review
+3. `/ccg` **[probe-gated §7]** — multi-advisor migration plan review *(substitution: replaced by `/plan-eng-review` when `HAS_GSTACK_PLANNING=true` — migrations are architecture-dominant; single-persona senior-EM review is a better fit than multi-model consensus. CEO/design/DX angles rarely add value to migration plans. See SKILL.md § Heavy planning authority substitution.)*
 4. Commit migration plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-4`)
 
 *Session 2 — Implementation:*
