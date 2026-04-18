@@ -433,6 +433,23 @@ When presenting a skill chain, resolve all conditions using Project Discovery va
 - **Design-phase session handoffs**: chain files specify inline `handoff_marker` values where applicable. For per-scenario handoff points and guidance on when to break sessions mid-implementation, see `references/troubleshooting.md`.
 - **Step failure or unexpected state**: see `references/troubleshooting.md` for per-failure guidance (failed QA, failed deploy, review disagreement, flaky tests, spec invalidation, canary failure, vault tooling failure, hygiene reveals bugs, migration breaks tests, batch item blocks others).
 
+## Session Habits
+
+Three habits shape context longevity across a chain. The probe in Step 6.5
+surfaces them contextually; keep the underlying habits in mind between probes:
+
+- **Rewind beats correction.** When a step produces a wrong result, prefer
+  `/rewind` (double-Esc) over replying "that didn't work, try X." Rewind drops
+  the failed attempt from context; correction stacks it. The parent context
+  stays lean, and the second try gets a cleaner prompt.
+- **New task, new session.** When the current chain completes and the next
+  task is unrelated, `/clear` and start fresh. Grey area: closely-coupled
+  follow-ups (e.g., documenting a feature you just shipped) may reuse context.
+- **`/compact` with a forward brief.** When compacting mid-chain, steer the
+  summary: `/compact focus on the auth refactor; drop the test debugging`.
+  The probe's mitigation menu pre-fills this template using the current chain
+  state — use it verbatim or edit.
+
 ## Routing Rules Template
 
 See `references/routing-template.md` for the copy-paste block to add to project CLAUDE.md files. (Not loaded at runtime — this is human-only documentation.)
