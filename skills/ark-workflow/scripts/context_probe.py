@@ -206,6 +206,8 @@ def render_step_boundary_menu(*, level: str, pct: int, tokens, chain_text: str) 
     zero-completed entry branch.
     """
     info = _parse_chain_file(chain_text)
+    if not info["completed"] and info["all_steps"]:
+        return _render_entry_menu(level=level, pct=pct, tokens=tokens, info=info)
     return _render_midchain_menu(level=level, pct=pct, tokens=tokens, info=info)
 
 
@@ -248,6 +250,37 @@ def _render_midchain_menu(*, level, pct, tokens, info) -> str:
         f"  (c) Delegate Next step to a subagent (keeps this session lean — only the\n"
         f"      subagent's conclusion returns, not its tool output).\n\n"
         f"Which option? [a/b/c/proceed]"
+    )
+
+
+def _render_entry_menu(*, level, pct, tokens, info) -> str:
+    plan = ", ".join(info["all_steps"]) or "(no steps)"
+    scenario = info["scenario"]
+    weight = info["weight"]
+    pct_tokens = _format_pct_tokens(pct, tokens)
+
+    if level == "strong":
+        header = (
+            f"⚠ {pct_tokens} — entering the attention-rot zone (~300k+ tokens) "
+            f"before chain has started. One of (b)/(c) is strongly recommended."
+        )
+    else:
+        header = f"⚠ {pct_tokens} before chain has started."
+
+    forward_brief = (
+        f'  "Starting {scenario} chain ({weight}). Plan: {plan}.\n'
+        f'   Key context to preserve: <fill in>."'
+    )
+
+    return (
+        f"{header}\n\n"
+        f"Forward brief (auto-assembled):\n"
+        f"{forward_brief}\n\n"
+        f"  (a) /compact — unavailable (no progress to summarize yet).\n"
+        f"  (b) /clear, then paste the forward brief above as your opening message.\n"
+        f"  (c) Delegate Step 1 to a subagent (keeps this session lean — only the\n"
+        f"      subagent's conclusion returns, not its tool output).\n\n"
+        f"Which option? [b/c/proceed]"
     )
 
 

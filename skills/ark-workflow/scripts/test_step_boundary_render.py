@@ -56,3 +56,35 @@ class TestMidChainRender:
         assert "Context at 28%" in menu
         # When tokens unknown, the parenthetical is omitted (no ~k suffix)
         assert "(~" not in menu
+
+
+class TestEntryRender:
+    def test_zero_completed_uses_entry_template(self):
+        chain_text = (CHAIN_FIXTURES / "entry-0of4.md").read_text()
+        menu = cp.render_step_boundary_menu(
+            level="nudge", pct=24, tokens=240_000, chain_text=chain_text,
+        )
+        assert "before chain has started" in menu
+        assert "Starting greenfield chain (heavy)" in menu
+        assert "/ark-context-warmup" in menu  # in plan list
+        assert "/executing-plans" in menu  # in plan list
+        # No Completed/Remaining lines in entry rendering
+        assert "Completed:" not in menu
+        assert "Remaining:" not in menu
+        assert "Plan:" in menu
+
+    def test_entry_option_a_unavailable(self):
+        chain_text = (CHAIN_FIXTURES / "entry-0of4.md").read_text()
+        menu = cp.render_step_boundary_menu(
+            level="nudge", pct=24, tokens=240_000, chain_text=chain_text,
+        )
+        assert "(a) /compact — unavailable" in menu
+        assert "Which option? [b/c/proceed]" in menu  # constrained answer set
+
+    def test_entry_strong_escalates(self):
+        chain_text = (CHAIN_FIXTURES / "entry-0of4.md").read_text()
+        menu = cp.render_step_boundary_menu(
+            level="strong", pct=42, tokens=420_000, chain_text=chain_text,
+        )
+        assert "attention-rot zone" in menu
+        assert "(b)/(c) is strongly recommended" in menu
