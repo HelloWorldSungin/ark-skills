@@ -4,7 +4,7 @@ type: meta
 tags:
   - meta
 summary: "Machine-generated flat catalog of all vault pages."
-last-updated: 2026-04-17
+last-updated: 2026-04-20
 ---
 
 # Index
@@ -26,6 +26,7 @@ last-updated: 2026-04-17
 | [[Compiled-Insights/Plugin-Versioning-and-Cache-Pitfalls.md|Plugin Versioning & Cache Pitfalls]] | compiled-insight | Claude Code plugin versioning has 4 sources of truth (VERSION, plugin.json, marketplace.json, cache SHA) — any desync causes silent update failure. |
 | [[Compiled-Insights/Python-314-Dataclass-Future-Annotations-Pitfall.md|Python 3.14 @dataclass + future annotations + spec_from_file_location Pitfall]] | compiled-insight | On Python 3.14, combining @dataclass with `from __future__ import annotations` breaks when the module is loaded via importlib.util.spec_from_file_location without being registered in sys.modules. Dataclass internals read sys.modules[cls.__module__].__dict__ and get None. |
 | [[Compiled-Insights/Retrieval-Backend-Benchmark.md|Retrieval Backend Benchmark — index.md vs Obsidian-CLI vs MemPalace]] | compiled-insight | Benchmarked 3 retrieval backends on ArkNode-AI vault (394 pages): index.md scan won for documented decisions (~2K tokens), Obsidian-CLI matched quality but needs two-step pattern, MemPalace failed on vault queries (wrong corpus — indexes conversations, not pages). |
+| [[Compiled-Insights/Session-Capability-Plugin-Detection-Pattern.md|Session-Capability Plugin Detection Pattern]] | compiled-insight | For Claude Code plugin availability detection, the canonical signal is the session skill-list (semantic probe by the agent), not filesystem inspection. Filesystem/CLI probes are advisory only — they distinguish 'absent' from 'broken-install' but don't prove the plugin is loadable in the current session. Extracted from v1.18.0 gstack integration; matches pattern already proven in /ark-health and /ark-onboard. |
 | [[Compiled-Insights/Session-Habits-For-Context-Longevity.md|Session Habits for Context Longevity]] | compiled-insight | Three habits that shape context longevity across a skill chain: rewind-before-correction, new-task-means-new-session, compact-with-forward-brief. Landed in ark-workflow SKILL.md as a coaching block in v1.17.0; the Step 6.5 probe surfaces them contextually. |
 | [[Compiled-Insights/Session-Log-Knowledge-Burial.md|Session Log Knowledge Burial — The Core Vault Problem]] | compiled-insight | Session log knowledge burial is the primary vault problem — 103+ session logs with hard-won ML insights buried in chronological journals, inaccessible to retrieval. |
 | [[Compiled-Insights/Shell-Script-Safety-Patterns.md|Shell Script Safety Patterns — Lessons from mine-vault.sh Review]] | compiled-insight | Four shell scripting pitfalls caught by code review: TMPDIR env collision, pipefail+tail swallowing, missing EXIT traps, and unquoted-tilde parameter stripping. All patterns survived spec review in plans and were only caught by code quality review. |
@@ -48,6 +49,7 @@ last-updated: 2026-04-17
 | [[Session-Logs/S009-OMC-Detection-Surfaces.md|Session 9: OMC Detection Surfaces in /ark-health + /ark-onboard (v1.14.0 Stream A)]] | session-log | Shipped OMC plugin detection to /ark-health (Check 21) and /ark-onboard (Healthy Step 3 + Greenfield Step 18 + scorecard). Upgrade-style, tier-agnostic. Structural parity with canonical HAS_OMC probe enforced by diff. Combined v1.14.0 release alongside Session 2's Stream B. PR #17. |
 | [[Session-Logs/S010-Path-B-Uniformity-Refactor.md|Session 8: Path B Uniformity Refactor (audit + 7-commit implementation)]] | session-log | Audited /ark-workflow Path B routing; implemented 2026-04-14 uniformity decision in 7 atomic commits on branch ark-workflow-improve-OMC. All chain Path B engines collapsed to /autopilot except Migration Heavy (/team). Added chain drift lint (R4). 17 blocks / 4 classifier shapes / 5 raw-text hashes. Shipped in v1.16.0 via PR #18 (renumbered from S008 during rebase onto master's S008/S009). |
 | [[Session-Logs/S011-Ark-Workflow-Context-Budget-Probe.md|Session 11: /ark-workflow Context-Budget Probe (v1.17.0 ship)]] | session-log | Shipped v1.17.0: stdlib-only context_probe.py with 6 CLI modes + atomic chain-file helper + session habits coaching block. 22 atomic commits on branch context-management, merged via PR #19 as squash commit 8d42bd8. No P1 blockers in final /ccg review; 7 P2 + 4 P3 follow-ups filed. |
+| [[Session-Logs/S012-Ark-Workflow-Gstack-Planning.md|Session 12: /ark-workflow gstack planning integration + Brainstorm scenario (v1.18.0 ship)]] | session-log | Shipped v1.18.0: wired gstack planning (/autoplan, /plan-*-review, /office-hours) into /ark-workflow and added Brainstorm scenario with Continuous Brainstorm pivot gate. Two /ccg review passes — design-level (6 reworks) and pre-push diff-level (4 fixes). 2 commits on branch gstack-improve, PR #21 open. |
 | [[TaskNotes/00-Project-Management-Guide.md|Project Management Guide]] | moc | How task IDs, statuses, and task notes work in the ark-skills project. |
 | [[TaskNotes/Tasks/Epic/Arkskill-001-vault-retrieval-tiers.md|Multi-Backend Vault Retrieval Tiers]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-002-ark-context-warmup.md|/ark-context-warmup — Automatic Context Loader]] |  |  |
@@ -56,3 +58,4 @@ last-updated: 2026-04-17
 | [[TaskNotes/Tasks/Epic/Arkskill-005-omc-detection-surfaces.md|OMC Plugin Detection Surfaces in /ark-health + /ark-onboard]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-006-path-b-uniformity.md|/ark-workflow Path B Uniformity Refactor]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-007-context-budget-probe.md|/ark-workflow Context-Budget Probe (v1.17.0)]] |  |  |
+| [[TaskNotes/Tasks/Epic/Arkskill-008-gstack-planning-brainstorm.md|/ark-workflow gstack planning integration + Brainstorm scenario (v1.18.0)]] |  |  |

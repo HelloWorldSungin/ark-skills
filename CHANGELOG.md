@@ -2,6 +2,55 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.18.0] - 2026-04-18
+
+New **Brainstorm** scenario + **gstack planning integration** in `/ark-workflow`. Both were designed with a `/ccg` second-opinion pass — Codex flagged three HIGH concerns (wrong-truth-source detection, zombie chain files after Brainstorm STOP, Path B parity), Gemini flagged "Review Hell" (stacked `/ccg` + `/autoplan`) and bureaucratic re-invocation after Brainstorm. The synthesized rework shipped before Phase 2 chain edits.
+
+### Added
+
+- **`Brainstorm` scenario** in `/ark-workflow` — pre-triage exploration for fuzzy ideas. No weight class. Triggers on creation-intent phrases only ("brainstorm", "I have an idea", "should I build", "worth building", "shape this idea", "is this worth"). Produces a spec artifact suitable for re-triage. New `chains/brainstorm.md`.
+- **Continuous Brainstorm pivot gate** in `chains/brainstorm.md` — at spec-commit, offers interactive `[Y/n]` prompt. Y archives the chain file and re-invokes `/ark-workflow` internally with the spec; N archives and stops. Either branch prevents zombie chains from being offered on session resume.
+- **Session-capability `HAS_GSTACK_PLANNING` detection** in `/ark-workflow` Project Discovery — agent-executed semantic probe that reads the skill list in the system-reminder context. Matches the detection pattern used by `/ark-health` and `/ark-onboard` (plugin availability = "skill loadable in current session", not filesystem inspection).
+- **`GSTACK_STATE_PRESENT` advisory filesystem cross-check** — secondary, non-authoritative signal based on `$HOME/.gstack/config.yaml`. Used only to distinguish "gstack absent" from "gstack installed-but-broken" — not used for routing decisions.
+- **Three-state UX for gstack availability**: healthy (include the step), absent (silent skip — no notice), broken-install (one-notice-per-chain pointing to `/ark-health`). Brainstorm is the single exception — it always emits a fallback notice when invoked without gstack.
+- **Heavy planning authority substitution rule** (SKILL.md § Condition Resolution) — Path A Heavy chains **replace** `/ccg` plan review with the gstack planning authority when `HAS_GSTACK_PLANNING=true`:
+  - Greenfield Heavy step 4 `/ccg` plan review → `/autoplan` (CEO+design+eng+DX bundle)
+  - Migration Heavy step 3 `/ccg` migration plan review → `/plan-eng-review` (architecture-focused)
+  - Performance Heavy step 4 `/ccg` optimization plan review → `/plan-eng-review`
+  Prevents stacked-committee ceremony. Spec-review `/ccg` steps (earlier in each chain) stay unchanged — they review the spec, not the plan.
+- **Path B gstack-independence** documented as explicit product decision (SKILL.md § Path B gstack-independence). Path B's `/autopilot`/`/team` engines already include internal review phases; layering gstack planning on top would reintroduce stacked-committee ceremony. Users who want gstack reviews choose Path A.
+- **Greenfield Medium additive planning steps** (not substitution — Medium uses `/ask codex` single-advisor review, not `/ccg`):
+  - `/plan-design-review` at step 2 (if gstack AND UI-with-design-reference)
+  - `/plan-devex-review` at step 3 (if gstack AND developer-facing surface)
+  Handoff marker renumbered `after-step-3` → `after-step-5`.
+- **New condition triggers** in SKILL.md Condition Resolution:
+  - "Developer-facing surface" (for `/plan-devex-review`): public APIs, CLIs, SDKs, plugin interfaces, developer docs
+  - Extended "UI-with-design-reference" trigger now also gates `/plan-design-review`
+  - `(if gstack)` resolver branches on both `HAS_GSTACK_PLANNING` and `GSTACK_STATE_PRESENT` per the three-state UX
+- **Scope-retreat pivot** (Greenfield → Brainstorm) documented in SKILL.md § When Things Change. If step 1 `/brainstorming` reveals scope uncertainty ("should we even build this", "I don't know if this is the right thing"), pivot mid-chain to Brainstorm scenario. This is a *downshift* pattern, distinct from the existing upshift re-triage rule — Greenfield assumes implementation commitment; Brainstorm does scope-challenging. Escape-hatch note also added at the top of `chains/greenfield.md`.
+
+### Changed
+
+- Brainstorm scenario triggers deliberately exclude "explore" and "think through" (too generic — would match verbose bug descriptions or Hygiene tasks). Creation-intent phrases only.
+- `chains/brainstorm.md` step 4 changed from `**STOP** — invoke /ark-workflow again` to the Continuous Brainstorm interactive pivot + archive-either-branch semantics.
+- Greenfield Medium `/plan-design-review` and `/plan-devex-review` step descriptions clarified to note that at Medium scale the spec itself is the review target (no separate `/writing-plans` artifact exists at Medium, unlike Heavy). Functional behavior unchanged; documentation clearer.
+
+### Rework context
+
+Phase 1 was patched in place (semantic detection change, substitution rule, Brainstorm pivot) before Phase 2 chain edits. Both advisors' raw outputs and the synthesis are preserved in `.omc/artifacts/ask/` for the 2026-04-18 design session.
+
+### Post-commit review fixes (pre-push)
+
+Ran a second `/ccg` review against the v1.18.0 commit diff before pushing. Codex flagged two HIGH contract bugs and one MEDIUM rendering concern; Gemini flagged one UX red flag. All addressed in a follow-up commit on the same 1.18.0 release (not pushed yet at review time — no version bump needed).
+
+- **Brainstorm archive path aligned with `references/continuity.md` convention** — changed from `.ark-workflow/archive/{chain_id}.md` to `.ark-workflow/archive/YYYY-MM-DD-brainstorm.md`. Two different archive contracts for the same operation would have produced drift between continuity.md's stale-chain logic and Brainstorm's pivot.
+- **Brainstorm pivot Y-branch reframed as inline re-triage**, not a recursive `/ark-workflow` skill invocation. Reconciles with SKILL.md Step 7's core contract ("ark-workflow does not invoke downstream skills itself"). The agent continues applying the triage algorithm inline against the new spec and writes a fresh `current-chain.md` — no recursion.
+- **Substitution render rule** added to SKILL.md Step 6: when `HAS_GSTACK_PLANNING=true`, the resolved chain rewrites substituted step text (`/ccg` → `/autoplan` / `/plan-eng-review`) and drops the substitution note from user-facing output. Chain-file storage stays canonical; the user sees exactly one skill per step.
+- **Misleading "Path B exception" note removed** from `chains/brainstorm.md` — Brainstorm Path B uses OMC skills (`/deep-interview`, `/ralplan`, `/ccg`), not gstack. No actual exception to the Path B gstack-independence rule; the note was residue.
+- **Non-interactive pivot-gate fallback** documented in `chains/brainstorm.md`: in auto-mode, CI, or unattended background execution, default to Y (continue to triage) without prompting. Addresses Gemini's red flag that the `[Y/n]` prompt would hang in backgrounded contexts.
+
+Known follow-ups for a future minor release: semantic probe silent misclassification (low-severity — relies on agent correctly reading skill-list names), Brainstorm trigger rigidity for "explore new feature idea" (false-negative by design), substitution note verbosity in chain-file storage.
+
 ## [1.17.0] - 2026-04-17
 
 ### Added

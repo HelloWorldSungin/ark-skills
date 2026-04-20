@@ -1,5 +1,7 @@
 # Greenfield Feature
 
+*Greenfield assumes implementation commitment. If step 1 `/brainstorming` reveals scope uncertainty ("I don't know if this is the right thing", "should we even build this"), pivot to Brainstorm scenario — see `SKILL.md § When Things Change § Scope-retreat pivot`.*
+
 ## Light
 
 *rare for greenfield*
@@ -28,25 +30,27 @@
 *Session 1 — Design:*
 0. `/ark-context-warmup` — load recent + relevant project context
 1. `/brainstorming` — explore intent, propose approaches, write spec
-2. `/ask codex` **[probe-gated §7]** — single-advisor spec review
-3. Commit spec → **end session, start fresh for implementation** (set `handoff_marker: after-step-3`)
+2. `/plan-design-review` (if gstack AND UI-with-design-reference) — design critique of the spec's design decisions; rates each dimension 0-10 and fixes toward 10. *(Note: at Medium scale, the spec from step 1 is the design-review target — there's no separate `/writing-plans` artifact as in Heavy.)*
+3. `/plan-devex-review` (if gstack AND developer-facing surface) — developer-experience critique of the spec's API/CLI/SDK decisions. *(Same note as step 2: operates on the spec at Medium scale.)*
+4. `/ask codex` **[probe-gated §7]** — single-advisor spec review
+5. Commit spec → **end session, start fresh for implementation** (set `handoff_marker: after-step-5`)
 
 *Session 2 — Implementation:*
-4. Read spec from `docs/superpowers/specs/`
-5. `/test-driven-development` — write tests first, implement against them
-6. `/ark-code-review --quick` → `/simplify`
-7. `/qa` (if UI)
-8. `/visual-verdict` (if UI with design reference)
-9. `/cso` (if security-relevant)
-10. `/ship` → `/land-and-deploy`
-11. `/canary` (if deploy risk)
+6. Read spec from `docs/superpowers/specs/`
+7. `/test-driven-development` — write tests first, implement against them
+8. `/ark-code-review --quick` → `/simplify`
+9. `/qa` (if UI)
+10. `/visual-verdict` (if UI with design reference)
+11. `/cso` (if security-relevant)
+12. `/ship` → `/land-and-deploy`
+13. `/canary` (if deploy risk)
 
 *Document:*
-12. `/wiki-update` (if vault)
-13. `/wiki-ingest` (if vault + new component needs its own page)
-14. `/cross-linker` (if vault)
-15. `/document-release` (if standard docs exist)
-16. Session log
+14. `/wiki-update` (if vault)
+15. `/wiki-ingest` (if vault + new component needs its own page)
+16. `/cross-linker` (if vault)
+17. `/document-release` (if standard docs exist)
+18. Session log
 
 ### Path B (OMC-powered — if HAS_OMC=true)
 
@@ -66,7 +70,7 @@
 1. `/brainstorming` — explore intent, propose approaches, write spec
 2. `/ccg` **[probe-gated §7]** — multi-advisor spec review (architecture + alternatives, synthesized)
 3. `/writing-plans` — break into phased implementation plan
-4. `/ccg` **[probe-gated §7]** — multi-advisor plan review
+4. `/ccg` **[probe-gated §7]** — multi-advisor plan review *(substitution: replaced by `/autoplan` when `HAS_GSTACK_PLANNING=true` — gstack multi-persona bundle (CEO+design+eng+DX) supersedes multi-model consensus for plan review. See SKILL.md § Heavy planning authority substitution. The step 2 `/ccg` spec review is NOT substituted — it reviews the spec, not the plan.)*
 5. Commit spec + plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-5`)
 
 *Session 2 — Implementation:*

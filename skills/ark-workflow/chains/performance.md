@@ -64,7 +64,7 @@
 1. `/investigate` — deep profiling, identify systemic bottlenecks
 2. `/benchmark` — comprehensive baseline
 3. `/brainstorming` — optimization strategy (caching architecture, query redesign, etc.)
-4. `/ccg` **[probe-gated §7]** — multi-advisor optimization plan review
+4. `/ccg` **[probe-gated §7]** — multi-advisor optimization plan review *(substitution: replaced by `/plan-eng-review` when `HAS_GSTACK_PLANNING=true` — performance architecture work is single-discipline (engineering); multi-persona reviews add little. See SKILL.md § Heavy planning authority substitution.)*
 5. Commit plan → **end session, start fresh for implementation** (set `handoff_marker: after-step-5`)
 
 *Session 2 — Implementation:*
