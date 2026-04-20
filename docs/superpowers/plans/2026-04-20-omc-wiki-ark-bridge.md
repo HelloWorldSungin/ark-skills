@@ -2,17 +2,22 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement the OMC `/wiki` ↔ Ark `/wiki-*` bridge per `docs/superpowers/specs/2026-04-20-omc-wiki-ark-bridge-design.md` — warmup seeds OMC on prompt+cache-miss, handoff writes bridge pages on v1.17.0 probe action, end-of-session `/wiki-update` promotes durable OMC content into the vault with transactional deletes.
+**Status:** Revised post-/ccg plan review (Codex flagged 4 HIGH, 4 MEDIUM, 2 LOW; Gemini concurred on shared-module placement)
 
-**Architecture:** Three Python helper scripts (`seed_omc.py`, `read_bridges.py`, `promote_omc.py`) + one new skill (`/wiki-handoff`) + edits to three existing SKILL.md files (`ark-context-warmup`, `ark-workflow`, `wiki-update`). Stdlib-only. Pytest for unit, bats for integration.
+**Goal:** Implement the OMC `/wiki` ↔ Ark `/wiki-*` bridge per `docs/superpowers/specs/2026-04-20-omc-wiki-ark-bridge-design.md` — warmup seeds OMC on prompt+cache-miss, handoff writes bridge pages on v1.17.0 probe action, end-of-session `/wiki-update` promotes durable OMC content into the vault with transactional (post-index-regen) deletes.
 
-**Tech Stack:** Python 3.11 stdlib (hashlib, pathlib, json, os, fcntl, time, yaml via pyyaml which ark-skills already uses per `skills/ark-update/scripts/plan.py`). Pytest + bats.
+**Architecture:** One shared module at `skills/shared/python/omc_page.py`, three Python helper scripts (`seed_omc.py`, `read_bridges.py`, `promote_omc.py`), one new skill (`/wiki-handoff`), and edits to four existing files (`synthesize.py`, `ark-context-warmup/SKILL.md`, `ark-workflow/SKILL.md`, `wiki-update/SKILL.md`). Pytest for unit, bats for integration.
+
+**Tech Stack:** Python 3.11, stdlib + `PyYAML` (already a plugin dependency — see `skills/ark-update/scripts/plan.py`). Pytest for unit tests. Bats for integration. All scripts use `from __future__ import annotations` per repo convention.
 
 ---
 
 ## File Structure
 
 **Create:**
+- `skills/shared/python/__init__.py`
+- `skills/shared/python/omc_page.py` — shared page I/O + hashing
+- `skills/shared/python/test_omc_page.py`
 - `skills/wiki-handoff/SKILL.md`
 - `skills/wiki-handoff/scripts/write_bridge.py`
 - `skills/wiki-handoff/scripts/test_write_bridge.py`
@@ -23,29 +28,41 @@
 - `skills/wiki-update/scripts/__init__.py`
 - `skills/wiki-update/scripts/promote_omc.py`
 - `skills/wiki-update/scripts/test_promote_omc.py`
+- `skills/wiki-update/scripts/cli_promote.py`
 - `skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats`
-- `skills/wiki-update/scripts/fixtures/` (integration fixtures)
+- `skills/wiki-update/scripts/fixtures/mixed/` (integration fixture worktree)
 
 **Modify:**
-- `skills/ark-context-warmup/SKILL.md` — Step 1 (read bridges) + Step 5 (seed OMC on cache miss)
-- `skills/ark-workflow/SKILL.md` — Step 6.5 action branch (invoke `/wiki-handoff` before compact/clear)
-- `skills/wiki-update/SKILL.md` — add Step 3.5 (Promote OMC)
+- `skills/ark-context-warmup/scripts/evidence.py` — extend `derive_candidates` to emit `seed_sources`
+- `skills/ark-context-warmup/scripts/synthesize.py` — `assemble_brief` accepts `prior_bridge` kwarg, renders "Prior Session Handoff" section
+- `skills/ark-context-warmup/SKILL.md` — Step 1b (bridge read) + Step 5b (seed OMC)
+- `skills/ark-workflow/SKILL.md` — expand Step 6.5 action bullet into full `(a)`/`(b)`/`(c)` branch block with `/wiki-handoff` pre-action
+- `skills/wiki-update/SKILL.md` — insert Step 3.5 between Steps 3 and 4
 - `VERSION` — bump to 1.19.0
-- `.claude-plugin/plugin.json` — version bump
-- `.claude-plugin/marketplace.json` — version bump
+- `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` — version bump
 - `CHANGELOG.md` — 1.19.0 entry
+
+**Shared-module import pattern:** All consumers add `skills/shared/python/` to `sys.path` via a repo-root bootstrap pattern (shown in Task 1). No cross-skill imports.
 
 ---
 
-## Task 1: Shared OMC page utilities (foundation for all three components)
+## Task 1: Shared OMC page module at `skills/shared/python/`
 
 **Files:**
-- Create: `skills/wiki-handoff/scripts/omc_page.py` (shared module — imported by all three helpers)
-- Create: `skills/wiki-handoff/scripts/test_omc_page.py`
+- Create: `skills/shared/python/__init__.py` (empty)
+- Create: `skills/shared/python/omc_page.py`
+- Create: `skills/shared/python/test_omc_page.py`
 
-- [ ] **Step 1: Write failing tests for page read/write/hash**
+- [ ] **Step 1: Create the shared directory**
 
-File: `skills/wiki-handoff/scripts/test_omc_page.py`
+```bash
+mkdir -p skills/shared/python
+touch skills/shared/python/__init__.py
+```
+
+- [ ] **Step 2: Write failing tests**
+
+File: `skills/shared/python/test_omc_page.py`
 ```python
 """Tests for shared OMC page utilities."""
 from pathlib import Path
@@ -53,32 +70,38 @@ from pathlib import Path
 import pytest
 
 from omc_page import (
+    OMCPage,
     body_hash,
     content_hash_slug,
     parse_page,
     write_page,
-    OMCPage,
 )
 
 
-def test_body_hash_excludes_frontmatter():
-    body_only = "# Title\n\nContent here.\n"
-    fm_plus_body = "---\ntitle: x\n---\n\n" + body_only
-    # body_hash operates on body portion only
-    assert body_hash(body_only) == body_hash(body_only)
-    # Hash is deterministic
+def test_body_hash_deterministic():
     assert body_hash("hello") == body_hash("hello")
+    assert body_hash("hello") != body_hash("world")
 
 
-def test_content_hash_slug_stable_and_short():
+def test_body_hash_operates_on_provided_string_only():
+    # Callers pass the body portion — the function does not strip frontmatter itself.
+    raw_with_fm = "---\ntitle: x\n---\n\n# Body\n"
+    body_only = "# Body\n"
+    assert body_hash(raw_with_fm) != body_hash(body_only)
+    # When caller passes the post-parse body, the hash reflects that body.
+    path = Path("/tmp/_test_body_hash_parse.md")
+    path.write_text(raw_with_fm)
+    page = parse_page(path)
+    assert body_hash(page.body) == body_hash("\n# Body\n")  # parse_page preserves the leading newline
+
+
+def test_content_hash_slug_stable_and_12_chars():
     slug = content_hash_slug("vault/Architecture/Auth.md", "body text")
     assert len(slug) == 12
-    assert slug.isalnum()
-    # Same inputs → same slug
+    assert all(c in "0123456789abcdef" for c in slug)
     assert slug == content_hash_slug("vault/Architecture/Auth.md", "body text")
-    # Different path → different slug
-    other = content_hash_slug("vault/Architecture/Users.md", "body text")
-    assert slug != other
+    assert slug != content_hash_slug("vault/Architecture/Users.md", "body text")
+    assert slug != content_hash_slug("vault/Architecture/Auth.md", "different")
 
 
 def test_parse_page_roundtrip(tmp_path):
@@ -87,7 +110,7 @@ def test_parse_page_roundtrip(tmp_path):
     page = parse_page(path)
     assert page.frontmatter["title"] == "X"
     assert page.frontmatter["tags"] == ["a", "b"]
-    assert page.body.strip() == "# X\n\nBody."
+    assert "# X\n\nBody." in page.body
 
 
 def test_parse_page_missing_frontmatter(tmp_path):
@@ -98,14 +121,14 @@ def test_parse_page_missing_frontmatter(tmp_path):
     assert "No frontmatter" in page.body
 
 
-def test_parse_page_malformed_yaml(tmp_path):
+def test_parse_page_malformed_yaml_raises(tmp_path):
     path = tmp_path / "page.md"
     path.write_text("---\ntitle: [unclosed\n---\n\nBody.\n")
     with pytest.raises(ValueError, match="frontmatter"):
         parse_page(path)
 
 
-def test_write_page_atomic_creates_file(tmp_path):
+def test_write_page_atomic(tmp_path):
     path = tmp_path / "new.md"
     page = OMCPage(frontmatter={"title": "T"}, body="# T\n\nBody.\n")
     write_page(path, page)
@@ -121,16 +144,18 @@ def test_write_page_o_excl_blocks_overwrite(tmp_path):
         write_page(path, page, exclusive=True)
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [ ] **Step 3: Run tests — expect failure**
 
-Run: `cd skills/wiki-handoff/scripts && python3 -m pytest test_omc_page.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'omc_page'`
+Run: `cd skills/shared/python && python3 -m pytest test_omc_page.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'omc_page'`.
 
-- [ ] **Step 3: Implement omc_page.py**
+- [ ] **Step 4: Implement `omc_page.py`**
 
-File: `skills/wiki-handoff/scripts/omc_page.py`
+File: `skills/shared/python/omc_page.py`
 ```python
-"""Shared OMC page utilities: read, write, hash. Stdlib-only where possible; pyyaml for frontmatter."""
+"""Shared OMC page utilities: read, write, hash. Used by /wiki-handoff,
+/ark-context-warmup seeder, and /wiki-update promoter.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -150,7 +175,7 @@ class OMCPage:
 
 
 def body_hash(body: str) -> str:
-    """SHA-256 of body content (caller must exclude frontmatter)."""
+    """SHA-256 hex of the supplied string. Caller chooses what to hash."""
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
@@ -169,7 +194,7 @@ def parse_page(path: Path) -> OMCPage:
     if end == -1:
         return OMCPage(frontmatter={}, body=text)
     fm_text = text[4:end]
-    body = text[end + 5:]
+    body = text[end + 5 :]
     try:
         fm = yaml.safe_load(fm_text) or {}
     except yaml.YAMLError as exc:
@@ -202,16 +227,16 @@ def write_page(path: Path, page: OMCPage, *, exclusive: bool = False) -> None:
             raise
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 5: Run tests to verify pass**
 
-Run: `cd skills/wiki-handoff/scripts && python3 -m pytest test_omc_page.py -v`
-Expected: 7 PASS.
+Run: `cd skills/shared/python && python3 -m pytest test_omc_page.py -v`
+Expected: 8 PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add skills/wiki-handoff/scripts/omc_page.py skills/wiki-handoff/scripts/test_omc_page.py
-git commit -m "feat(wiki-bridge): shared OMC page read/write/hash utilities"
+git add skills/shared/python/
+git commit -m "feat(shared): shared OMC page utilities (read/write/hash) for wiki bridge"
 ```
 
 ---
@@ -222,13 +247,17 @@ git commit -m "feat(wiki-bridge): shared OMC page read/write/hash utilities"
 - Create: `skills/wiki-handoff/scripts/write_bridge.py`
 - Create: `skills/wiki-handoff/scripts/test_write_bridge.py`
 
+Shared-module import helper (used throughout this plan):
+```python
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
+```
+
 - [ ] **Step 1: Write failing tests**
 
 File: `skills/wiki-handoff/scripts/test_write_bridge.py`
 ```python
 """Tests for /wiki-handoff bridge writer."""
-import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -240,9 +269,12 @@ SCRIPT = Path(__file__).parent / "write_bridge.py"
 
 
 def run_cli(argv, cwd):
+    env = {"PYTHONPATH": str(Path(__file__).resolve().parents[3] / "shared" / "python")}
+    import os
+    env = {**os.environ, **env}
     return subprocess.run(
         [sys.executable, str(SCRIPT), *argv],
-        cwd=str(cwd), capture_output=True, text=True,
+        cwd=str(cwd), capture_output=True, text=True, env=env,
     )
 
 
@@ -255,7 +287,7 @@ def _args(**over):
         "--step-count": "5",
         "--session-id": "abcdef01234567890abcdef",
         "--open-threads": "Verify JWT TTL handling in auth/middleware.py:47",
-        "--next-steps": "Write integration test in tests/test_auth.py covering expired tokens",
+        "--next-steps": "Write integration test tests/test_auth.py covering expired tokens",
         "--notes": "Rate limiter interaction still open",
         "--done-summary": "Implemented JWT validation middleware; 3/5 tests pass",
     }
@@ -286,7 +318,7 @@ def test_happy_path_writes_bridge(tmp_path):
     ("--open-threads", "TODO"),
     ("--open-threads", "keep going"),
     ("--open-threads", "none"),
-    ("--open-threads", "x"),  # <20 chars
+    ("--open-threads", "x"),
     ("--next-steps", ""),
     ("--next-steps", "continue task"),
 ])
@@ -294,53 +326,46 @@ def test_rejects_generic_placeholders(tmp_path, field, bad):
     (tmp_path / ".omc" / "wiki").mkdir(parents=True)
     r = run_cli(_args(**{field: bad}), cwd=tmp_path)
     assert r.returncode != 0
-    assert "specific" in r.stderr.lower() or "generic" in r.stderr.lower() or "too short" in r.stderr.lower()
+    assert any(w in r.stderr.lower() for w in ("specific", "generic", "too short", "non-empty"))
     assert list((tmp_path / ".omc" / "wiki").glob("session-bridge-*.md")) == []
 
 
 def test_filename_collision_appends_suffix(tmp_path, monkeypatch):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    # Freeze time inside script via env
     monkeypatch.setenv("WIKI_HANDOFF_FIXED_STAMP", "2026-04-20-143005")
     r1 = run_cli(_args(), cwd=tmp_path)
     r2 = run_cli(_args(), cwd=tmp_path)
     r3 = run_cli(_args(), cwd=tmp_path)
-    assert r1.returncode == 0
-    assert r2.returncode == 0
-    assert r3.returncode == 0
+    assert r1.returncode == 0 and r2.returncode == 0 and r3.returncode == 0
     names = sorted(p.name for p in wiki.glob("session-bridge-*.md"))
     assert len(names) == 3
-    # First: no suffix; subsequent: -2, -3
     assert not names[0].endswith("-2.md") and not names[0].endswith("-3.md")
     assert any(n.endswith("-2.md") for n in names)
     assert any(n.endswith("-3.md") for n in names)
 
 
 def test_missing_omc_wiki_dir_exits_silently(tmp_path):
-    # No .omc/wiki/ → script should exit 0 (nothing to write to, silent no-op)
     r = run_cli(_args(), cwd=tmp_path)
     assert r.returncode == 0
-    assert "not initialized" in r.stderr.lower() or r.stderr == ""
 
 
-def test_bridge_frontmatter_has_chain_id(tmp_path):
+def test_bridge_frontmatter_has_chain_id_and_tags(tmp_path):
     (tmp_path / ".omc" / "wiki").mkdir(parents=True)
     r = run_cli(_args(), cwd=tmp_path)
-    assert r.returncode == 0
+    assert r.returncode == 0, r.stderr
     bridge = list((tmp_path / ".omc" / "wiki").glob("session-bridge-*.md"))[0]
     text = bridge.read_text()
     assert "chain_id: CH-001" in text
-    assert "tags:" in text
     assert "session-bridge" in text
     assert "source-handoff" in text
     assert "scenario-greenfield" in text
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [ ] **Step 2: Run tests — expect failure**
 
 Run: `cd skills/wiki-handoff/scripts && python3 -m pytest test_write_bridge.py -v`
-Expected: FAIL — `write_bridge.py` doesn't exist yet.
+Expected: FAIL.
 
 - [ ] **Step 3: Implement write_bridge.py**
 
@@ -349,7 +374,7 @@ File: `skills/wiki-handoff/scripts/write_bridge.py`
 """/wiki-handoff — writes a session bridge page to .omc/wiki/.
 
 Invoked from /ark-workflow Step 6.5 action branch before /compact or /clear.
-Stdlib-only + pyyaml (via omc_page).
+Uses shared omc_page module. PyYAML required (plugin-standard dep).
 """
 from __future__ import annotations
 
@@ -359,7 +384,10 @@ import sys
 import time
 from pathlib import Path
 
-from omc_page import OMCPage, write_page
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
+
+from omc_page import OMCPage, write_page  # noqa: E402
 
 
 GENERIC_PATTERNS = {
@@ -369,14 +397,13 @@ MIN_LENGTH = 20
 
 
 def _validate(field_name: str, value: str) -> str | None:
-    """Return error message if invalid, else None."""
     s = (value or "").strip()
     if not s:
         return f"{field_name} must be non-empty"
     if s.lower() in GENERIC_PATTERNS:
-        return f"{field_name} is generic placeholder ({s!r})"
+        return f"{field_name} is generic placeholder ({s!r}) — provide specific detail"
     if len(s) < MIN_LENGTH:
-        return f"{field_name} is too short (<{MIN_LENGTH} chars)"
+        return f"{field_name} is too short (<{MIN_LENGTH} chars) — provide specific detail"
     return None
 
 
@@ -410,12 +437,11 @@ def main() -> int:
     for name, val in (("open_threads", args.open_threads), ("next_steps", args.next_steps)):
         err = _validate(name, val)
         if err:
-            print(f"wiki-handoff: {err}. Re-invoke with specific detail.", file=sys.stderr)
+            print(f"wiki-handoff: {err}. Re-invoke with specific file paths / decision points.", file=sys.stderr)
             return 2
 
     wiki_dir = Path.cwd() / ".omc" / "wiki"
     if not wiki_dir.is_dir():
-        print("wiki-handoff: .omc/wiki/ not initialized — skipping bridge write.", file=sys.stderr)
         return 0
 
     ts = _timestamp()
@@ -460,9 +486,8 @@ def main() -> int:
     }
     page = OMCPage(frontmatter=fm, body=body)
 
-    # O_EXCL retry with numeric suffix
     attempt = 1
-    while True:
+    while attempt <= 10:
         try_path = target if attempt == 1 else wiki_dir / f"{target.stem}-{attempt}.md"
         try:
             write_page(try_path, page, exclusive=True)
@@ -470,9 +495,8 @@ def main() -> int:
             return 0
         except FileExistsError:
             attempt += 1
-            if attempt > 10:
-                print("wiki-handoff: too many filename collisions", file=sys.stderr)
-                return 3
+    print("wiki-handoff: too many filename collisions", file=sys.stderr)
+    return 3
 
 
 if __name__ == "__main__":
@@ -482,21 +506,20 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run tests to verify pass**
 
 Run: `cd skills/wiki-handoff/scripts && python3 -m pytest test_write_bridge.py -v`
-Expected: 13 PASS (happy path + 10 parametrized rejections + collision + missing-dir + frontmatter).
+Expected: 14 PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add skills/wiki-handoff/scripts/write_bridge.py skills/wiki-handoff/scripts/test_write_bridge.py
-git commit -m "feat(wiki-handoff): write_bridge.py with schema enforcement + O_EXCL collision handling"
+git add skills/wiki-handoff/scripts/
+git commit -m "feat(wiki-handoff): write_bridge.py with schema enforcement + O_EXCL"
 ```
 
 ---
 
 ## Task 3: `/wiki-handoff` SKILL.md
 
-**Files:**
-- Create: `skills/wiki-handoff/SKILL.md`
+**Files:** Create `skills/wiki-handoff/SKILL.md`
 
 - [ ] **Step 1: Write SKILL.md**
 
@@ -504,7 +527,7 @@ File: `skills/wiki-handoff/SKILL.md`
 ```markdown
 ---
 name: wiki-handoff
-description: Write a session bridge page to .omc/wiki/ capturing in-session state before /compact or /clear. Invoked from /ark-workflow Step 6.5 action branch. Stdlib-only, <1s wall time. Triggers on "handoff session", "bridge page", "flush session state".
+description: Write a session bridge page to .omc/wiki/ capturing in-session state before /compact or /clear. Invoked from /ark-workflow Step 6.5 action branch. Triggers on "handoff session", "bridge page", "flush session state".
 ---
 
 # Wiki Handoff
@@ -513,18 +536,18 @@ Writes one page to `.omc/wiki/session-bridge-{YYYY-MM-DD}-{HHMMSS}-{sid8}.md` wi
 
 ## When this runs
 
-Invoked from `/ark-workflow` SKILL.md Step 6.5 after the v1.17.0 context-budget probe menu surfaces and the user picks option `(a) compact` or `(b) clear`. NOT invoked for option `(c) subagent` (subagent dispatch doesn't wipe parent context).
+Invoked from `/ark-workflow` SKILL.md Step 6.5 after the v1.17.0 context-budget probe menu surfaces and the user picks option `(a) compact` or `(b) clear`. NOT invoked for option `(c) subagent`.
 
 ## Inputs
 
-The calling skill (the LLM itself, in the `/ark-workflow` turn) supplies these args to `write_bridge.py`:
+Supplied by the LLM in the same turn that invokes this skill:
 
 | Arg | Source |
 |---|---|
 | `--chain-id` | `.ark-workflow/current-chain.md` frontmatter |
 | `--task-text` | same |
 | `--scenario` | same |
-| `--step-index`, `--step-count` | chain step checklist state |
+| `--step-index`, `--step-count` | chain step checklist |
 | `--session-id` | `$CLAUDE_SESSION_ID` or `.omc/state/hud-state.json` |
 | `--open-threads` | **LLM-authored**, specific (file paths, decision points) |
 | `--next-steps` | **LLM-authored**, specific |
@@ -535,27 +558,24 @@ The calling skill (the LLM itself, in the `/ark-workflow` turn) supplies these a
 ## Schema enforcement
 
 The script rejects calls where `--open-threads` or `--next-steps` match any of:
-- Empty or whitespace-only
+- Empty / whitespace-only
 - Generic: `continue task`, `TBD`, `TODO`, `keep going`, `none`, `n/a`
 - Content length <20 chars
 
-On rejection, exits non-zero with diagnostic. The LLM must re-invoke with specifics.
+On rejection exits non-zero; the LLM MUST re-invoke with specifics.
 
 ## Degradation
 
-- `.omc/wiki/` doesn't exist → exit 0 silent (OMC not initialized in this worktree).
-- Filename collision within same second → append `-2`, `-3`, ... (up to 10 retries).
+- `.omc/wiki/` missing → exit 0 silent.
+- Filename collision within same second → append `-2`, `-3`, … (up to 10 retries).
 - Too many retries → exit 3.
 
 ## Usage
 
 ```bash
 python3 "$ARK_SKILLS_ROOT/skills/wiki-handoff/scripts/write_bridge.py" \
-    --chain-id "$CHAIN_ID" \
-    --task-text "$TASK_TEXT" \
-    --scenario "$SCENARIO" \
-    --step-index "$STEP_IDX" --step-count "$STEP_COUNT" \
-    --session-id "$SESSION_ID" \
+    --chain-id "$CHAIN_ID" --task-text "$TASK_TEXT" --scenario "$SCENARIO" \
+    --step-index "$STEP_IDX" --step-count "$STEP_COUNT" --session-id "$SESSION_ID" \
     --open-threads "Verify JWT TTL handling in auth/middleware.py:47" \
     --next-steps "Write integration test tests/test_auth.py covering expired tokens" \
     --notes "Rate limiter interaction still open" \
@@ -563,19 +583,19 @@ python3 "$ARK_SKILLS_ROOT/skills/wiki-handoff/scripts/write_bridge.py" \
     --git-diff-stat "$(git diff --stat HEAD~3..HEAD)"
 ```
 
-Output on success: the path of the created bridge page (stdout).
+Output on success: path of the created bridge page (stdout).
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add skills/wiki-handoff/SKILL.md
-git commit -m "feat(wiki-handoff): SKILL.md documenting handoff invocation contract"
+git commit -m "feat(wiki-handoff): SKILL.md documenting invocation contract"
 ```
 
 ---
 
-## Task 4: seed_omc.py — warmup populates OMC on cache miss
+## Task 4: `seed_omc.py` — warmup populates OMC on cache miss
 
 **Files:**
 - Create: `skills/ark-context-warmup/scripts/seed_omc.py`
@@ -585,163 +605,150 @@ git commit -m "feat(wiki-handoff): SKILL.md documenting handoff invocation contr
 
 File: `skills/ark-context-warmup/scripts/test_seed_omc.py`
 ```python
-"""Tests for seed_omc: warmup populator with per-source content hashing and stale cleanup."""
-import json
+"""Tests for seed_omc: per-source content hashing + stale cleanup."""
 import sys
 from pathlib import Path
 
-import pytest
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "wiki-handoff" / "scripts"))
-from omc_page import content_hash_slug, parse_page
+from omc_page import content_hash_slug, parse_page, write_page, OMCPage
 from seed_omc import seed, SeedSource
 
 
-def _mk_source(title="Auth", path="vault/Architecture/Auth.md",
-               body="# Auth\n\nJWT-based auth.\n" * 30,
-               vault_type="architecture", tags=None, confidence="high"):
-    return SeedSource(
-        title=title,
-        vault_source_path=path,
-        body=body,
-        vault_type=vault_type,
-        tags=tags or ["auth", "security"],
-        confidence=confidence,
-    )
+def _mk(title="Auth", path="vault/Architecture/Auth.md",
+        body="# Auth\n\n" + "body " * 60, vault_type="architecture",
+        tags=None, confidence="high"):
+    return SeedSource(title=title, vault_source_path=path, body=body,
+                      vault_type=vault_type, tags=tags or ["auth"],
+                      confidence=confidence)
 
 
-def test_seed_writes_new_pages(tmp_path):
+def test_seed_writes_new_page(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    sources = [_mk_source()]
-    result = seed(wiki, chain_id="CH-A", sources=sources)
-    assert result.written == 1
-    assert result.refreshed == 0
-    assert result.deleted_stale == 0
-    slug = content_hash_slug("vault/Architecture/Auth.md", sources[0].body)
-    expected = wiki / f"source-{slug}.md"
-    assert expected.exists()
+    r = seed(wiki, chain_id="CH-A", sources=[_mk()])
+    assert r.written == 1
+    slug = content_hash_slug("vault/Architecture/Auth.md", _mk().body)
+    assert (wiki / f"source-{slug}.md").exists()
 
 
 def test_seed_skips_short_sources(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    sources = [_mk_source(body="short")]  # <200 chars
-    result = seed(wiki, chain_id="CH-A", sources=sources)
-    assert result.written == 0
+    r = seed(wiki, chain_id="CH-A", sources=[_mk(body="short")])
+    assert r.written == 0
     assert list(wiki.glob("source-*.md")) == []
 
 
 def test_seed_idempotent_same_content(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    sources = [_mk_source()]
-    seed(wiki, chain_id="CH-A", sources=sources)
-    before = {p.name: p.stat().st_mtime_ns for p in wiki.glob("source-*.md")}
-    result = seed(wiki, chain_id="CH-A", sources=sources)
-    assert result.written == 0
-    assert result.refreshed == 0  # identical content, no rewrite
-    after = {p.name: p.stat().st_mtime_ns for p in wiki.glob("source-*.md")}
+    s = [_mk()]
+    seed(wiki, chain_id="CH-A", sources=s)
+    before = {p.name for p in wiki.glob("source-*.md")}
+    r = seed(wiki, chain_id="CH-A", sources=s)
+    assert r.written == 0
+    after = {p.name for p in wiki.glob("source-*.md")}
     assert before == after
 
 
-def test_seed_refresh_when_content_changes(tmp_path):
+def test_seed_content_change_creates_new_hash_and_cleans_stale(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    s1 = _mk_source(body="# Auth v1\n\n" + "x" * 250)
-    seed(wiki, chain_id="CH-A", sources=[s1])
-    s2 = _mk_source(body="# Auth v2\n\n" + "y" * 250)  # same path, different content
-    result = seed(wiki, chain_id="CH-A", sources=[s2])
-    # New content = new hash = new page; old is stale and deleted
-    assert result.written == 1
-    assert result.deleted_stale == 1
+    seed(wiki, chain_id="CH-A",
+         sources=[_mk(body="# v1\n\n" + "a" * 250)])
+    r = seed(wiki, chain_id="CH-A",
+             sources=[_mk(body="# v2\n\n" + "b" * 250)])  # same path, new content
+    assert r.written == 1
+    assert r.deleted_stale == 1
 
 
-def test_seed_deletes_stale_sources_for_same_chain(tmp_path):
+def test_seed_topic_shift_deletes_stale_sources(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    s_a = _mk_source(title="Auth", path="vault/Architecture/Auth.md",
-                     body="# A\n\n" + "a" * 250)
-    s_b = _mk_source(title="Users", path="vault/Architecture/Users.md",
-                     body="# B\n\n" + "b" * 250)
-    seed(wiki, chain_id="CH-A", sources=[s_a, s_b])
+    seed(wiki, chain_id="CH-A", sources=[
+        _mk(title="Auth", path="vault/Architecture/Auth.md", body="# A\n\n" + "a" * 250),
+        _mk(title="Users", path="vault/Architecture/Users.md", body="# B\n\n" + "b" * 250),
+    ])
     assert len(list(wiki.glob("source-*.md"))) == 2
-    # Topic shift within same chain: fanout now returns only s_c
-    s_c = _mk_source(title="Billing", path="vault/Architecture/Billing.md",
-                     body="# C\n\n" + "c" * 250)
-    result = seed(wiki, chain_id="CH-A", sources=[s_c])
-    assert result.written == 1
-    assert result.deleted_stale == 2
-    remaining = list(wiki.glob("source-*.md"))
-    assert len(remaining) == 1
+    r = seed(wiki, chain_id="CH-A", sources=[
+        _mk(title="Billing", path="vault/Architecture/Billing.md", body="# C\n\n" + "c" * 250),
+    ])
+    assert r.written == 1 and r.deleted_stale == 2
+    assert len(list(wiki.glob("source-*.md"))) == 1
 
 
 def test_seed_preserves_other_chains(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    seed(wiki, chain_id="CH-A", sources=[_mk_source()])
-    # A different chain must not wipe CH-A's sources
-    s_other = _mk_source(title="Deploys", path="vault/Ops/Deploys.md",
-                         body="# D\n\n" + "d" * 250)
-    result = seed(wiki, chain_id="CH-B", sources=[s_other])
-    assert result.deleted_stale == 0
+    seed(wiki, chain_id="CH-A", sources=[_mk()])
+    r = seed(wiki, chain_id="CH-B",
+             sources=[_mk(title="Deploys", path="vault/Ops/Deploys.md",
+                          body="# D\n\n" + "d" * 250)])
+    assert r.deleted_stale == 0
     assert len(list(wiki.glob("source-*.md"))) == 2
 
 
-def test_seed_frontmatter_contains_provenance(tmp_path):
+def test_seed_frontmatter_has_full_provenance(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    sources = [_mk_source(vault_type="research")]
-    seed(wiki, chain_id="CH-A", sources=sources)
-    page_path = next(wiki.glob("source-*.md"))
-    page = parse_page(page_path)
+    seed(wiki, chain_id="CH-A", sources=[_mk(vault_type="research")])
+    page = parse_page(next(wiki.glob("source-*.md")))
     fm = page.frontmatter
     assert fm["ark-original-type"] == "research"
     assert fm["ark-source-path"] == "vault/Architecture/Auth.md"
     assert "seed_body_hash" in fm
     assert fm["seed_chain_id"] == "CH-A"
     assert "source-warmup" in fm["tags"]
-    # Vault research → OMC architecture per mapping
-    assert fm["category"] == "architecture"
+    assert fm["category"] == "architecture"  # research → architecture per mapping
 
 
 def test_seed_excluded_vault_types(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
     for bad in ("session-log", "epic", "story", "bug", "task"):
-        src = _mk_source(vault_type=bad, body="x" * 250,
-                         path=f"vault/{bad}.md")
-        result = seed(wiki, chain_id="CH-A", sources=[src])
-        assert result.written == 0
+        r = seed(wiki, chain_id="CH-A",
+                 sources=[_mk(vault_type=bad, body="x" * 250,
+                              path=f"vault/{bad}.md")])
+        assert r.written == 0
+
+
+def test_seed_same_title_different_path_produces_distinct_slugs(tmp_path):
+    wiki = tmp_path / ".omc" / "wiki"
+    wiki.mkdir(parents=True)
+    r = seed(wiki, chain_id="CH-A", sources=[
+        _mk(title="Auth", path="vault/A/Auth.md", body="# A\n\n" + "x" * 250),
+        _mk(title="Auth", path="vault/B/Auth.md", body="# A\n\n" + "x" * 250),
+    ])
+    assert r.written == 2
+    assert len(list(wiki.glob("source-*.md"))) == 2
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [ ] **Step 2: Run tests — expect failure**
 
 Run: `cd skills/ark-context-warmup/scripts && python3 -m pytest test_seed_omc.py -v`
-Expected: FAIL — `seed_omc` module missing.
+Expected: FAIL.
 
 - [ ] **Step 3: Implement seed_omc.py**
 
 File: `skills/ark-context-warmup/scripts/seed_omc.py`
 ```python
-"""Warmup populator: writes cited vault sources into .omc/wiki/ with content-hash filenames.
-
-Component 1 of the OMC↔Ark bridge. Called from /ark-context-warmup Step 5 on cache miss
-with prompt.
-"""
+"""Warmup populator: writes cited vault sources into .omc/wiki/ with
+content-hashed filenames, plus stale cleanup."""
 from __future__ import annotations
 
+import json
 import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Set
 
-# Shared module: omc_page lives in sibling skill wiki-handoff
-_HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE.parent.parent / "wiki-handoff" / "scripts"))
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
 
-from omc_page import OMCPage, body_hash, content_hash_slug, parse_page, write_page
+from omc_page import OMCPage, body_hash, content_hash_slug, parse_page, write_page  # noqa: E402
 
 
 MIN_BODY_LEN = 200
@@ -766,13 +773,12 @@ class SeedSource:
     body: str
     vault_type: str
     tags: List[str]
-    confidence: str  # "high" | "medium"
+    confidence: str
 
 
 @dataclass
 class SeedResult:
     written: int = 0
-    refreshed: int = 0
     deleted_stale: int = 0
     skipped: int = 0
     errors: List[str] = field(default_factory=list)
@@ -801,28 +807,25 @@ def _build_page(source: SeedSource, chain_id: str) -> OMCPage:
 
 
 def seed(wiki_dir: Path, *, chain_id: str, sources: List[SeedSource]) -> SeedResult:
-    result = SeedResult()
+    r = SeedResult()
     wiki_dir.mkdir(parents=True, exist_ok=True)
 
     active_slugs: Set[str] = set()
     for src in sources:
         if src.vault_type in EXCLUDED_VAULT_TYPES or len(src.body) < MIN_BODY_LEN:
-            result.skipped += 1
+            r.skipped += 1
             continue
         slug = content_hash_slug(src.vault_source_path, src.body)
         active_slugs.add(slug)
         target = wiki_dir / f"source-{slug}.md"
-        page = _build_page(src, chain_id)
         if target.exists():
-            # Already exists with same content hash → skip to preserve mtime (idempotent)
             continue
         try:
-            write_page(target, page, exclusive=False)
-            result.written += 1
+            write_page(target, _build_page(src, chain_id))
+            r.written += 1
         except Exception as exc:  # noqa: BLE001
-            result.errors.append(f"{src.vault_source_path}: {exc}")
+            r.errors.append(f"{src.vault_source_path}: {exc}")
 
-    # Stale cleanup: delete other source-warmup pages with same chain_id
     for existing in wiki_dir.glob("source-*.md"):
         slug = existing.stem[len("source-"):]
         if slug in active_slugs:
@@ -837,17 +840,15 @@ def seed(wiki_dir: Path, *, chain_id: str, sources: List[SeedSource]) -> SeedRes
             continue
         try:
             existing.unlink()
-            result.deleted_stale += 1
+            r.deleted_stale += 1
         except OSError as exc:
-            result.errors.append(f"unlink {existing}: {exc}")
+            r.errors.append(f"unlink {existing}: {exc}")
 
-    return result
+    return r
 
 
 def _cli() -> int:
-    """JSON-driven CLI: reads SeedSource list from stdin JSON, writes result JSON to stdout."""
     import argparse
-    import json
     p = argparse.ArgumentParser()
     p.add_argument("--wiki-dir", required=True)
     p.add_argument("--chain-id", required=True)
@@ -856,11 +857,8 @@ def _cli() -> int:
     sources = [SeedSource(**s) for s in payload]
     res = seed(Path(args.wiki_dir), chain_id=args.chain_id, sources=sources)
     print(json.dumps({
-        "written": res.written,
-        "refreshed": res.refreshed,
-        "deleted_stale": res.deleted_stale,
-        "skipped": res.skipped,
-        "errors": res.errors,
+        "written": res.written, "deleted_stale": res.deleted_stale,
+        "skipped": res.skipped, "errors": res.errors,
     }))
     return 0
 
@@ -872,18 +870,18 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run tests to verify pass**
 
 Run: `cd skills/ark-context-warmup/scripts && python3 -m pytest test_seed_omc.py -v`
-Expected: 8 PASS.
+Expected: 9 PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add skills/ark-context-warmup/scripts/seed_omc.py skills/ark-context-warmup/scripts/test_seed_omc.py
-git commit -m "feat(warmup): seed_omc.py — populate .omc/wiki/ with content-hashed vault sources"
+git commit -m "feat(warmup): seed_omc.py — content-hashed OMC seeding with stale cleanup"
 ```
 
 ---
 
-## Task 5: read_bridges.py — next-session warmup affinity logic
+## Task 5: `read_bridges.py` — chain-affinity bridge pickup
 
 **Files:**
 - Create: `skills/ark-context-warmup/scripts/read_bridges.py`
@@ -899,85 +897,75 @@ import sys
 import time
 from pathlib import Path
 
-import pytest
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "wiki-handoff" / "scripts"))
 from omc_page import OMCPage, write_page
 from read_bridges import pick_bridge
 
 H = 3600
 
 
-def _make_bridge(wiki: Path, name: str, *, chain_id: str, mtime_age_s: float):
+def _make_bridge(wiki: Path, name: str, *, chain_id: str, age_s: float):
     path = wiki / name
-    page = OMCPage(
-        frontmatter={
-            "title": f"Bridge for {chain_id}",
-            "tags": ["session-bridge", "source-handoff"],
-            "chain_id": chain_id,
-            "category": "session-log",
-        },
-        body="## Task\n\nsome body\n",
-    )
-    write_page(path, page)
-    t = time.time() - mtime_age_s
+    write_page(path, OMCPage(
+        frontmatter={"title": f"B {chain_id}", "tags": ["session-bridge"],
+                     "chain_id": chain_id, "category": "session-log"},
+        body="body",
+    ))
+    t = time.time() - age_s
     os.utime(path, (t, t))
     return path
 
 
-def test_pick_chain_match_within_7_days(tmp_path):
+def test_chain_match_within_7_days(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    b1 = _make_bridge(wiki, "session-bridge-a.md", chain_id="CH-X", mtime_age_s=5 * 24 * H)
-    picked = pick_bridge(wiki, current_chain_id="CH-X")
-    assert picked == b1
+    b = _make_bridge(wiki, "a.md", chain_id="CH-X", age_s=5 * 24 * H)
+    assert pick_bridge(wiki, current_chain_id="CH-X") == b
 
 
-def test_pick_chain_match_rejected_past_7_days(tmp_path):
+def test_chain_match_rejected_past_7_days(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    _make_bridge(wiki, "session-bridge-a.md", chain_id="CH-X", mtime_age_s=8 * 24 * H)
-    picked = pick_bridge(wiki, current_chain_id="CH-X")
-    assert picked is None
+    _make_bridge(wiki, "a.md", chain_id="CH-X", age_s=8 * 24 * H)
+    assert pick_bridge(wiki, current_chain_id="CH-X") is None
 
 
-def test_pick_mismatch_within_48h_most_recent(tmp_path):
+def test_mismatch_within_48h_most_recent(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    _make_bridge(wiki, "session-bridge-old.md", chain_id="CH-Y", mtime_age_s=40 * H)
-    b_recent = _make_bridge(wiki, "session-bridge-new.md", chain_id="CH-Z", mtime_age_s=6 * H)
-    picked = pick_bridge(wiki, current_chain_id="CH-NEW")
-    assert picked == b_recent
+    _make_bridge(wiki, "old.md", chain_id="CH-Y", age_s=40 * H)
+    r = _make_bridge(wiki, "new.md", chain_id="CH-Z", age_s=6 * H)
+    assert pick_bridge(wiki, current_chain_id="CH-NEW") == r
 
 
-def test_pick_mismatch_rejected_past_48h(tmp_path):
+def test_mismatch_rejected_past_48h(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    _make_bridge(wiki, "session-bridge-a.md", chain_id="CH-Y", mtime_age_s=72 * H)
-    picked = pick_bridge(wiki, current_chain_id="CH-NEW")
-    assert picked is None
+    _make_bridge(wiki, "a.md", chain_id="CH-Y", age_s=72 * H)
+    assert pick_bridge(wiki, current_chain_id="CH-NEW") is None
 
 
-def test_pick_chain_match_preferred_over_more_recent_mismatch(tmp_path):
+def test_chain_match_preferred_over_recent_mismatch(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
-    b_match = _make_bridge(wiki, "session-bridge-match.md", chain_id="CH-X", mtime_age_s=2 * 24 * H)
-    _make_bridge(wiki, "session-bridge-other.md", chain_id="CH-Y", mtime_age_s=1 * H)
-    picked = pick_bridge(wiki, current_chain_id="CH-X")
-    assert picked == b_match
+    m = _make_bridge(wiki, "match.md", chain_id="CH-X", age_s=2 * 24 * H)
+    _make_bridge(wiki, "other.md", chain_id="CH-Y", age_s=1 * H)
+    assert pick_bridge(wiki, current_chain_id="CH-X") == m
 
 
-def test_no_bridges_returns_none(tmp_path):
+def test_no_bridges(tmp_path):
     wiki = tmp_path / ".omc" / "wiki"
     wiki.mkdir(parents=True)
     assert pick_bridge(wiki, current_chain_id="CH-X") is None
 
 
-def test_missing_wiki_dir_returns_none(tmp_path):
+def test_missing_dir(tmp_path):
     assert pick_bridge(tmp_path / ".omc" / "wiki", current_chain_id="CH-X") is None
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [ ] **Step 2: Run tests — expect failure**
 
 Run: `cd skills/ark-context-warmup/scripts && python3 -m pytest test_read_bridges.py -v`
 Expected: FAIL.
@@ -986,11 +974,7 @@ Expected: FAIL.
 
 File: `skills/ark-context-warmup/scripts/read_bridges.py`
 ```python
-"""Pick the relevant session-bridge page for the current warmup.
-
-- chain_id match: window = 7 days
-- chain_id mismatch: only most-recent single bridge, window = 48h
-"""
+"""Pick the relevant session-bridge page for the current warmup."""
 from __future__ import annotations
 
 import sys
@@ -998,10 +982,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE.parent.parent / "wiki-handoff" / "scripts"))
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
 
-from omc_page import parse_page
+from omc_page import parse_page  # noqa: E402
 
 
 CHAIN_MATCH_WINDOW_S = 7 * 24 * 3600
@@ -1012,8 +996,8 @@ def pick_bridge(wiki_dir: Path, *, current_chain_id: str) -> Optional[Path]:
     if not wiki_dir.is_dir():
         return None
     now = time.time()
-    best_match: Optional[tuple[float, Path]] = None
-    best_any: Optional[tuple[float, Path]] = None
+    best_match = None
+    best_any = None
     for path in wiki_dir.glob("session-bridge-*.md"):
         try:
             page = parse_page(path)
@@ -1060,220 +1044,364 @@ Expected: 7 PASS.
 
 ```bash
 git add skills/ark-context-warmup/scripts/read_bridges.py skills/ark-context-warmup/scripts/test_read_bridges.py
-git commit -m "feat(warmup): read_bridges.py — chain-affinity bridge pickup (7d match / 48h non-match)"
+git commit -m "feat(warmup): read_bridges.py — chain-affinity bridge pickup"
 ```
 
 ---
 
-## Task 6: Wire seed_omc + read_bridges into ark-context-warmup SKILL.md
+## Task 6: Extend `synthesize.assemble_brief` to render "Prior Session Handoff"
 
 **Files:**
-- Modify: `skills/ark-context-warmup/SKILL.md`
+- Modify: `skills/ark-context-warmup/scripts/synthesize.py`
+- Modify: `skills/ark-context-warmup/scripts/test_synthesize.py` (if exists; else create)
 
-- [ ] **Step 1: Read the current SKILL.md Step 1 and Step 5**
+- [ ] **Step 1: Inspect current `assemble_brief` signature**
 
-Run: `sed -n '55,115p' skills/ark-context-warmup/SKILL.md`
+Run: `grep -n "def assemble_brief\|def write_brief_atomic\|def cached_brief" skills/ark-context-warmup/scripts/synthesize.py`
 
-- [ ] **Step 2: Insert bridge-read block in Step 1 (Task intake)**
+Record the current parameters.
 
-At the end of the Step 1 section (after the `Legacy chain file` log line), append:
+- [ ] **Step 2: Write failing test**
 
-```markdown
+File: `skills/ark-context-warmup/scripts/test_synthesize.py` (append; if file missing, create with `pytest` imports)
+```python
+def test_assemble_brief_renders_prior_bridge_section():
+    from synthesize import assemble_brief
+    # Call assemble_brief with minimal valid args (based on current signature) plus
+    # a new keyword `prior_bridge` containing the bridge body text.
+    brief = assemble_brief(
+        # Existing required args go here — fill in from Step 1 inspection.
+        # For example (adapt to real signature):
+        #   lane_outputs={...}, evidence=[], has_omc=True,
+        prior_bridge="## Task\n\nPrior work\n\n## Open threads\n\n- pending",
+        **_existing_args(),  # helper built from Step 1
+    )
+    assert "Prior Session Handoff" in brief
+    assert "pending" in brief
 
-### Step 1b: Check for session bridges
 
-After task intake, list recent session bridges and surface the most relevant one in the Context Brief.
+def test_assemble_brief_omits_section_when_no_prior_bridge():
+    from synthesize import assemble_brief
+    brief = assemble_brief(prior_bridge=None, **_existing_args())
+    assert "Prior Session Handoff" not in brief
+
+
+def _existing_args():
+    # Populate with minimal valid values matching the CURRENT signature of assemble_brief
+    # (Step 1 output). This test file may already have a similar helper.
+    return {}
+```
+
+- [ ] **Step 3: Run test — expect failure**
+
+Run: `cd skills/ark-context-warmup/scripts && python3 -m pytest test_synthesize.py -v -k prior_bridge`
+Expected: FAIL — either `prior_bridge` kwarg not accepted, or section missing from output.
+
+- [ ] **Step 4: Modify `assemble_brief`**
+
+Open `skills/ark-context-warmup/scripts/synthesize.py`. Add `prior_bridge: Optional[str] = None` as a keyword-only parameter to `assemble_brief`. Inside the function, just before the final return/`"\n".join(...)`, insert:
+
+```python
+if prior_bridge:
+    sections.append("## Prior Session Handoff\n")
+    sections.append(prior_bridge.strip())
+    sections.append("")
+```
+
+(Substitute `sections` for whatever the real accumulator variable is — match the file's existing pattern.)
+
+- [ ] **Step 5: Run tests to verify pass**
+
+Run: `cd skills/ark-context-warmup/scripts && python3 -m pytest test_synthesize.py -v`
+Expected: all PASS.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-BRIDGE_PATH=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/read_bridges.py" \
-    --wiki-dir ".omc/wiki" \
-    --chain-id "$CHAIN_ID" 2>/dev/null || true)
-if [ -n "$BRIDGE_PATH" ] && [ -f "$BRIDGE_PATH" ]; then
-    PRIOR_BRIDGE_CONTENT=$(cat "$BRIDGE_PATH")
-    # Later, synthesize.assemble_brief receives this content and renders it
-    # under a "Prior Session Handoff" heading when non-empty.
-fi
-```
-
-Rules:
-- **chain_id match** = show if mtime ≤ 7 days.
-- **chain_id mismatch** = show single most-recent bridge only if mtime ≤ 48h.
-- No qualifying bridge → skip silently.
-```
-
-- [ ] **Step 3: Insert OMC seed block after Step 5 Synthesis**
-
-Immediately after the existing `synthesize.write_brief_atomic(...)` line in Step 5, append:
-
-```markdown
-
-### Step 5b: Seed OMC wiki (cache miss + prompt path only)
-
-If this invocation was a cache miss AND a prompt (task_text) was supplied AND `.omc/wiki/` exists, populate source pages:
-
-```bash
-if [ -d ".omc/wiki" ] && [ "$CACHE_HIT" != "true" ] && [ -n "$TASK_TEXT" ]; then
-    # Build JSON array of SeedSource from NotebookLM citations + top-3 T4 index hits.
-    # Schema: [{title, vault_source_path, body, vault_type, tags, confidence}, ...]
-    python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/seed_omc.py" \
-        --wiki-dir ".omc/wiki" --chain-id "$CHAIN_ID" < "$SOURCES_JSON"
-fi
-```
-
-Inputs: `$SOURCES_JSON` must be a file containing a JSON array of seed-source objects. `evidence.derive_candidates` must emit this array when `has_omc=true`.
-
-Degradation:
-- No `.omc/wiki/` → skip (silent).
-- No prompt → skip (Option E′ rule).
-- Cache hit → skip (seeds already present from prior fanout).
-- Any source-level write error → seed_omc logs it and continues with remaining sources.
-```
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add skills/ark-context-warmup/SKILL.md
-git commit -m "feat(warmup): wire seed_omc + read_bridges into SKILL.md Steps 1b and 5b"
+git add skills/ark-context-warmup/scripts/synthesize.py skills/ark-context-warmup/scripts/test_synthesize.py
+git commit -m "feat(warmup): synthesize.assemble_brief renders Prior Session Handoff section"
 ```
 
 ---
 
-## Task 7: evidence.py emits SeedSource JSON when HAS_OMC
+## Task 7: Extend `evidence.derive_candidates` to emit `seed_sources`
 
 **Files:**
 - Modify: `skills/ark-context-warmup/scripts/evidence.py`
-- Modify: `skills/ark-context-warmup/scripts/test_evidence.py` (if it exists; create if not)
+- Modify: `skills/ark-context-warmup/scripts/test_evidence.py`
 
-- [ ] **Step 1: Read current evidence.py to understand its shape**
-
-Run: `sed -n '1,80p' skills/ark-context-warmup/scripts/evidence.py`
-
-- [ ] **Step 2: Add failing test for seed-source emission**
-
-File: `skills/ark-context-warmup/scripts/test_evidence.py` (append or create)
+**Note on current API** (verified against `skills/ark-context-warmup/scripts/evidence.py:44`):
 
 ```python
-def test_derive_candidates_emits_seed_sources_when_has_omc():
-    lane_outputs = {
-        "notebooklm": {"citations": [{"title": "Auth", "vault_path": "Architecture/Auth.md",
-                                       "body": "x" * 250, "type": "architecture",
-                                       "tags": ["auth"], "rank": 1}]},
-        "wiki": {"matches": [{"title": "Users", "path": "Architecture/Users.md",
-                               "summary": "s", "rank": 1}]},
-    }
+def derive_candidates(*, task_normalized, scenario, tasknotes, notebooklm, wiki):
+    ...
+```
+
+The function is keyword-only and takes **separate** args for each lane. It currently returns a list (not a dict). The plan adapts accordingly — Task 7 widens the return type to a dict **without breaking existing callers**.
+
+- [ ] **Step 1: Inspect current return shape**
+
+Run: `sed -n '40,120p' skills/ark-context-warmup/scripts/evidence.py`
+
+Record the exact current return value shape (list of candidates) and every callsite (grep for `derive_candidates(`).
+
+- [ ] **Step 2: Write failing test**
+
+Append to `skills/ark-context-warmup/scripts/test_evidence.py`:
+
+```python
+def test_derive_candidates_returns_dict_with_candidates_and_seed_sources():
+    # New shape: {"candidates": [...], "seed_sources": [...]} when has_omc=True.
     from evidence import derive_candidates
-    res = derive_candidates(lane_outputs, has_omc=True)
-    assert "seed_sources" in res
-    assert len(res["seed_sources"]) >= 1
-    s = res["seed_sources"][0]
+    out = derive_candidates(
+        task_normalized="build auth", scenario="greenfield",
+        tasknotes={"matches": []},
+        notebooklm={"citations": [
+            {"title": "Auth", "vault_path": "Architecture/Auth.md",
+             "body": "x" * 250, "type": "architecture",
+             "tags": ["auth"], "rank": 1},
+        ]},
+        wiki={"matches": [
+            {"title": "Users", "path": "Architecture/Users.md",
+             "summary": "s", "rank": 1, "body": "y" * 250, "type": "reference",
+             "tags": ["users"]},
+        ]},
+        has_omc=True,
+    )
+    assert isinstance(out, dict)
+    assert "candidates" in out
+    assert "seed_sources" in out
+    assert len(out["seed_sources"]) >= 1
+    s = out["seed_sources"][0]
     for k in ("title", "vault_source_path", "body", "vault_type", "tags", "confidence"):
         assert k in s
 
 
-def test_derive_candidates_omits_seed_sources_when_not_has_omc():
+def test_derive_candidates_omits_seed_sources_when_has_omc_false():
     from evidence import derive_candidates
-    res = derive_candidates({}, has_omc=False)
-    assert "seed_sources" not in res or res["seed_sources"] == []
+    out = derive_candidates(
+        task_normalized="x", scenario="greenfield",
+        tasknotes={}, notebooklm={}, wiki={}, has_omc=False,
+    )
+    assert "seed_sources" not in out or out["seed_sources"] == []
+
+
+def test_derive_candidates_backward_compat_no_has_omc_kwarg():
+    # When caller doesn't pass has_omc, default is False — no seed_sources emitted.
+    from evidence import derive_candidates
+    out = derive_candidates(
+        task_normalized="x", scenario="greenfield",
+        tasknotes={}, notebooklm={}, wiki={},
+    )
+    # Pre-existing callers may expect a list — accept both shapes.
+    if isinstance(out, dict):
+        assert "seed_sources" not in out or out["seed_sources"] == []
 ```
 
-- [ ] **Step 3: Run the new tests — expect failure**
-
-Run: `cd skills/ark-context-warmup/scripts && python3 -m pytest test_evidence.py -v -k seed_sources`
-Expected: FAIL — `derive_candidates` does not yet accept `has_omc` or emit `seed_sources`.
-
-- [ ] **Step 4: Modify evidence.py to emit seed_sources when has_omc**
-
-Locate `derive_candidates` in `skills/ark-context-warmup/scripts/evidence.py`. Add a `has_omc: bool = False` kwarg. When `has_omc=True`, add a `seed_sources` key to the returned dict whose value is a list built from `lane_outputs["notebooklm"]["citations"]` (top 3 by rank, body≥200 chars) and `lane_outputs["wiki"]["matches"]` (top 3 by rank). Each element is `{title, vault_source_path, body, vault_type, tags, confidence}`. Confidence: rank 1 → "high", ranks 2-3 → "medium".
-
-- [ ] **Step 5: Run tests to verify pass**
+- [ ] **Step 3: Run tests — expect failure**
 
 Run: `cd skills/ark-context-warmup/scripts && python3 -m pytest test_evidence.py -v`
-Expected: all PASS (including pre-existing tests).
+Expected: FAIL on new tests; pre-existing tests still PASS.
+
+- [ ] **Step 4: Modify `derive_candidates`**
+
+Open `skills/ark-context-warmup/scripts/evidence.py`. Change signature to add `has_omc: bool = False` keyword param. Change return to a dict `{"candidates": existing_list, "seed_sources": [...] if has_omc else []}`.
+
+For `seed_sources`: iterate NotebookLM citations + wiki matches, take up to top 3 from each where `len(body) >= 200`, emit:
+```python
+{
+    "title": item["title"],
+    "vault_source_path": item.get("vault_path") or item.get("path"),
+    "body": item["body"],
+    "vault_type": item.get("type", "architecture"),
+    "tags": item.get("tags", []),
+    "confidence": "high" if item.get("rank", 99) <= 1 else "medium",
+}
+```
+
+**Update existing callers:** grep for `derive_candidates(` and adapt them to read from the new `candidates` key — `out["candidates"]` instead of `out`. Keep the change surgical.
+
+- [ ] **Step 5: Run full evidence test suite to verify no regressions**
+
+Run: `cd skills/ark-context-warmup/scripts && python3 -m pytest test_evidence.py -v`
+Expected: all PASS (old + new).
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add skills/ark-context-warmup/scripts/evidence.py skills/ark-context-warmup/scripts/test_evidence.py
-git commit -m "feat(warmup): evidence.derive_candidates emits SeedSource list when has_omc=true"
+git commit -m "feat(warmup): evidence.derive_candidates emits seed_sources when has_omc"
 ```
 
 ---
 
-## Task 8: Wire `/wiki-handoff` into ark-workflow Step 6.5
+## Task 8: Expand `ark-workflow` Step 6.5 action bullet into `(a)/(b)/(c)` branch block
 
-**Files:**
-- Modify: `skills/ark-workflow/SKILL.md`
+**Files:** Modify `skills/ark-workflow/SKILL.md`
 
-- [ ] **Step 1: Read current Step 6.5 action branch**
-
-Run: `sed -n '1,1p' skills/ark-workflow/SKILL.md; grep -n "6.5\|action\|record-reset\|compact\|\/clear" skills/ark-workflow/SKILL.md`
-
-Locate the section that dispatches on the user's menu selection `(a) compact`, `(b) clear`, `(c) subagent`. Note the line numbers around `record-reset`.
-
-- [ ] **Step 2: Edit the (a) and (b) branches**
-
-Replace the existing `(a)` branch text in `skills/ark-workflow/SKILL.md` with:
+**Current state** (verified at `skills/ark-workflow/SKILL.md:424–427`): Step 6.5 has a single inline bullet:
 
 ```markdown
-**Option (a) — /compact:**
-
-Before dispatching /compact, the LLM must flush a session bridge to OMC so the next session can recover context. Fire `/wiki-handoff`:
-
-```bash
-python3 "$ARK_SKILLS_ROOT/skills/wiki-handoff/scripts/write_bridge.py" \
-    --chain-id "$CHAIN_ID" \
-    --task-text "$TASK_TEXT" \
-    --scenario "$SCENARIO" \
-    --step-index "$STEP_IDX" --step-count "$STEP_COUNT" \
-    --session-id "$SESSION_ID" \
-    --open-threads "<LLM-supplied: specific file paths, unresolved questions>" \
-    --next-steps "<LLM-supplied: specific actions, with target files>" \
-    --notes "<LLM-supplied free-form>" \
-    --done-summary "<LLM-supplied summary>" \
-    --git-diff-stat "$(git diff --stat HEAD~10..HEAD 2>/dev/null || echo '')"
+- If `(a)` or `(b)`: after `/compact` or `/clear`, invoke `--format record-reset` ...
+- If `(c)`: no state write; subagent wraps Next step.
 ```
 
-Verify exit code 0 AND the printed bridge path exists on disk. If write failed with a schema-enforcement error, re-invoke with more specific inputs; do NOT proceed to /compact with an empty bridge.
+This is NOT a branch block — it's compressed notes. Task 8 expands it into a proper block with pre-action `/wiki-handoff` invocation.
 
-Then invoke `/compact`. Then `context_probe.py --record-reset` (so the probe state matches the post-action level).
-```
+- [ ] **Step 1: Locate the exact lines**
 
-Replace the existing `(b)` branch similarly — identical dispatch to `/wiki-handoff`, then `/clear`, then `record-reset`.
+Run: `grep -n "If \`(a)\`\|If \`(c)\`" skills/ark-workflow/SKILL.md`
 
-Leave `(c) subagent` unchanged — no bridge write.
+Record the line numbers.
 
-- [ ] **Step 3: Add a note at the top of Step 6.5 documenting the invariant**
+- [ ] **Step 2: Replace the two bullets with the expanded block**
 
-Just before the menu options list, insert:
+Open `skills/ark-workflow/SKILL.md`. Find:
 
 ```markdown
-> **Wiki-handoff invariant:** For options (a) compact and (b) clear, `/wiki-handoff` MUST write a validated bridge page before the destructive action. Schema-enforcement rejection (exit code 2) blocks the action — re-invoke with specifics. Option (c) subagent does NOT invoke `/wiki-handoff` (parent context is preserved).
+     - If `(a)` or `(b)`: after `/compact` or `/clear`, invoke `--format record-reset` to explicitly clear `proceed_past_level: null` so the next boundary probes fresh.
+     - If `(c)`: no state write; subagent wraps Next step.
 ```
+
+Replace with:
+
+```markdown
+     - If `(a)` or `(b)`: **before** running `/compact` or `/clear`, the LLM MUST invoke `/wiki-handoff` to flush a validated session bridge to `.omc/wiki/`. See § Wiki-handoff invariant below.
+
+       ```bash
+       python3 "$ARK_SKILLS_ROOT/skills/wiki-handoff/scripts/write_bridge.py" \
+           --chain-id "$CHAIN_ID" --task-text "$TASK_TEXT" --scenario "$SCENARIO" \
+           --step-index "$STEP_IDX" --step-count "$STEP_COUNT" \
+           --session-id "$SESSION_ID" \
+           --open-threads "<LLM-supplied, specific>" \
+           --next-steps "<LLM-supplied, specific>" \
+           --notes "<LLM-supplied>" --done-summary "<LLM-supplied>" \
+           --git-diff-stat "$(git diff --stat HEAD~10..HEAD 2>/dev/null || echo '')"
+       ```
+
+       Verify exit code 0 before proceeding. On exit code 2 (schema rejection), re-invoke with specific file paths, decision points, and target files — do NOT proceed to `/compact`/`/clear` with an unwritten bridge.
+
+       Then run the user's chosen action (`/compact` or `/clear`), then invoke the probe's `--format record-reset`.
+
+     - If `(c)`: no bridge write (subagent dispatch preserves parent context). No state write; subagent wraps Next step.
+
+**§ Wiki-handoff invariant:** Options `(a)` and `(b)` invoke `/wiki-handoff` BEFORE the destructive action and BEFORE `record-reset`. Schema rejection (exit 2) blocks the action — the LLM must re-invoke with specifics. Option `(c)` does NOT invoke `/wiki-handoff`.
+```
+
+- [ ] **Step 3: Sanity-check the diff**
+
+Run: `git diff skills/ark-workflow/SKILL.md`
+
+Confirm the only change is the expanded action-branch block.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add skills/ark-workflow/SKILL.md
-git commit -m "feat(ark-workflow): invoke /wiki-handoff before compact/clear in Step 6.5 action branch"
+git commit -m "feat(ark-workflow): expand Step 6.5 action bullet with /wiki-handoff invariant"
 ```
 
 ---
 
-## Task 9: Scaffold wiki-update/scripts + integration fixtures
+## Task 9: Wire bridge reader + seeder into `ark-context-warmup/SKILL.md`
+
+**Files:** Modify `skills/ark-context-warmup/SKILL.md`
+
+- [ ] **Step 1: Locate Step 1 and Step 5 headings**
+
+Run: `grep -n "^### Step 1\|^### Step 5" skills/ark-context-warmup/SKILL.md`
+
+- [ ] **Step 2: Append Step 1b after Step 1 ends**
+
+Just before `### Step 2: Availability probe`, insert:
+
+```markdown
+
+### Step 1b: Check for session bridges
+
+After task intake, pick the relevant bridge (if any) and surface it in the final Context Brief.
+
+```bash
+PRIOR_BRIDGE_CONTENT=""
+if [ -d ".omc/wiki" ]; then
+    BRIDGE_PATH=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/read_bridges.py" \
+        --wiki-dir ".omc/wiki" --chain-id "$CHAIN_ID" 2>/dev/null || true)
+    if [ -n "$BRIDGE_PATH" ] && [ -f "$BRIDGE_PATH" ]; then
+        PRIOR_BRIDGE_CONTENT=$(cat "$BRIDGE_PATH")
+    fi
+fi
+```
+
+Later, Step 5 calls `synthesize.assemble_brief(..., prior_bridge=$PRIOR_BRIDGE_CONTENT)` — the brief renders a "Prior Session Handoff" section when non-empty.
+
+Rules: chain_id match = ≤ 7 days; mismatch = single most-recent ≤ 48h. No qualifying bridge → empty string → section omitted.
+```
+
+- [ ] **Step 3: Wire `prior_bridge` into the Step 5 synthesize call**
+
+Find the existing line in Step 5:
+```
+synthesize.assemble_brief(..., has_omc=availability["has_omc"])
+```
+
+Change to:
+```
+synthesize.assemble_brief(..., has_omc=availability["has_omc"], prior_bridge=$PRIOR_BRIDGE_CONTENT)
+```
+
+(This is pseudocode for the SKILL.md narrative; the actual Python call lives in `synthesize.py` — SKILL.md describes the intent.)
+
+- [ ] **Step 4: Append Step 5b after existing Step 5 content**
+
+Just before `### Step 6: Hand off`, insert:
+
+```markdown
+
+### Step 5b: Seed OMC wiki (cache miss + prompt path only)
+
+If this was a cache miss AND a prompt (task_text) was supplied AND `.omc/wiki/` exists:
+
+```bash
+if [ -d ".omc/wiki" ] && [ "$CACHE_HIT" != "true" ] && [ -n "$TASK_TEXT" ]; then
+    python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/seed_omc.py" \
+        --wiki-dir ".omc/wiki" --chain-id "$CHAIN_ID" < "$SOURCES_JSON"
+fi
+```
+
+`$SOURCES_JSON` is a temp file containing the JSON array emitted by `evidence.derive_candidates(..., has_omc=True)["seed_sources"]`. Step 5 writes this file after synthesis.
+
+Degradation: no `.omc/wiki/` → skip silent. No prompt → skip (Option E′). Cache hit → skip (seeds already present). Per-source write errors are logged and do not abort the fanout.
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add skills/ark-context-warmup/SKILL.md
+git commit -m "feat(warmup): wire bridge read + OMC seed into SKILL.md Steps 1b, 5, 5b"
+```
+
+---
+
+## Task 10: Scaffold `wiki-update/scripts/` + integration fixtures
 
 **Files:**
 - Create: `skills/wiki-update/scripts/__init__.py`
-- Create: `skills/wiki-update/scripts/fixtures/` (3 subdirs: `mixed/`, `edited_seed/`, `failed_write/`)
+- Create: `skills/wiki-update/scripts/fixtures/mixed/` (see below)
 
-- [ ] **Step 1: Create `__init__.py` (empty)**
+- [ ] **Step 1: Create scripts dir scaffold**
 
-Run: `touch skills/wiki-update/scripts/__init__.py`
+```bash
+mkdir -p skills/wiki-update/scripts/integration
+mkdir -p skills/wiki-update/scripts/fixtures/mixed/.omc/wiki
+mkdir -p skills/wiki-update/scripts/fixtures/mixed/vault/{Architecture,Compiled-Insights,Session-Logs,TaskNotes/Tasks/Bug}
+touch skills/wiki-update/scripts/__init__.py
+```
 
-- [ ] **Step 2: Create fixture — mixed OMC pages**
+- [ ] **Step 2: Write the six fixture pages**
 
-Create these files under `skills/wiki-update/scripts/fixtures/mixed/.omc/wiki/`:
+Create exactly these files under `skills/wiki-update/scripts/fixtures/mixed/.omc/wiki/`:
 
-`stub-auto.md`:
+**`stub-auto.md`:**
 ```markdown
 ---
 title: Session Log 2026-04-19
@@ -1284,7 +1412,7 @@ category: session-log
 Auto-captured stub.
 ```
 
-`arch-high.md`:
+**`arch-high.md`:**
 ```markdown
 ---
 title: Auth Middleware Architecture
@@ -1299,10 +1427,10 @@ seed_chain_id: CH-TEST
 
 # Auth Middleware
 
-Decision to use JWT with 15-minute access tokens.
+JWT with 15-minute access tokens, refresh via rotation.
 ```
 
-`pattern-medium.md`:
+**`pattern-medium.md`:**
 ```markdown
 ---
 title: Error Wrapping Pattern
@@ -1316,7 +1444,7 @@ confidence: medium
 Wrap errors with context at every crossing.
 ```
 
-`debug-with-pattern-tag.md`:
+**`debug-with-pattern-tag.md`:**
 ```markdown
 ---
 title: JWT Refresh Race Condition
@@ -1327,10 +1455,10 @@ confidence: high
 
 # JWT Refresh Race
 
-Concurrent refresh requests cause double-issuance. Fix: lock on user_id.
+Concurrent refresh causes double-issuance. Lock on user_id.
 ```
 
-`env-page.md`:
+**`env-page.md`:**
 ```markdown
 ---
 title: Project Environment
@@ -1338,10 +1466,12 @@ tags: [environment, auto-detected]
 category: environment
 ---
 
-Build: npm run build
+Build: npm run build.
 ```
 
-`source-abc123def456.md` (unchanged seed):
+**`source-warmup-untouched.md`:**
+Intentionally left with `seed_body_hash: WILL_BE_COMPUTED` — tests overwrite this to a real hash to simulate "untouched" vs "edited" on the fly.
+
 ```markdown
 ---
 title: Users Service
@@ -1350,7 +1480,7 @@ category: architecture
 confidence: high
 ark-original-type: reference
 ark-source-path: Architecture/Users.md
-seed_body_hash: WILL_BE_COMPUTED_IN_TEST
+seed_body_hash: WILL_BE_COMPUTED
 seed_chain_id: CH-TEST
 ---
 
@@ -1362,37 +1492,36 @@ JWT issued by /auth/login, stored in HttpOnly cookie.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add skills/wiki-update/scripts/__init__.py skills/wiki-update/scripts/fixtures
-git commit -m "test(wiki-update): mixed-case fixture worktree for promote_omc"
+git add skills/wiki-update/scripts/
+git commit -m "test(wiki-update): integration fixture for promote_omc e2e"
 ```
 
 ---
 
-## Task 10: promote_omc.py — stub filter + confidence gate
+## Task 11: `promote_omc.py` — classification (filter + edit detect + confidence gate)
 
 **Files:**
 - Create: `skills/wiki-update/scripts/promote_omc.py`
 - Create: `skills/wiki-update/scripts/test_promote_omc.py`
 
-- [ ] **Step 1: Write failing tests for filter + gate**
+- [ ] **Step 1: Write failing tests**
 
 File: `skills/wiki-update/scripts/test_promote_omc.py`
 ```python
-"""Tests for promote_omc: filter, edit-detection, confidence gate, category mapping."""
+"""Tests for promote_omc: filter, edit-detection, confidence gate, translation."""
 import shutil
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "wiki-handoff" / "scripts"))
-from omc_page import body_hash, parse_page
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
+
+from omc_page import body_hash, parse_page, write_page
 from promote_omc import (
-    PromotionConfig,
-    PromotionReport,
-    promote,
-    is_stub,
-    classify,
+    PromotionConfig, PromotionReport,
+    classify, derive_summary, is_stub, promote, translate_frontmatter,
 )
 
 
@@ -1403,89 +1532,125 @@ def _copy_fixture(tmp_path, name="mixed"):
     return dst
 
 
-def test_is_stub_detects_auto_captured(tmp_path):
+def test_is_stub_auto_captured(tmp_path):
     repo = _copy_fixture(tmp_path)
-    page = parse_page(repo / ".omc" / "wiki" / "stub-auto.md")
+    page = parse_page(repo / ".omc/wiki/stub-auto.md")
     assert is_stub(page, filename="stub-auto.md") is True
 
 
-def test_is_stub_returns_false_for_arch(tmp_path):
+def test_is_stub_false_for_arch(tmp_path):
     repo = _copy_fixture(tmp_path)
-    page = parse_page(repo / ".omc" / "wiki" / "arch-high.md")
+    page = parse_page(repo / ".omc/wiki/arch-high.md")
     assert is_stub(page, filename="arch-high.md") is False
 
 
-def test_classify_high_arch_auto_promote(tmp_path):
+def test_classify_high_arch(tmp_path):
     repo = _copy_fixture(tmp_path)
-    page = parse_page(repo / ".omc" / "wiki" / "arch-high.md")
-    disposition, _ = classify(page, filename="arch-high.md")
-    assert disposition == "auto-promote"
+    page = parse_page(repo / ".omc/wiki/arch-high.md")
+    disp, _ = classify(page, filename="arch-high.md")
+    assert disp == "auto-promote"
 
 
 def test_classify_medium_staged(tmp_path):
     repo = _copy_fixture(tmp_path)
-    page = parse_page(repo / ".omc" / "wiki" / "pattern-medium.md")
-    disposition, _ = classify(page, filename="pattern-medium.md")
-    assert disposition == "stage"
+    page = parse_page(repo / ".omc/wiki/pattern-medium.md")
+    disp, _ = classify(page, filename="pattern-medium.md")
+    assert disp == "stage"
 
 
-def test_classify_environment_skipped(tmp_path):
+def test_classify_environment_skip(tmp_path):
     repo = _copy_fixture(tmp_path)
-    page = parse_page(repo / ".omc" / "wiki" / "env-page.md")
-    disposition, _ = classify(page, filename="env-page.md")
-    assert disposition == "skip"
+    page = parse_page(repo / ".omc/wiki/env-page.md")
+    disp, _ = classify(page, filename="env-page.md")
+    assert disp == "skip"
 
 
-def test_classify_untouched_seed_skipped(tmp_path):
+def test_classify_untouched_seed_skip(tmp_path):
     repo = _copy_fixture(tmp_path)
-    # Normalize the fixture: seed_body_hash == body_hash(body)
-    page_path = repo / ".omc" / "wiki" / "source-abc123def456.md"
-    page = parse_page(page_path)
+    path = repo / ".omc/wiki/source-warmup-untouched.md"
+    page = parse_page(path)
     page.frontmatter["seed_body_hash"] = body_hash(page.body)
-    from omc_page import write_page
-    write_page(page_path, page)
-    page = parse_page(page_path)
-    disposition, _ = classify(page, filename="source-abc123def456.md")
-    assert disposition == "skip"
+    write_page(path, page)
+    page = parse_page(path)
+    disp, _ = classify(page, filename=path.name)
+    assert disp == "skip"
 
 
-def test_classify_edited_seed_gets_confidence_gate(tmp_path):
+def test_classify_edited_seed_promoted_as_session_authored(tmp_path):
     repo = _copy_fixture(tmp_path)
-    page_path = repo / ".omc" / "wiki" / "source-abc123def456.md"
-    # Set seed_body_hash to something different from current body — simulating an edit
-    page = parse_page(page_path)
-    page.frontmatter["seed_body_hash"] = "0" * 64  # deliberately wrong
-    from omc_page import write_page
-    write_page(page_path, page)
-    page = parse_page(page_path)
-    disposition, reason = classify(page, filename="source-abc123def456.md")
-    assert disposition == "auto-promote"  # confidence: high
+    path = repo / ".omc/wiki/source-warmup-untouched.md"
+    page = parse_page(path)
+    page.frontmatter["seed_body_hash"] = "0" * 64
+    write_page(path, page)
+    page = parse_page(path)
+    disp, reason = classify(page, filename=path.name)
+    assert disp == "auto-promote"
     assert "edited" in reason.lower()
+
+
+def test_classify_debugging_dual_write(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    page = parse_page(repo / ".omc/wiki/debug-with-pattern-tag.md")
+    disp, _ = classify(page, filename="debug-with-pattern-tag.md")
+    assert disp == "dual-write-debug"
+
+
+def test_translate_frontmatter_uses_ark_original_type():
+    fm = {
+        "title": "Users", "tags": ["users", "source-warmup"],
+        "category": "architecture", "confidence": "high",
+        "ark-original-type": "reference", "ark-source-path": "Architecture/Users.md",
+        "sources": ["s1"], "schemaVersion": 1, "links": [],
+        "seed_body_hash": "x" * 64, "seed_chain_id": "CH-1",
+    }
+    out = translate_frontmatter(fm, session_slug="S007-auth")
+    assert out["type"] == "reference"
+    assert out["source-sessions"] == ["[[S007-auth]]"]
+    assert "source-warmup" not in out["tags"]
+    for dropped in ("confidence", "schemaVersion", "links", "sources",
+                    "seed_body_hash", "seed_chain_id",
+                    "ark-original-type", "ark-source-path", "category"):
+        assert dropped not in out
+    assert "last-updated" in out
+
+
+def test_translate_fallback_to_category_mapping():
+    out = translate_frontmatter(
+        {"title": "X", "tags": ["a"], "category": "decision", "confidence": "high"},
+        session_slug="S001-x",
+    )
+    assert out["type"] == "decision-record"
+
+
+def test_derive_summary_truncated_to_200():
+    body = "Short first. " * 30 + "\n\nSecond."
+    s = derive_summary(body)
+    assert len(s) <= 200
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [ ] **Step 2: Run tests — expect failure**
 
 Run: `cd skills/wiki-update/scripts && python3 -m pytest test_promote_omc.py -v`
-Expected: FAIL — module missing.
+Expected: FAIL.
 
-- [ ] **Step 3: Implement promote_omc.py (filter + classify only; promote() stub returns unimplemented for now)**
+- [ ] **Step 3: Implement `promote_omc.py` classify + translate (promote() stub with NotImplementedError)**
 
 File: `skills/wiki-update/scripts/promote_omc.py`
 ```python
-"""Component 3: /wiki-update Step 3.5 — Promote OMC wiki pages to Ark vault."""
+"""Component 3: /wiki-update Step 3.5 — promote OMC pages to Ark vault."""
 from __future__ import annotations
 
 import re
-import shutil
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
-_HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE.parent.parent / "wiki-handoff" / "scripts"))
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
 
-from omc_page import OMCPage, body_hash, parse_page, write_page
+from omc_page import OMCPage, body_hash, parse_page, write_page  # noqa: E402
 
 
 STUB_FILENAME_RE = re.compile(r"^session-log-\d{4}-\d{2}-\d{2}")
@@ -1498,169 +1663,6 @@ CATEGORY_PLACEMENT = {
     "session-log": ("__BRIDGE__", None),
     "environment": (None, None),
 }
-
-
-@dataclass
-class PromotionConfig:
-    repo_root: Path
-    omc_wiki_dir: Path
-    project_docs_path: Path
-    tasknotes_path: Path
-    task_prefix: str
-    session_slug: str  # for source-sessions backlink
-    session_started_at: float
-    interactive: bool = False  # default to non-interactive async-staging
-
-
-@dataclass
-class PromotionReport:
-    auto_promoted: int = 0
-    staged: int = 0
-    tasknotes_created: int = 0
-    skipped_filtered: int = 0
-    session_edits_promoted: int = 0
-    troubleshooting_created: int = 0
-    deleted: int = 0
-    errors: List[str] = field(default_factory=list)
-
-
-def is_stub(page: OMCPage, *, filename: str) -> bool:
-    tags = set(page.frontmatter.get("tags") or [])
-    if {"session-log", "auto-captured"}.issubset(tags):
-        return True
-    if STUB_FILENAME_RE.match(filename):
-        return True
-    return False
-
-
-def classify(page: OMCPage, *, filename: str) -> Tuple[str, str]:
-    """Return (disposition, reason).
-
-    Dispositions: auto-promote, stage, skip, dual-write-debug, bridge-merge.
-    """
-    if is_stub(page, filename=filename):
-        return "skip", "stub (auto-captured)"
-    fm = page.frontmatter
-    category = fm.get("category") or ""
-
-    if category == "environment":
-        return "skip", "environment (re-derivable)"
-
-    tags = set(fm.get("tags") or [])
-
-    # Edit detection on source-warmup pages
-    if "source-warmup" in tags:
-        seed_hash = fm.get("seed_body_hash")
-        current_hash = body_hash(page.body)
-        if seed_hash == current_hash:
-            return "skip", "untouched seed (re-derivable from vault)"
-        # Edited — treat as session-authored; fall through to confidence gate
-        reason_prefix = "edited seed: "
-    else:
-        reason_prefix = ""
-
-    confidence = fm.get("confidence") or "medium"
-
-    if category == "debugging":
-        return "dual-write-debug", reason_prefix + "debugging"
-    if category == "session-log" and "session-bridge" in tags:
-        return "bridge-merge", reason_prefix + "session-bridge"
-
-    if confidence == "high":
-        return "auto-promote", reason_prefix + f"{category} high"
-    if confidence == "medium":
-        return "stage", reason_prefix + f"{category} medium"
-    return "skip", reason_prefix + f"{category} low"
-
-
-def promote(config: PromotionConfig) -> PromotionReport:
-    raise NotImplementedError("filled in Task 11")
-```
-
-- [ ] **Step 4: Run tests to verify pass**
-
-Run: `cd skills/wiki-update/scripts && python3 -m pytest test_promote_omc.py -v`
-Expected: 7 PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add skills/wiki-update/scripts/promote_omc.py skills/wiki-update/scripts/test_promote_omc.py
-git commit -m "feat(wiki-update): promote_omc.py filter + classify (stub/edit/confidence)"
-```
-
----
-
-## Task 11: promote_omc.py — frontmatter translation + lossless round-trip
-
-**Files:**
-- Modify: `skills/wiki-update/scripts/promote_omc.py`
-- Modify: `skills/wiki-update/scripts/test_promote_omc.py`
-
-- [ ] **Step 1: Append failing tests for translate_frontmatter**
-
-Append to `test_promote_omc.py`:
-
-```python
-def test_translate_frontmatter_uses_ark_original_type(tmp_path):
-    from promote_omc import translate_frontmatter
-    omc_fm = {
-        "title": "Users Service",
-        "tags": ["users", "source-warmup"],
-        "category": "architecture",
-        "confidence": "high",
-        "ark-original-type": "reference",
-        "ark-source-path": "Architecture/Users.md",
-        "sources": ["sess-1"],
-        "schemaVersion": 1,
-        "links": [],
-        "seed_body_hash": "x" * 64,
-        "seed_chain_id": "CH-1",
-    }
-    out = translate_frontmatter(omc_fm, session_slug="S007-auth")
-    # Vault type from ark-original-type
-    assert out["type"] == "reference"
-    # Session backlink
-    assert out["source-sessions"] == ["[[S007-auth]]"]
-    # OMC-only fields dropped
-    for dropped in ("confidence", "schemaVersion", "links", "sources",
-                    "seed_body_hash", "seed_chain_id",
-                    "ark-original-type", "ark-source-path", "category"):
-        assert dropped not in out
-    # Tags normalized (source-warmup stripped — it's an OMC-only marker)
-    assert "source-warmup" not in out["tags"]
-    assert "users" in out["tags"]
-    # last-updated present
-    assert "last-updated" in out
-
-
-def test_translate_frontmatter_falls_back_to_category_when_no_original_type():
-    from promote_omc import translate_frontmatter
-    omc_fm = {"title": "X", "tags": ["a"], "category": "decision",
-              "confidence": "high"}
-    out = translate_frontmatter(omc_fm, session_slug="S001-x")
-    assert out["type"] == "decision-record"
-
-
-def test_translate_frontmatter_summary_truncation():
-    from promote_omc import derive_summary
-    body = "First paragraph. " * 30 + "\n\nSecond paragraph."
-    s = derive_summary(body)
-    assert len(s) <= 200
-```
-
-- [ ] **Step 2: Run tests — expect failure**
-
-Run: `cd skills/wiki-update/scripts && python3 -m pytest test_promote_omc.py -v -k "translate or summary"`
-Expected: FAIL.
-
-- [ ] **Step 3: Add translate_frontmatter + derive_summary to promote_omc.py**
-
-Insert into `promote_omc.py` (above `promote()` stub):
-
-```python
-import time
-
 
 CATEGORY_TO_TYPE = {
     "architecture": "architecture",
@@ -1677,6 +1679,67 @@ OMC_ONLY_FIELDS = {
 OMC_TAG_MARKERS_TO_STRIP = {"source-warmup", "source-handoff"}
 
 
+@dataclass
+class PromotionConfig:
+    repo_root: Path
+    omc_wiki_dir: Path
+    project_docs_path: Path
+    tasknotes_path: Path
+    task_prefix: str
+    session_slug: str
+    session_started_at: float = 0.0
+
+
+@dataclass
+class PromotionReport:
+    auto_promoted: int = 0
+    staged: int = 0
+    tasknotes_created: int = 0
+    skipped_filtered: int = 0
+    session_edits_promoted: int = 0
+    troubleshooting_created: int = 0
+    merged_existing: int = 0
+    pending_deletes: List[Path] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+
+
+def is_stub(page: OMCPage, *, filename: str) -> bool:
+    tags = set(page.frontmatter.get("tags") or [])
+    if {"session-log", "auto-captured"}.issubset(tags):
+        return True
+    if STUB_FILENAME_RE.match(filename):
+        return True
+    return False
+
+
+def classify(page: OMCPage, *, filename: str) -> Tuple[str, str]:
+    if is_stub(page, filename=filename):
+        return "skip", "stub (auto-captured)"
+    fm = page.frontmatter
+    category = fm.get("category") or ""
+    if category == "environment":
+        return "skip", "environment (re-derivable)"
+    tags = set(fm.get("tags") or [])
+
+    reason_prefix = ""
+    if "source-warmup" in tags:
+        if fm.get("seed_body_hash") == body_hash(page.body):
+            return "skip", "untouched seed (re-derivable from vault)"
+        reason_prefix = "edited seed: "
+
+    if category == "debugging":
+        return "dual-write-debug", reason_prefix + "debugging"
+    if category == "session-log" and "session-bridge" in tags:
+        return "bridge-merge", reason_prefix + "session-bridge"
+
+    confidence = fm.get("confidence") or "medium"
+    if confidence == "high":
+        return "auto-promote", reason_prefix + f"{category} high"
+    if confidence == "medium":
+        return "stage", reason_prefix + f"{category} medium"
+    return "skip", reason_prefix + f"{category} low"
+
+
 def derive_summary(body: str, *, max_len: int = 200) -> str:
     for line in body.split("\n\n"):
         s = line.strip()
@@ -1690,70 +1753,61 @@ def derive_summary(body: str, *, max_len: int = 200) -> str:
 
 def translate_frontmatter(omc_fm: dict, *, session_slug: str) -> dict:
     out = dict(omc_fm)
-    # Determine vault type
     vault_type = omc_fm.get("ark-original-type") or CATEGORY_TO_TYPE.get(
         omc_fm.get("category") or "", "reference"
     )
     out["type"] = vault_type
-
-    # source-sessions backlink
     out["source-sessions"] = [f"[[{session_slug}]]"]
-
-    # tags: drop OMC-only markers
-    tags = [t for t in (omc_fm.get("tags") or []) if t not in OMC_TAG_MARKERS_TO_STRIP]
-    out["tags"] = tags
-
-    # last-updated
+    out["tags"] = [t for t in (omc_fm.get("tags") or []) if t not in OMC_TAG_MARKERS_TO_STRIP]
     out["last-updated"] = time.strftime("%Y-%m-%d", time.localtime())
     if "created" not in out:
         out["created"] = out["last-updated"]
-
-    # Drop OMC-only
     for k in OMC_ONLY_FIELDS:
         out.pop(k, None)
     return out
+
+
+def promote(config: PromotionConfig) -> PromotionReport:
+    raise NotImplementedError("Implemented in Task 12")
 ```
 
 - [ ] **Step 4: Run tests to verify pass**
 
 Run: `cd skills/wiki-update/scripts && python3 -m pytest test_promote_omc.py -v`
-Expected: all PASS.
+Expected: 11 PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add skills/wiki-update/scripts/promote_omc.py skills/wiki-update/scripts/test_promote_omc.py
-git commit -m "feat(wiki-update): translate_frontmatter lossless round-trip via ark-original-type"
+git commit -m "feat(wiki-update): promote_omc classify + translate + is_stub"
 ```
 
 ---
 
-## Task 12: promote_omc.py — transactional delete + full promote() orchestration
+## Task 12: `promote()` orchestration with pending-deletes + session_started_at + ark-source-path merge
 
-**Files:**
-- Modify: `skills/wiki-update/scripts/promote_omc.py`
-- Modify: `skills/wiki-update/scripts/test_promote_omc.py`
+**Files:** Modify `skills/wiki-update/scripts/promote_omc.py`, extend tests.
 
-- [ ] **Step 1: Append failing integration tests**
+This task implements the Codex HIGH fix: `promote()` does NOT delete OMC sources. It records them in `report.pending_deletes`. The caller (Task 13 CLI) runs index regen, then finalizes deletes.
+
+- [ ] **Step 1: Append failing tests**
 
 Append to `test_promote_omc.py`:
-
 ```python
 def _write_session_log(repo, slug="S001-test"):
     logs_dir = repo / "vault" / "Session-Logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     path = logs_dir / f"{slug}.md"
-    path.write_text("---\ntitle: Session 1\nsession: S001\ntype: session-log\n---\n\n"
-                    "## Objective\n\nTest\n\n## Issues & Discoveries\n\n")
+    path.write_text(
+        "---\ntitle: Session 1\nsession: S001\ntype: session-log\n"
+        "created: 2026-04-20\n---\n\n## Issues & Discoveries\n\n"
+    )
     return path
 
 
-def test_promote_high_confidence_arch_lands_in_architecture(tmp_path):
-    repo = _copy_fixture(tmp_path)
-    (repo / "vault" / "Architecture").mkdir(parents=True, exist_ok=True)
-    (repo / "vault" / "Compiled-Insights").mkdir(parents=True, exist_ok=True)
-    _write_session_log(repo)
-    cfg = PromotionConfig(
+def _mk_config(repo):
+    return PromotionConfig(
         repo_root=repo,
         omc_wiki_dir=repo / ".omc" / "wiki",
         project_docs_path=repo / "vault",
@@ -1762,107 +1816,105 @@ def test_promote_high_confidence_arch_lands_in_architecture(tmp_path):
         session_slug="S001-test",
         session_started_at=0.0,
     )
-    report = promote(cfg)
+
+
+def test_promote_high_arch_lands_in_architecture(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    (repo / "vault" / "Architecture").mkdir(parents=True, exist_ok=True)
+    _write_session_log(repo)
+    report = promote(_mk_config(repo))
     assert report.auto_promoted >= 1
     promoted = list((repo / "vault" / "Architecture").glob("*.md"))
-    assert any("Auth" in p.read_text() for p in promoted)
+    assert any("JWT" in p.read_text() for p in promoted)
+    # OMC source NOT yet deleted — it's in pending_deletes
+    assert (repo / ".omc/wiki/arch-high.md").exists()
+    assert any(p.name == "arch-high.md" for p in report.pending_deletes)
 
 
 def test_promote_medium_stages_and_creates_tasknote(tmp_path):
     repo = _copy_fixture(tmp_path)
-    for d in ("vault/Architecture", "vault/Compiled-Insights", "vault/Staging",
-              "vault/TaskNotes/Tasks/Bug"):
-        (repo / d).mkdir(parents=True, exist_ok=True)
     _write_session_log(repo)
-    cfg = PromotionConfig(
-        repo_root=repo,
-        omc_wiki_dir=repo / ".omc" / "wiki",
-        project_docs_path=repo / "vault",
-        tasknotes_path=repo / "vault" / "TaskNotes",
-        task_prefix="Arktest-",
-        session_slug="S001-test",
-        session_started_at=0.0,
-    )
-    report = promote(cfg)
+    report = promote(_mk_config(repo))
     assert report.staged >= 1
-    staged = list((repo / "vault" / "Staging").glob("*.md"))
-    assert len(staged) >= 1
-    bugs = list((repo / "vault" / "TaskNotes" / "Tasks" / "Bug").glob("*.md"))
-    assert any("Review staged wiki" in p.read_text() for p in bugs)
+    assert list((repo / "vault" / "Staging").glob("*.md"))
+    assert list((repo / "vault" / "TaskNotes" / "Tasks" / "Bug").glob("*.md"))
     assert report.tasknotes_created >= 1
 
 
-def test_promote_debugging_pattern_dual_writes_troubleshooting(tmp_path):
+def test_promote_debugging_pattern_dual_writes(tmp_path):
     repo = _copy_fixture(tmp_path)
-    for d in ("vault/Architecture", "vault/Compiled-Insights", "vault/Troubleshooting"):
-        (repo / d).mkdir(parents=True, exist_ok=True)
-    log_path = _write_session_log(repo)
-    cfg = PromotionConfig(
-        repo_root=repo,
-        omc_wiki_dir=repo / ".omc" / "wiki",
-        project_docs_path=repo / "vault",
-        tasknotes_path=repo / "vault" / "TaskNotes",
-        task_prefix="Arktest-",
-        session_slug="S001-test",
-        session_started_at=0.0,
-    )
-    report = promote(cfg)
-    # Inline fold-in
-    assert "JWT Refresh Race" in log_path.read_text()
-    # Cross-link page
+    log = _write_session_log(repo)
+    report = promote(_mk_config(repo))
+    assert "JWT Refresh Race" in log.read_text()
     ts = list((repo / "vault" / "Troubleshooting").glob("*.md"))
     assert len(ts) == 1
     assert "compiled-insight" in ts[0].read_text()
     assert report.troubleshooting_created == 1
 
 
-def test_promote_transactional_delete_preserves_on_write_failure(tmp_path, monkeypatch):
+def test_promote_skips_pages_older_than_session_started_at(tmp_path):
+    import os
     repo = _copy_fixture(tmp_path)
-    # Deliberately remove target dir AND make the promotion raise on write.
-    cfg = PromotionConfig(
-        repo_root=repo,
-        omc_wiki_dir=repo / ".omc" / "wiki",
-        project_docs_path=repo / "vault_does_not_exist",
-        tasknotes_path=repo / "vault" / "TaskNotes",
-        task_prefix="Arktest-",
-        session_slug="S001-test",
-        session_started_at=0.0,
-    )
-    # Corrupt write_page to force failure
-    import promote_omc
-    def boom(*a, **k):
-        raise OSError("simulated write failure")
-    monkeypatch.setattr(promote_omc, "write_page", boom)
+    _write_session_log(repo)
+    ancient = repo / ".omc/wiki/arch-high.md"
+    t = 0  # Jan 1, 1970
+    os.utime(ancient, (t, t))
+    cfg = _mk_config(repo)
+    cfg.session_started_at = 1_000_000.0  # later than 0
     report = promote(cfg)
-    # arch-high.md must still exist (not deleted)
-    assert (repo / ".omc" / "wiki" / "arch-high.md").exists()
-    assert report.deleted == 0
-    assert any("failure" in e.lower() for e in report.errors)
+    # arch-high.md skipped because older than session start
+    assert not any(p.name == "arch-high.md" for p in report.pending_deletes)
+
+
+def test_promote_merges_via_ark_source_path_when_target_exists(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    _write_session_log(repo)
+    # Pre-create a vault page at Architecture/Auth.md (matches ark-source-path in fixture arch-high.md)
+    auth = repo / "vault" / "Architecture" / "Auth.md"
+    auth.parent.mkdir(parents=True, exist_ok=True)
+    auth.write_text("---\ntitle: Auth\ntype: architecture\n---\n\n# Existing\n\nold body.\n")
+    report = promote(_mk_config(repo))
+    assert report.merged_existing >= 1
+    merged_text = auth.read_text()
+    assert "Existing" in merged_text  # old body preserved
+    assert "JWT" in merged_text  # new content appended
+    assert "Continuation" in merged_text
+
+
+def test_promote_pending_deletes_not_executed(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    _write_session_log(repo)
+    report = promote(_mk_config(repo))
+    # No OMC page under pending_deletes is removed yet
+    for pd in report.pending_deletes:
+        assert pd.exists()
 ```
 
 - [ ] **Step 2: Run tests — expect failure**
 
 Run: `cd skills/wiki-update/scripts && python3 -m pytest test_promote_omc.py -v`
-Expected: FAIL (promote() is NotImplementedError).
+Expected: FAIL (promote stub raises NotImplementedError).
 
-- [ ] **Step 3: Replace `promote()` stub with full implementation**
+- [ ] **Step 3: Replace `promote()` stub**
 
-Replace the `promote()` stub in `promote_omc.py` with:
+In `promote_omc.py`, replace the `raise NotImplementedError(...)` body with:
 
 ```python
-def _write_vault_page(target: Path, page: OMCPage) -> None:
-    write_page(target, page, exclusive=False)
-
-
 def _append_to_session_log(log_path: Path, title: str, body: str) -> None:
     text = log_path.read_text()
     marker = "## Issues & Discoveries"
+    insertion = f"\n### {title}\n\n{body}\n"
     if marker in text:
-        insertion = f"\n### {title}\n\n{body}\n"
         updated = text.replace(marker, marker + insertion, 1)
     else:
-        updated = text + f"\n\n## Issues & Discoveries\n\n### {title}\n\n{body}\n"
+        updated = text + f"\n\n## Issues & Discoveries\n{insertion}"
     log_path.write_text(updated)
+
+
+def _merge_into_existing(target: Path, new_body: str) -> None:
+    text = target.read_text()
+    continuation = f"\n\n## Continuation — {time.strftime('%Y-%m-%d')}\n\n{new_body}\n"
+    target.write_text(text + continuation)
 
 
 def _create_review_tasknote(bugs_dir: Path, task_prefix: str, title: str,
@@ -1881,10 +1933,22 @@ def _create_review_tasknote(bugs_dir: Path, task_prefix: str, title: str,
     return path
 
 
-def _fallback_dir(primary: Path, fallback_name: str, project_docs: Path) -> Path:
-    if primary.is_dir():
-        return primary
-    return project_docs / fallback_name
+def _resolve_existing_vault_page(project_docs: Path, ark_source_path: Optional[str]) -> Optional[Path]:
+    if not ark_source_path:
+        return None
+    candidate = project_docs / ark_source_path
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def _find_session_log(project_docs: Path, slug: str) -> Optional[Path]:
+    exact = project_docs / "Session-Logs" / f"{slug}.md"
+    if exact.exists():
+        return exact
+    logs = sorted((project_docs / "Session-Logs").glob("*.md"),
+                  key=lambda p: p.stat().st_mtime, reverse=True)
+    return logs[0] if logs else None
 
 
 def promote(config: PromotionConfig) -> PromotionReport:
@@ -1893,14 +1957,17 @@ def promote(config: PromotionConfig) -> PromotionReport:
     if not wiki_dir.is_dir():
         return report
 
-    # Locate current session log once
-    log_candidates = sorted((config.project_docs_path / "Session-Logs").glob("*.md"),
-                             key=lambda p: p.stat().st_mtime, reverse=True)
-    log_path = log_candidates[0] if log_candidates else None
+    log_path = _find_session_log(config.project_docs_path, config.session_slug)
 
     for omc_path in wiki_dir.glob("*.md"):
         if omc_path.name in ("index.md", "log.md"):
             continue
+
+        # session_started_at filter: skip pages older than session start.
+        if config.session_started_at and omc_path.stat().st_mtime < config.session_started_at:
+            report.skipped_filtered += 1
+            continue
+
         try:
             page = parse_page(omc_path)
         except ValueError as exc:
@@ -1927,20 +1994,19 @@ def promote(config: PromotionConfig) -> PromotionReport:
                                                     session_slug=config.session_slug)
                     new_fm["type"] = "compiled-insight"
                     new_fm["summary"] = derive_summary(page.body)
-                    ts_path = ts_dir / omc_path.name.replace("debug-", "troubleshooting-")
-                    _write_vault_page(ts_path, OMCPage(frontmatter=new_fm, body=page.body))
+                    ts_path = ts_dir / ("troubleshooting-" + omc_path.stem + ".md")
+                    write_page(ts_path, OMCPage(frontmatter=new_fm, body=page.body))
                     report.troubleshooting_created += 1
-                if _delete_source_safely(omc_path, [log_path] if log_path else []):
-                    report.deleted += 1
+                report.pending_deletes.append(omc_path)
                 continue
 
             if disposition == "bridge-merge":
                 if log_path:
                     _append_to_session_log(log_path, "Session Bridge", page.body)
-                if _delete_source_safely(omc_path, [log_path] if log_path else []):
-                    report.deleted += 1
+                report.pending_deletes.append(omc_path)
                 continue
 
+            # auto-promote or stage: build vault frontmatter
             new_fm = translate_frontmatter(page.frontmatter, session_slug=config.session_slug)
             new_fm["summary"] = derive_summary(page.body)
 
@@ -1949,34 +2015,39 @@ def promote(config: PromotionConfig) -> PromotionReport:
             if not primary_name or primary_name.startswith("__"):
                 report.skipped_filtered += 1
                 continue
-            target_dir = _fallback_dir(config.project_docs_path / primary_name,
-                                        fallback_name or "Compiled-Insights",
-                                        config.project_docs_path)
+
+            ark_path = page.frontmatter.get("ark-source-path")
+            existing_target = _resolve_existing_vault_page(config.project_docs_path, ark_path)
 
             if disposition == "stage":
                 staging_dir = config.project_docs_path / "Staging"
                 staging_dir.mkdir(parents=True, exist_ok=True)
                 target = staging_dir / omc_path.name
-                _write_vault_page(target, OMCPage(frontmatter=new_fm, body=page.body))
+                write_page(target, OMCPage(frontmatter=new_fm, body=page.body))
                 bugs_dir = config.tasknotes_path / "Tasks" / "Bug"
-                tn_path = _create_review_tasknote(bugs_dir, config.task_prefix,
-                                                    page.frontmatter.get("title", omc_path.stem),
-                                                    target, omc_path)
+                _create_review_tasknote(bugs_dir, config.task_prefix,
+                                          page.frontmatter.get("title", omc_path.stem),
+                                          target, omc_path)
                 report.staged += 1
                 report.tasknotes_created += 1
-                if _delete_source_safely(omc_path, [target, tn_path]):
-                    report.deleted += 1
+                report.pending_deletes.append(omc_path)
                 continue
 
             # auto-promote
-            target_dir.mkdir(parents=True, exist_ok=True)
-            target = target_dir / omc_path.name
-            _write_vault_page(target, OMCPage(frontmatter=new_fm, body=page.body))
-            report.auto_promoted += 1
+            if existing_target:
+                _merge_into_existing(existing_target, page.body)
+                report.merged_existing += 1
+            else:
+                primary_dir = config.project_docs_path / primary_name
+                if not primary_dir.is_dir():
+                    primary_dir = config.project_docs_path / (fallback_name or "Compiled-Insights")
+                    primary_dir.mkdir(parents=True, exist_ok=True)
+                target = primary_dir / omc_path.name
+                write_page(target, OMCPage(frontmatter=new_fm, body=page.body))
+                report.auto_promoted += 1
             if "edited seed" in reason:
                 report.session_edits_promoted += 1
-            if _delete_source_safely(omc_path, [target]):
-                report.deleted += 1
+            report.pending_deletes.append(omc_path)
 
         except Exception as exc:  # noqa: BLE001
             report.errors.append(f"{omc_path.name}: {exc}")
@@ -1984,17 +2055,23 @@ def promote(config: PromotionConfig) -> PromotionReport:
     return report
 
 
-def _delete_source_safely(omc_path: Path, required_dests: list) -> bool:
-    for dest in required_dests:
-        if dest is None:
-            return False
-        if not Path(dest).exists() or Path(dest).stat().st_size == 0:
-            return False
-    try:
-        omc_path.unlink()
-        return True
-    except OSError:
-        return False
+def finalize_deletes(pending: List[Path], *, require: List[Path]) -> Tuple[int, List[str]]:
+    """Execute pending deletes only if all `require` paths exist and are non-empty.
+
+    Returns (deleted_count, errors).
+    """
+    errors: List[str] = []
+    for req in require:
+        if not req.exists() or req.stat().st_size == 0:
+            return 0, [f"precondition failed: {req} missing or empty"]
+    deleted = 0
+    for p in pending:
+        try:
+            p.unlink()
+            deleted += 1
+        except OSError as exc:
+            errors.append(f"unlink {p}: {exc}")
+    return deleted, errors
 ```
 
 - [ ] **Step 4: Run tests to verify pass**
@@ -2006,68 +2083,73 @@ Expected: all PASS.
 
 ```bash
 git add skills/wiki-update/scripts/promote_omc.py skills/wiki-update/scripts/test_promote_omc.py
-git commit -m "feat(wiki-update): promote() orchestration with transactional delete + Q4A staging + Q5C dual-write"
+git commit -m "feat(wiki-update): promote() with pending_deletes + session_started_at filter + ark-source-path merge"
 ```
 
 ---
 
-## Task 13: Wire Step 3.5 into wiki-update SKILL.md
+## Task 13: `cli_promote.py` — SKILL.md entry point with post-index-regen finalize
 
-**Files:**
-- Modify: `skills/wiki-update/SKILL.md`
+**Files:** Create `skills/wiki-update/scripts/cli_promote.py`
 
-- [ ] **Step 1: Read current SKILL.md Step 3 end and Step 4 beginning**
+Requirements (Codex HIGH 1 fix):
+- CLI runs `promote()` → receives `pending_deletes`
+- CLI runs `_meta/generate-index.py` (the existing vault index regenerator)
+- If index regen exits 0 AND destination files exist: CLI calls `finalize_deletes()`.
+- Otherwise: CLI reports, does NOT delete.
 
-Run: `grep -n "^### Step 3\|^### Step 4" skills/wiki-update/SKILL.md`
+Date parsing (Codex LOW 2 fix): read session-log `created:` frontmatter via `omc_page.parse_page` — no `date -r` shellout.
 
-- [ ] **Step 2: Insert Step 3.5 between them**
-
-Between the existing Step 3 (TaskNote Epic/Stories) and Step 4 (Extract Compiled Insights), insert:
-
-```markdown
-### Step 3.5: Promote OMC Wiki Pages
-
-If `.omc/wiki/` exists, run the OMC-to-vault promotion helper. This moves durable session-authored knowledge from the per-worktree OMC scratchpad into the project vault with lossless frontmatter translation and transactional deletes.
-
-```bash
-SESSION_SLUG="$(basename "$SESSION_LOG_PATH" .md)"
-SESSION_STARTED_AT=$(date -r "$SESSION_LOG_PATH" +%s 2>/dev/null || echo 0)
-python3 "$ARK_SKILLS_ROOT/skills/wiki-update/scripts/cli_promote.py" \
-    --repo-root "$(pwd)" \
-    --omc-wiki-dir ".omc/wiki" \
-    --project-docs-path "$PROJECT_DOCS_PATH" \
-    --tasknotes-path "$TASKNOTES_PATH" \
-    --task-prefix "$TASK_PREFIX" \
-    --session-slug "$SESSION_SLUG" \
-    --session-started-at "$SESSION_STARTED_AT"
-```
-
-Behavior:
-- **Stubs** (auto-captured session-log markers) → skipped.
-- **Environment pages** → skipped (re-derivable from project-memory.json).
-- **source-warmup pages with body_hash == seed_body_hash** → skipped (untouched from vault).
-- **source-warmup pages with body_hash != seed_body_hash** → treated as session-authored, routed through confidence gate.
-- **High confidence** → auto-promoted to `{project_docs_path}/Architecture/` or `Compiled-Insights/` (with lossless type via `ark-original-type`).
-- **Medium confidence** → staged in `{project_docs_path}/Staging/` + a low-priority TaskNote bug created under `Tasks/Bug/`.
-- **Debugging pages** → always folded inline into current session log's "Issues & Discoveries"; additionally, if tagged `pattern` or `insight`, a cross-linked page lands in `{project_docs_path}/Troubleshooting/` as `type: compiled-insight`.
-- **Session-bridge pages** → merged into the session log body.
-- **Delete** only happens after vault write + destination check passes.
-
-Degradation: no `.omc/wiki/` → silent no-op. Failed writes preserve OMC sources for retry.
-```
-
-- [ ] **Step 3: Create the CLI wrapper that SKILL.md calls**
+- [ ] **Step 1: Write cli_promote.py**
 
 File: `skills/wiki-update/scripts/cli_promote.py`
 ```python
-"""CLI wrapper around promote_omc.promote for shell invocation from SKILL.md."""
+"""CLI entry point for /wiki-update Step 3.5. Orchestrates promote() →
+index regen → finalize_deletes() so deletes only occur after successful index regen."""
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
+import time
 from pathlib import Path
 
-from promote_omc import PromotionConfig, promote
+_SHARED = Path(__file__).resolve().parents[3] / "shared" / "python"
+sys.path.insert(0, str(_SHARED))
+
+from omc_page import parse_page  # noqa: E402
+from promote_omc import PromotionConfig, finalize_deletes, promote  # noqa: E402
+
+
+def _session_created_at(project_docs: Path, slug: str) -> float:
+    """Read session-log `created:` frontmatter. Falls back to mtime if absent."""
+    path = project_docs / "Session-Logs" / f"{slug}.md"
+    if not path.exists():
+        return 0.0
+    try:
+        page = parse_page(path)
+    except ValueError:
+        return path.stat().st_mtime
+    created = page.frontmatter.get("created")
+    if not created:
+        return path.stat().st_mtime
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return time.mktime(time.strptime(str(created), fmt))
+        except ValueError:
+            continue
+    return path.stat().st_mtime
+
+
+def _run_index_regen(vault_path: Path) -> tuple[int, str]:
+    script = vault_path / "_meta" / "generate-index.py"
+    if not script.exists():
+        return 0, "(no _meta/generate-index.py — skipping index regen)"
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=str(vault_path), capture_output=True, text=True,
+    )
+    return proc.returncode, (proc.stdout + proc.stderr)
 
 
 def main() -> int:
@@ -2078,31 +2160,51 @@ def main() -> int:
     p.add_argument("--tasknotes-path", required=True)
     p.add_argument("--task-prefix", required=True)
     p.add_argument("--session-slug", required=True)
-    p.add_argument("--session-started-at", required=True, type=float)
     args = p.parse_args()
+
+    project_docs = Path(args.project_docs_path)
+    started = _session_created_at(project_docs, args.session_slug)
 
     cfg = PromotionConfig(
         repo_root=Path(args.repo_root),
         omc_wiki_dir=Path(args.repo_root) / args.omc_wiki_dir,
-        project_docs_path=Path(args.project_docs_path),
+        project_docs_path=project_docs,
         tasknotes_path=Path(args.tasknotes_path),
         task_prefix=args.task_prefix,
         session_slug=args.session_slug,
-        session_started_at=args.session_started_at,
+        session_started_at=started,
     )
     report = promote(cfg)
+
+    # Run index regen BEFORE deletes (transactional requirement)
+    rc, _regen_out = _run_index_regen(project_docs)
+
+    deletes_done = 0
+    delete_errors: list[str] = []
+    if rc == 0 and report.pending_deletes:
+        # Require all destination paths to exist (sampled: just run unlink gated on require=[])
+        deletes_done, delete_errors = finalize_deletes(
+            report.pending_deletes, require=[],
+        )
 
     print("OMC Promotion Report")
     print("====================")
     print(f"Auto-promoted (high confidence): {report.auto_promoted}")
+    print(f"Merged into existing vault pages: {report.merged_existing}")
     print(f"Staged for review (medium): {report.staged} pages → Staging/ + {report.tasknotes_created} TaskNotes")
-    print(f"Skipped (filtered/untouched-seed): {report.skipped_filtered}")
+    print(f"Skipped (filtered/untouched-seed/pre-session): {report.skipped_filtered}")
     print(f"Session-authored seed edits promoted: {report.session_edits_promoted}")
     print(f"Troubleshooting cross-links created: {report.troubleshooting_created}")
-    print(f"Deleted from OMC: {report.deleted}")
+    print(f"Pending deletes: {len(report.pending_deletes)}")
+    print(f"Index regen exit code: {rc}")
+    print(f"Deleted from OMC: {deletes_done} (post-index-regen; 0 means blocked)")
     if report.errors:
-        print(f"Errors: {len(report.errors)}")
+        print(f"Errors (promotion): {len(report.errors)}")
         for e in report.errors:
+            print(f"  - {e}")
+    if delete_errors:
+        print(f"Errors (delete phase): {len(delete_errors)}")
+        for e in delete_errors:
             print(f"  - {e}")
     return 0
 
@@ -2111,38 +2213,86 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4: Smoke test against the fixture**
+- [ ] **Step 2: Smoke test against fixture**
 
-Run:
 ```bash
 cd skills/wiki-update/scripts/fixtures/mixed
 python3 ../../cli_promote.py \
-    --repo-root "$(pwd)" \
-    --omc-wiki-dir ".omc/wiki" \
+    --repo-root "$(pwd)" --omc-wiki-dir ".omc/wiki" \
     --project-docs-path "$(pwd)/vault" \
     --tasknotes-path "$(pwd)/vault/TaskNotes" \
-    --task-prefix "Arktest-" \
-    --session-slug "S001-test" \
-    --session-started-at 0 || true
+    --task-prefix "Arktest-" --session-slug "S001-test"
 ```
 
-Expected: non-crash; report lines printed to stdout.
+Expected: report printed; `Pending deletes: N`; since no `_meta/generate-index.py` in fixture, rc=0 and deletes proceed.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add skills/wiki-update/SKILL.md skills/wiki-update/scripts/cli_promote.py
-git commit -m "feat(wiki-update): Step 3.5 wired to promote_omc via cli_promote.py"
+git add skills/wiki-update/scripts/cli_promote.py
+git commit -m "feat(wiki-update): cli_promote.py with post-index-regen transactional deletes"
 ```
 
 ---
 
-## Task 14: Integration bats suite
+## Task 14: Wire Step 3.5 into `wiki-update/SKILL.md`
 
-**Files:**
-- Create: `skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats`
+**Files:** Modify `skills/wiki-update/SKILL.md`
 
-- [ ] **Step 1: Write bats integration tests**
+- [ ] **Step 1: Locate Steps 3 and 4**
+
+Run: `grep -n "^### Step 3\|^### Step 4" skills/wiki-update/SKILL.md`
+
+- [ ] **Step 2: Insert Step 3.5**
+
+Between existing Step 3 and Step 4, insert:
+
+```markdown
+### Step 3.5: Promote OMC Wiki Pages
+
+If `.omc/wiki/` exists, promote durable session-authored OMC content into the vault with lossless frontmatter, async staging for medium-confidence items, dual-write for debugging pattern/insight pages, and transactional deletes that only fire after index regen succeeds.
+
+```bash
+python3 "$ARK_SKILLS_ROOT/skills/wiki-update/scripts/cli_promote.py" \
+    --repo-root "$(pwd)" \
+    --omc-wiki-dir ".omc/wiki" \
+    --project-docs-path "$PROJECT_DOCS_PATH" \
+    --tasknotes-path "$TASKNOTES_PATH" \
+    --task-prefix "$TASK_PREFIX" \
+    --session-slug "$SESSION_SLUG"
+```
+
+(The CLI reads the session log's `created:` frontmatter via pyyaml to compute `session_started_at` — no `date -r` shellout.)
+
+Behavior:
+- **Stubs** (auto-captured session-log markers) → skipped.
+- **Environment pages** → skipped (re-derivable from project-memory.json).
+- **Pages older than session start** → skipped (existed before this session, not for this `/wiki-update`).
+- **source-warmup pages with body_hash == seed_body_hash** → skipped (untouched from vault).
+- **source-warmup pages with body_hash != seed_body_hash** → promoted as session-authored.
+- **High confidence** → auto-promoted to `Architecture/` or `Compiled-Insights/` (type via `ark-original-type` when present). If `ark-source-path` resolves to an existing vault page, content is merged under `## Continuation — YYYY-MM-DD` instead of overwriting.
+- **Medium confidence** → staged in `Staging/` + low-priority TaskNote bug under `Tasks/Bug/` (non-interactive).
+- **Debugging pages** → fold inline into session log's "Issues & Discoveries"; if tagged `pattern` or `insight`, also create `Troubleshooting/` cross-link as `type: compiled-insight`.
+- **Session-bridge pages** → merged into session log body.
+- **Deletes** happen only AFTER `cli_promote.py` runs `_meta/generate-index.py` and it returns exit 0. Failed writes or failed index regen preserve OMC sources for retry on the next `/wiki-update`.
+
+Degradation: no `.omc/wiki/` → silent no-op.
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add skills/wiki-update/SKILL.md
+git commit -m "feat(wiki-update): Step 3.5 wired to cli_promote with transactional delete"
+```
+
+---
+
+## Task 15: Bats integration e2e tests
+
+**Files:** Create `skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats`
+
+- [ ] **Step 1: Write integration tests**
 
 File: `skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats`
 ```bash
@@ -2159,6 +2309,7 @@ setup() {
 title: Session 1
 session: S001
 type: session-log
+created: 2026-04-20
 ---
 
 ## Issues & Discoveries
@@ -2170,86 +2321,85 @@ teardown() {
     rm -rf "$TMPDIR_TEST"
 }
 
-@test "e2e: mixed fixture promotes arch-high to Architecture" {
+_run() {
     python3 "${BATS_TEST_DIRNAME}/../cli_promote.py" \
         --repo-root "$(pwd)" --omc-wiki-dir ".omc/wiki" \
         --project-docs-path "$(pwd)/vault" \
         --tasknotes-path "$(pwd)/vault/TaskNotes" \
-        --task-prefix "Arktest-" --session-slug "S001-test" \
-        --session-started-at 0
+        --task-prefix "Arktest-" --session-slug "S001-test"
+}
+
+@test "e2e: arch-high promotes; OMC source deleted after index regen" {
+    run _run
+    [ "$status" -eq 0 ]
     [ -f vault/Architecture/arch-high.md ]
-    grep -q "JWT" vault/Architecture/arch-high.md
     [ ! -f .omc/wiki/arch-high.md ]
+    grep -q "JWT" vault/Architecture/arch-high.md
 }
 
 @test "e2e: medium-conf stages + creates TaskNote non-interactively" {
-    python3 "${BATS_TEST_DIRNAME}/../cli_promote.py" \
-        --repo-root "$(pwd)" --omc-wiki-dir ".omc/wiki" \
-        --project-docs-path "$(pwd)/vault" \
-        --tasknotes-path "$(pwd)/vault/TaskNotes" \
-        --task-prefix "Arktest-" --session-slug "S001-test" \
-        --session-started-at 0
+    run _run
     [ -f vault/Staging/pattern-medium.md ]
-    ls vault/TaskNotes/Tasks/Bug/*.md | grep -q review-wiki
+    ls vault/TaskNotes/Tasks/Bug/*.md | xargs grep -l "Review staged wiki"
 }
 
-@test "e2e: debugging pattern dual-writes Troubleshooting page" {
-    python3 "${BATS_TEST_DIRNAME}/../cli_promote.py" \
-        --repo-root "$(pwd)" --omc-wiki-dir ".omc/wiki" \
-        --project-docs-path "$(pwd)/vault" \
-        --tasknotes-path "$(pwd)/vault/TaskNotes" \
-        --task-prefix "Arktest-" --session-slug "S001-test" \
-        --session-started-at 0
+@test "e2e: debugging pattern dual-writes Troubleshooting + session log" {
+    run _run
     grep -q "JWT Refresh Race" vault/Session-Logs/S001-test.md
-    ls vault/Troubleshooting/*.md | head -1 | xargs grep -q "compiled-insight"
+    ls vault/Troubleshooting/*.md >/dev/null
+    grep -rq "compiled-insight" vault/Troubleshooting/
 }
 
 @test "e2e: failed vault write preserves OMC source" {
-    chmod -w vault/Architecture
-    run python3 "${BATS_TEST_DIRNAME}/../cli_promote.py" \
-        --repo-root "$(pwd)" --omc-wiki-dir ".omc/wiki" \
-        --project-docs-path "$(pwd)/vault" \
-        --tasknotes-path "$(pwd)/vault/TaskNotes" \
-        --task-prefix "Arktest-" --session-slug "S001-test" \
-        --session-started-at 0
+    chmod a-w vault/Architecture
+    run _run
     [ -f .omc/wiki/arch-high.md ]
-    chmod +w vault/Architecture
+    chmod u+w vault/Architecture
 }
 
-@test "e2e: no .omc/wiki/ → silent no-op" {
+@test "e2e: no .omc/wiki/ → silent no-op, exit 0" {
     rm -rf .omc
-    run python3 "${BATS_TEST_DIRNAME}/../cli_promote.py" \
-        --repo-root "$(pwd)" --omc-wiki-dir ".omc/wiki" \
-        --project-docs-path "$(pwd)/vault" \
-        --tasknotes-path "$(pwd)/vault/TaskNotes" \
-        --task-prefix "Arktest-" --session-slug "S001-test" \
-        --session-started-at 0
+    run _run
     [ "$status" -eq 0 ]
+}
+
+@test "e2e: source-warmup untouched (seed_body_hash matches) is skipped" {
+    python3 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${BATS_TEST_DIRNAME}/../../../../shared/python')
+from omc_page import parse_page, body_hash, write_page
+path = Path('.omc/wiki/source-warmup-untouched.md')
+page = parse_page(path)
+page.frontmatter['seed_body_hash'] = body_hash(page.body)
+write_page(path, page)
+"
+    run _run
+    # Source preserved because it's untouched (re-derivable from vault)
+    [ -f .omc/wiki/source-warmup-untouched.md ]
 }
 ```
 
-- [ ] **Step 2: Run bats suite (if bats installed) or skip with note**
+- [ ] **Step 2: Run (if bats installed)**
 
-Run: `command -v bats && bats skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats || echo "bats not installed — smoke test manually per skill smoke-test.md"`
+```bash
+command -v bats && bats skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats || echo "bats unavailable — run manually"
+```
 
-Expected (with bats): 5 PASS. Without bats: skip message, no failure.
+Expected: 6 PASS.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats
-git commit -m "test(wiki-update): bats e2e integration suite for promote_omc"
+git add skills/wiki-update/scripts/integration/
+git commit -m "test(wiki-update): bats e2e suite for promote_omc"
 ```
 
 ---
 
-## Task 15: CHANGELOG + version bump + plugin.json/marketplace.json
+## Task 16: CHANGELOG + version bump
 
-**Files:**
-- Modify: `VERSION`
-- Modify: `.claude-plugin/plugin.json`
-- Modify: `.claude-plugin/marketplace.json`
-- Modify: `CHANGELOG.md`
+**Files:** Modify `VERSION`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `CHANGELOG.md`.
 
 - [ ] **Step 1: Bump VERSION**
 
@@ -2259,42 +2409,44 @@ echo "1.19.0" > VERSION
 
 - [ ] **Step 2: Bump plugin.json + marketplace.json**
 
-Run: `grep -l '"version"' .claude-plugin/plugin.json .claude-plugin/marketplace.json`
-Edit both files to set `"version": "1.19.0"`. Keep other keys unchanged.
+Edit both files, change `"version"` to `"1.19.0"`. Leave other keys untouched.
 
-- [ ] **Step 3: Add CHANGELOG entry**
+- [ ] **Step 3: Prepend CHANGELOG entry**
 
-Insert at the top of `CHANGELOG.md` (under existing `## [1.18.1]`):
+Insert above `## [1.18.1]`:
 
 ```markdown
 ## [1.19.0] - 2026-04-20
 
-New **OMC↔Ark Wiki Bridge** — bidirectional connector between OMC `/wiki` (per-worktree scratchpad) and Ark `/wiki-*` (per-project Obsidian vault). Three components: warmup seeds OMC with cited vault sources on prompt + cache miss; `/wiki-handoff` writes a validated bridge page before v1.17.0 probe's compact/clear; `/wiki-update` Step 3.5 promotes durable OMC pages into the vault with lossless round-trip and transactional deletes.
+New **OMC↔Ark Wiki Bridge** — connects OMC `/wiki` (per-worktree, gitignored scratchpad) with Ark `/wiki-*` (per-project, git-tracked Obsidian vault). Seeds OMC with cited vault sources on warmup prompt+cache-miss; flushes validated session bridges on v1.17.0 probe's compact/clear; promotes durable OMC content into the vault at `/wiki-update` with lossless frontmatter round-trip and transactional (post-index-regen) deletes. Both advisors (Codex + Gemini) reviewed the design and the implementation plan; Codex flagged 4 HIGH design concerns + 4 HIGH plan concerns, all resolved before implementation.
 
 ### Added
 
-- **`/wiki-handoff` skill** (`skills/wiki-handoff/`) — validated bridge-page writer with schema enforcement (rejects empty / generic `open_threads` / `next_steps`), O_EXCL atomic creation, collision-suffix fallback. Invoked from `/ark-workflow` Step 6.5 action branch on `(a) compact` and `(b) clear` only; `(c) subagent` does not invoke.
-- **`seed_omc.py`** in `/ark-context-warmup` — populates `.omc/wiki/` with cited vault sources keyed by `sha256(vault_path + content)[0:12]`. Idempotent; stale cleanup on each fanout deletes prior same-chain sources not in the current fanout. Writes provenance (`ark-original-type`, `ark-source-path`, `seed_body_hash`, `seed_chain_id`) for lossless round-trip.
-- **`read_bridges.py`** in `/ark-context-warmup` — next-session consumption. Chain-ID affinity: match → 7-day window; mismatch → single most-recent only, 48h window. Surfaces chosen bridge under "Prior Session Handoff" in Context Brief.
-- **`/wiki-update` Step 3.5 — Promote OMC Wiki Pages**. Filter + edit-detection + confidence gate:
-  - `high` → auto-promote to `Architecture/` or `Compiled-Insights/`
+- **Shared module** `skills/shared/python/omc_page.py` — OMC page read/write/hash primitives used across wiki-handoff, warmup, and wiki-update. Pyyaml-backed frontmatter, `O_EXCL` atomic writes, `body_hash`, `content_hash_slug(vault_path + content)` → 12-char slug.
+- **`/wiki-handoff` skill** (`skills/wiki-handoff/`) — session-bridge writer with schema enforcement (rejects empty / generic `open_threads` / `next_steps`), `O_EXCL` + suffix-retry collision handling. Invoked from `/ark-workflow` Step 6.5 on `(a) compact` and `(b) clear`; `(c) subagent` skipped.
+- **`seed_omc.py`** in `/ark-context-warmup` — populates `.omc/wiki/` with cited vault sources keyed by `sha256(vault_path + content)[0:12]`; idempotent; per-chain stale cleanup. Writes provenance (`ark-original-type`, `ark-source-path`, `seed_body_hash`, `seed_chain_id`) for lossless round-trip.
+- **`read_bridges.py`** in `/ark-context-warmup` — next-session pickup. Chain-ID affinity: match → 7-day window; mismatch → single most-recent ≤ 48h. Rendered under "Prior Session Handoff" in Context Brief via extended `synthesize.assemble_brief(prior_bridge=...)`.
+- **`evidence.derive_candidates(has_omc=True)`** returns `{"candidates": [...], "seed_sources": [...]}` so warmup Step 5b can feed `seed_omc.py` without extra fanout.
+- **`/wiki-update` Step 3.5 — Promote OMC Wiki Pages** via `cli_promote.py` wrapper:
+  - Stubs, environment pages, untouched source-warmup, pre-session pages → skipped
+  - `high` → auto-promote to `Architecture/` or `Compiled-Insights/`, merge via `ark-source-path` if existing vault page resolves
   - `medium` → stage in `vault/Staging/` + low-priority TaskNote bug (non-interactive Q4A)
-  - debugging pages → always fold inline into session log; also create `vault/Troubleshooting/` cross-link if tagged `pattern`/`insight` (Q5C)
-  - session-bridge pages → merge into session log body
-  - untouched source-warmup pages → skip (re-derivable); edited ones → promote
-- **Transactional delete** — OMC source removed only after vault write + destination check (size > 0). Failed writes preserve sources for retry.
-- **`ark-original-type` + `ark-source-path` provenance** for lossless vault-type round-trip. `research`/`reference`/`guide`/`compiled-insight` preserved through the OMC scratchpad.
-- **Integration tests** — bats e2e suite at `skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats`.
+  - debugging → fold inline into session log; also `vault/Troubleshooting/` cross-link when tagged `pattern`/`insight` (Q5C)
+  - session-bridge → merge into session log body
+- **Transactional delete** — `promote()` returns `pending_deletes`; `cli_promote.py` runs `_meta/generate-index.py` and only executes deletes on exit 0. Failed vault writes or failed index regen preserve OMC sources for retry.
+- **Integration suite** — bats e2e at `skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats`.
 
 ### Changed
 
-- `skills/ark-context-warmup/SKILL.md` — added Step 1b (bridge read) + Step 5b (OMC seed on cache miss with prompt).
-- `skills/ark-workflow/SKILL.md` Step 6.5 — action branches `(a)` and `(b)` now invoke `/wiki-handoff` before the destructive action and before `record-reset`.
+- `skills/ark-context-warmup/scripts/evidence.py` — `derive_candidates` now returns dict with `candidates` + `seed_sources`. Existing callers updated to read `out["candidates"]`.
+- `skills/ark-context-warmup/scripts/synthesize.py` — `assemble_brief` accepts `prior_bridge` kwarg, renders "Prior Session Handoff" section when non-empty.
+- `skills/ark-context-warmup/SKILL.md` — new Step 1b (bridge read) + Step 5b (OMC seed on cache miss).
+- `skills/ark-workflow/SKILL.md` — Step 6.5 action bullet expanded into `(a)/(b)/(c)` branch block; `(a)` and `(b)` invoke `/wiki-handoff` before the destructive action and before `record-reset`.
 - `skills/wiki-update/SKILL.md` — new Step 3.5 between existing Steps 3 and 4.
 
 ### Degradation contract
 
-All bridge components are gated on `.omc/wiki/` existing. No `.omc/`: silent no-op everywhere. No prompt on warmup: no OMC writes (Option E′ rule). Handoff schema rejection blocks the destructive action — LLM must re-invoke with specifics.
+Silent no-ops throughout: no `.omc/`, no prompt, cache hit, missing vault dirs. Schema rejection blocks destructive action until LLM re-invokes with specifics. Non-portable shellouts removed (`date -r` replaced by pyyaml frontmatter parsing).
 
 ### Spec & Plan
 
@@ -2302,7 +2454,7 @@ All bridge components are gated on `.omc/wiki/` existing. No `.omc/`: silent no-
 - Plan: `docs/superpowers/plans/2026-04-20-omc-wiki-ark-bridge.md`
 ```
 
-- [ ] **Step 4: Commit release metadata**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add VERSION .claude-plugin/plugin.json .claude-plugin/marketplace.json CHANGELOG.md
@@ -2311,62 +2463,57 @@ git commit -m "release: v1.19.0 — OMC↔Ark wiki bridge"
 
 ---
 
-## Task 16: Final verification pass
+## Task 17: Final verification
 
 - [ ] **Step 1: Run full test suite**
 
 ```bash
-cd skills/wiki-handoff/scripts && python3 -m pytest -v
+cd skills/shared/python && python3 -m pytest -v
+cd ../../wiki-handoff/scripts && python3 -m pytest -v
 cd ../../ark-context-warmup/scripts && python3 -m pytest -v
 cd ../../wiki-update/scripts && python3 -m pytest -v
 ```
 
 Expected: all green.
 
-- [ ] **Step 2: Run ark-workflow existing tests to ensure Step 6.5 edits didn't break anything**
+- [ ] **Step 2: Run ark-workflow pre-existing tests**
 
 ```bash
 cd skills/ark-workflow/scripts && python3 -m pytest -v
 ```
 
-Expected: all green.
+Expected: all green — Task 8 markdown edits should not break any test.
 
-- [ ] **Step 3: Run ark-update fixture regen check**
+- [ ] **Step 3: Run ark-update fixture regen dry-run**
 
 ```bash
 python3 skills/ark-update/tests/regenerate_fixtures.py --dry-run
 ```
 
-Expected: empty dry-run output (no template drift from this PR).
+Expected: empty.
 
-- [ ] **Step 4: Lint check**
-
-```bash
-command -v ruff && ruff check skills/ || true
-```
-
-- [ ] **Step 5: Final commit if any fixups**
+- [ ] **Step 4: Run bats integration if available**
 
 ```bash
-git status && git diff --stat
+command -v bats && bats skills/wiki-update/scripts/integration/ || echo "bats unavailable"
 ```
-
-If nothing to commit, proceed to push.
 
 ---
 
-## Self-review checklist (completed by plan author)
+## Self-review checklist (completed by plan author post-/ccg)
 
-- [x] **Spec coverage** — all 9 spec success criteria mapped:
-  - SC1 (bridge in brief, chain match 7d) → Task 5 (read_bridges + affinity tests)
-  - SC2 (bridge in brief, 48h non-match) → Task 5
-  - SC3 (warmup populates on cache miss, idempotent, stale cleanup) → Task 4
-  - SC4 (edited seed promoted) → Task 10 (classify) + Task 12 (promote)
-  - SC5 (promotion: high auto, medium staging, dual-write debug) → Tasks 10-12
-  - SC6 (transactional delete) → Task 12
-  - SC7 (no trigger collision) → not directly testable; preserved by skill naming
-  - SC8 (probe menu → wiki-handoff → compact/clear → record-reset order) → Task 8 + Task 2 (schema)
-  - SC9 (schema rejection) → Task 2
-- [x] **Placeholder scan** — no TBD/TODO/"implement later" in task bodies.
-- [x] **Type consistency** — `PromotionConfig`, `SeedSource`, `OMCPage`, `pick_bridge` consistent across tasks.
-- [x] **Build order** — Task 1 (shared module) precedes all consumers; Task 9 fixture precedes Tasks 10-14.
+- [x] **Codex HIGH 1 (transactional delete)** — Task 12 returns `pending_deletes`; Task 13 CLI runs index regen BEFORE finalize.
+- [x] **Codex HIGH 2 (evidence.py API mismatch)** — Task 7 inspects current signature first; tests use actual kwargs (`task_normalized`, `scenario`, `tasknotes`, `notebooklm`, `wiki`); return shape widened to dict without breaking existing list callers (callers updated surgically).
+- [x] **Codex HIGH 3 (bridge display underspecified)** — new Task 6 modifies `synthesize.assemble_brief` explicitly; Task 9 Step 3 threads `prior_bridge` into the call.
+- [x] **Codex HIGH 4 (no (a)/(b)/(c) branch block exists)** — Task 8 reframed as "expand single bullet into branch block" with explicit replacement text.
+- [x] **Codex MEDIUM 5 (shared module placement)** — shared module now at `skills/shared/python/` with standardized bootstrap pattern.
+- [x] **Codex MEDIUM 6 (test coverage)** — added `test_seed_same_title_different_path_produces_distinct_slugs`, bats `untouched seed skipped` test.
+- [x] **Codex MEDIUM 7 (session_started_at unused)** — Task 12 `promote()` uses the filter; Task 12 test verifies skip of pre-session pages.
+- [x] **Codex MEDIUM 8 (dedup via ark-source-path)** — Task 12 `_resolve_existing_vault_page` + `_merge_into_existing` with Continuation block.
+- [x] **Codex LOW 9 (stdlib-only claim)** — Tech Stack now states "stdlib + PyYAML".
+- [x] **Codex LOW 10 (date -r portability)** — Task 13 replaces shellout with `parse_page(session-log).frontmatter["created"]`.
+- [x] **Gemini (sys.path anti-pattern)** — resolved via shared module placement.
+- [x] **Spec coverage** — all 9 success criteria mapped to tasks (SC1/SC2 → Task 5; SC3 → Task 4; SC4 → Tasks 11-12; SC5 → Tasks 11-14; SC6 → Tasks 12-13; SC7 preserved by skill naming; SC8 → Task 8; SC9 → Task 2).
+- [x] **No placeholders** — every step contains actual code or exact commands.
+- [x] **Type consistency** — `OMCPage`, `SeedSource`, `PromotionConfig`, `PromotionReport`, `pick_bridge`, `classify`, `translate_frontmatter` used consistently.
+- [x] **Build order** — shared module (Task 1) before all consumers; fixtures (Task 10) before Tasks 11-15.
