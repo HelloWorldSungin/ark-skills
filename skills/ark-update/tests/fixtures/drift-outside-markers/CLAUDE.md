@@ -47,7 +47,7 @@ After `<<HANDBACK>>`, Ark resumes from the variant's Path A closeout step.
 See `skills/ark-workflow/references/omc-integration.md` § Section 4 for the full
 variant-inherited handback contract and expected-closeout table.
 <!-- ark:end id=omc-routing -->
-<!-- ark:begin id=routing-rules version=1.12.0 -->
+<!-- ark:begin id=routing-rules version=1.17.0 -->
 # Routing Rules Template
 
 Copy the block below into a project's CLAUDE.md to auto-trigger /ark-workflow and enable cross-session chain resume in that project.
@@ -92,6 +92,20 @@ For trivial tasks (single obvious change, no ambiguity), skip triage and work di
 4. Announce: `Next: [next skill] — [purpose]`
 5. Mark the next task as `in_progress`
 6. If the chain is complete, move the file to `.ark-workflow/archive/YYYY-MM-DD-[scenario].md`
+
+### Session habits
+
+Three habits keep context healthy across long chains:
+
+- **Rewind beats correction.** When a step produces a wrong result, prefer
+  `/rewind` (double-Esc) over replying "that didn't work, try X." Rewind drops
+  the failed attempt from context; correction stacks it.
+- **New task, new session.** When the current chain completes and the next
+  task is unrelated, `/clear` and start fresh.
+- **`/compact` with a forward brief.** When compacting mid-chain, steer the
+  summary: `/compact focus on the auth refactor; drop the test debugging`.
+  `/ark-workflow`'s step-boundary probe pre-fills this template from chain
+  state when context crosses the nudge or strong threshold.
 `````
 
 ---

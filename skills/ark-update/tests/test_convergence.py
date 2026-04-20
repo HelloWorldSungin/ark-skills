@@ -155,13 +155,22 @@ def test_convergence_pre_v1_12_skips_existing_script(tmp_path: Path) -> None:
     assert "1 skipped" in result.stdout, f"Expected 1 skipped:\n{result.stdout}"
 
 
-def test_convergence_pre_v1_13_skips_two_existing(tmp_path: Path) -> None:
-    """pre-v1.13: routing-rules block + setup-vault-symlink.sh already present → 2 skipped."""
+def test_convergence_pre_v1_13_converges_existing(tmp_path: Path) -> None:
+    """pre-v1.13: omc-routing missing, routing-rules stale (v1.12.0),
+    setup-vault-symlink.sh already present.
+
+    Expected breakdown against current target-profile:
+    - omc-routing            → applied (inserted)
+    - .ark-workflow/ ignore  → applied (appended)
+    - routing-rules          → drift-overwritten (marker version 1.12.0 < target 1.17.0)
+    - setup-vault-symlink.sh → skipped (already present)
+    """
     _copy_fixture_pre("pre-v1.13", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
     assert "2 applied" in result.stdout, f"Expected 2 applied:\n{result.stdout}"
-    assert "2 skipped" in result.stdout, f"Expected 2 skipped:\n{result.stdout}"
+    assert "1 drift-overwritten" in result.stdout, f"Expected 1 drift-overwritten:\n{result.stdout}"
+    assert "1 skipped" in result.stdout, f"Expected 1 skipped:\n{result.stdout}"
 
 
 def test_convergence_fresh_creates_all(tmp_path: Path) -> None:
