@@ -73,6 +73,7 @@ def build_plan(
     target_profile: dict,
     pending_migrations: list[dict],
     project_root: Path,
+    skills_root: Path,
 ) -> PlanReport:
     """Build a deterministic dry-run plan from target profile + pending migrations.
 
@@ -103,6 +104,15 @@ def build_plan(
         Absolute path to the project root.  Passed through to each op's
         ``dry_run`` call.
 
+    skills_root:
+        Absolute path to the ark-skills plugin installation root.  Injected
+        into each Phase-2 op's args dict as ``args["skills_root"]`` so ops
+        that read templates (``ensure_claude_md_section``,
+        ``ensure_routing_rules_block``, ``create_file_from_template``) can
+        resolve ``<skills_root>/skills/ark-update/templates/<name>``.  This
+        mirrors the injection performed by ``_run_phase_2`` in migrate.py so
+        dry-run and apply paths see identical args.
+
     Returns
     -------
     PlanReport
@@ -117,7 +127,7 @@ def build_plan(
     phase_2_reports: list[dict] = []
     # Collect all op entries from all sections of target_profile.
     for entry in _iter_target_profile_entries(target_profile):
-        report = _dry_run_target_profile_entry(entry, project_root)
+        report = _dry_run_target_profile_entry(entry, project_root, skills_root)
         phase_2_reports.append(_to_serializable(report))
 
     all_reports = phase_1_reports + phase_2_reports
@@ -244,15 +254,22 @@ def _dry_run_migration_op(migration_op: dict, project_root: Path) -> dict:
     }
 
 
-def _dry_run_target_profile_entry(entry: dict, project_root: Path) -> dict:
+def _dry_run_target_profile_entry(
+    entry: dict, project_root: Path, skills_root: Path
+) -> dict:
     """Call dry_run on a target-profile entry dict.
 
     Looks up the op class in ``OP_REGISTRY`` by ``entry["op"]``.  If not found
     (Step 2 — registry empty), returns a stub with ``would_fail_precondition=True``.
+
+    ``skills_root`` is injected into the op's args dict to match the apply-path
+    behavior in ``migrate.py:_run_phase_2``; template-reading ops need it to
+    resolve ``<skills_root>/skills/ark-update/templates/<name>``.
     """
     op_type = entry.get("op", "unknown")
     op_id = entry.get("id", entry.get("target", op_type))
     args = dict(entry)  # pass full entry as args; op extracts what it needs
+    args["skills_root"] = str(skills_root)
 
     cls = OP_REGISTRY.get(op_type)
     if cls is None:
