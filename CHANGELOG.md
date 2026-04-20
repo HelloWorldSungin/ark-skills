@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.18.1] - 2026-04-20
+
+Bugfix release for the `/ark-update` framework. Two independent issues surfaced when running `/ark-update` against the plugin's own repo for the first time since the routing-rules v1.17.0 template bump.
+
+### Fixed
+
+- **`/ark-update --dry-run` reports a correct plan.** `scripts/plan.py:_dry_run_target_profile_entry` did not inject `args["skills_root"]` into the op args dict, while the apply path (`scripts/migrate.py:_run_phase_2`) did. The mismatch caused every op that reads a template (`ensure_claude_md_section`, `ensure_routing_rules_block`, `create_file_from_template`) to report `would_fail_precondition=True` with `error="'skills_root'"` (KeyError), even when the real apply would have succeeded. The apply path was unaffected — only the dry-run report was misleading. Thread `skills_root` through `build_plan` → `_dry_run_target_profile_entry` to mirror the apply path.
+
+### Test infrastructure
+
+- **Regenerated fixtures** under `skills/ark-update/tests/fixtures/` that fell out of sync with commit `547cc34` (routing-rules bumped to v1.17.0 + added "Session habits" subsection). 11 convergence/summary/backup-provenance tests that expected idempotent "clean" runs were seeing legitimate drift and failing. The engine was behaving correctly — fixtures were stale. Regenerated in two semantic groups: (A) `expected-post` only for fixtures representing older/drifted/fresh state (`pre-v1.11`, `pre-v1.12`, `pre-v1.13`, `fresh`, `drift-inside-markers`); (B) both pre and post for fixtures representing "at current target" state (`healthy-current`, `drift-outside-markers`) — outside-markers content manually verified preserved byte-exact on the latter.
+- **`test_convergence_pre_v1_13_skips_two_existing`** renamed to `_converges_existing` and assertions updated. With `target-profile.yaml` routing-rules at v1.17.0 and the `pre-v1.13` fixture's region at v1.12.0, the region legitimately drift-overwrites on convergence — only `setup-vault-symlink.sh` remains `skipped`. Expected breakdown: `2 applied, 1 drift-overwritten, 1 skipped`.
+- **New fixture-regeneration helper** `skills/ark-update/tests/regenerate_fixtures.py`. Supports `--dry-run` (preview) and `--apply`. For future template or target-profile bumps, re-running this helper regenerates `expected-post/` across all fixtures (Group A) and additionally rewrites the pre-state for "at-target" fixtures (Group B). Eliminates the manual regeneration burden that caused this release's test drift.
+
+### Known follow-up
+
+- The underlying cause of fixture staleness — template/target-profile bumps without fixture regeneration in the same commit — is a process gap, not a tooling gap. Consider adding a CI check that fails if running `regenerate_fixtures.py --dry-run` would produce non-empty output.
+
 ## [1.18.0] - 2026-04-18
 
 New **Brainstorm** scenario + **gstack planning integration** in `/ark-workflow`. Both were designed with a `/ccg` second-opinion pass — Codex flagged three HIGH concerns (wrong-truth-source detection, zombie chain files after Brainstorm STOP, Path B parity), Gemini flagged "Review Hell" (stacked `/ccg` + `/autoplan`) and bureaucratic re-invocation after Brainstorm. The synthesized rework shipped before Phase 2 chain edits.
