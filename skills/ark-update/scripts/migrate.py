@@ -673,7 +673,7 @@ def _run(
 
     # 7. Dry-run path: build plan, print JSON, exit 0.
     if dry_run:
-        plan = build_plan(target_profile, pending_migrations, project_root)
+        plan = build_plan(target_profile, pending_migrations, project_root, skills_root)
         print(render_plan_report(plan))
         print()
         print(json.dumps(plan, sort_keys=True, indent=2))

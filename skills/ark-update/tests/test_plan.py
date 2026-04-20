@@ -57,7 +57,7 @@ def _make_profile_with_entries() -> dict:
 # ---------------------------------------------------------------------------
 
 def test_empty_profile_no_pending(tmp_path):
-    plan = build_plan(_make_empty_profile(), [], tmp_path)
+    plan = build_plan(_make_empty_profile(), [], tmp_path, tmp_path)
 
     assert plan["phase_1_ops"] == []
     assert plan["phase_2_ops"] == []
@@ -68,7 +68,7 @@ def test_empty_profile_no_pending(tmp_path):
 
 
 def test_empty_profile_json_serializable(tmp_path):
-    plan = build_plan(_make_empty_profile(), [], tmp_path)
+    plan = build_plan(_make_empty_profile(), [], tmp_path, tmp_path)
     # Must not raise
     serialized = json.dumps(plan, sort_keys=True)
     assert isinstance(serialized, str)
@@ -81,7 +81,7 @@ def test_empty_profile_json_serializable(tmp_path):
 def test_profile_with_entries_unregistered_ops(tmp_path):
     """In Step 2, OP_REGISTRY is empty; every entry yields would_fail_precondition=True."""
     profile = _make_profile_with_entries()
-    plan = build_plan(profile, [], tmp_path)
+    plan = build_plan(profile, [], tmp_path, tmp_path)
 
     # 3 entries in the profile
     assert len(plan["phase_2_ops"]) == 3
@@ -138,7 +138,7 @@ def test_profile_with_entries_mocked_ops(tmp_path):
                  "version": "1.13.0"},
             ],
         }
-        plan = build_plan(profile, [], tmp_path)
+        plan = build_plan(profile, [], tmp_path, tmp_path)
 
         assert len(plan["phase_2_ops"]) == 1
         assert plan["would_apply_count"] == 1
@@ -196,7 +196,7 @@ def test_aggregation_mixed_statuses(tmp_path):
                 {"op": "op_drift", "id": "z"},
             ]
         }
-        plan = build_plan(profile, [], tmp_path)
+        plan = build_plan(profile, [], tmp_path, tmp_path)
         assert plan["would_apply_count"] == 1
         assert plan["would_skip_count"] == 1
         assert plan["would_overwrite_count"] == 1
@@ -212,15 +212,15 @@ def test_aggregation_mixed_statuses(tmp_path):
 
 def test_determinism_empty(tmp_path):
     profile = _make_empty_profile()
-    plan_a = build_plan(profile, [], tmp_path)
-    plan_b = build_plan(profile, [], tmp_path)
+    plan_a = build_plan(profile, [], tmp_path, tmp_path)
+    plan_b = build_plan(profile, [], tmp_path, tmp_path)
     assert json.dumps(plan_a, sort_keys=True) == json.dumps(plan_b, sort_keys=True)
 
 
 def test_determinism_with_entries(tmp_path):
     profile = _make_profile_with_entries()
-    plan_a = build_plan(profile, [], tmp_path)
-    plan_b = build_plan(profile, [], tmp_path)
+    plan_a = build_plan(profile, [], tmp_path, tmp_path)
+    plan_b = build_plan(profile, [], tmp_path, tmp_path)
     serialized_a = json.dumps(plan_a, sort_keys=True)
     serialized_b = json.dumps(plan_b, sort_keys=True)
     assert serialized_a == serialized_b
@@ -231,7 +231,7 @@ def test_determinism_with_entries(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_render_plan_report_empty(tmp_path):
-    plan = build_plan(_make_empty_profile(), [], tmp_path)
+    plan = build_plan(_make_empty_profile(), [], tmp_path, tmp_path)
     output = render_plan_report(plan)
     assert isinstance(output, str)
     assert "ark-update dry-run plan" in output
@@ -243,7 +243,7 @@ def test_render_plan_report_empty(tmp_path):
 
 def test_render_plan_report_with_entries(tmp_path):
     profile = _make_profile_with_entries()
-    plan = build_plan(profile, [], tmp_path)
+    plan = build_plan(profile, [], tmp_path, tmp_path)
     output = render_plan_report(plan)
     assert "Phase 2 (target-profile convergence): 3 ops" in output
     assert "Summary:" in output
@@ -251,7 +251,7 @@ def test_render_plan_report_with_entries(tmp_path):
 
 def test_render_plan_report_contains_counts(tmp_path):
     profile = _make_profile_with_entries()
-    plan = build_plan(profile, [], tmp_path)
+    plan = build_plan(profile, [], tmp_path, tmp_path)
     output = render_plan_report(plan)
     # Summary line should contain the word "fail"
     assert "fail=" in output
@@ -316,7 +316,7 @@ def test_pending_migrations_in_phase_1(tmp_path):
             "args": {"old_field": "category", "new_field": "type"},
         }
     ]
-    plan = build_plan(_make_empty_profile(), pending, tmp_path)
+    plan = build_plan(_make_empty_profile(), pending, tmp_path, tmp_path)
     assert len(plan["phase_1_ops"]) == 1
     assert plan["phase_1_ops"][0]["op_id"] == "rename-category"
     # Unregistered destructive op → would_fail_precondition
@@ -333,7 +333,7 @@ def test_pending_migration_with_depends_on_op_in_plan(tmp_path):
             "args": {},
         }
     ]
-    plan = build_plan(_make_empty_profile(), pending, tmp_path)
+    plan = build_plan(_make_empty_profile(), pending, tmp_path, tmp_path)
     assert len(plan["phase_1_ops"]) == 1
     report = plan["phase_1_ops"][0]
     assert report.get("depends_on_op") == "step-a"
