@@ -67,6 +67,25 @@ TASK_HASH=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/warmup-h
 
 Log: `"Legacy chain file — cache will be cold. Run updated /ark-workflow to regenerate."`
 
+### Step 1b: Check for session bridges
+
+After task intake, pick the relevant bridge (if any) and surface it in the final Context Brief.
+
+```bash
+PRIOR_BRIDGE_CONTENT=""
+if [ -d ".omc/wiki" ]; then
+    BRIDGE_PATH=$(python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/read_bridges.py" \
+        --wiki-dir ".omc/wiki" --chain-id "$CHAIN_ID" 2>/dev/null || true)
+    if [ -n "$BRIDGE_PATH" ] && [ -f "$BRIDGE_PATH" ]; then
+        PRIOR_BRIDGE_CONTENT=$(cat "$BRIDGE_PATH")
+    fi
+fi
+```
+
+Later, Step 5 calls `synthesize.assemble_brief(..., prior_bridge=$PRIOR_BRIDGE_CONTENT)` — the brief renders a "Prior Session Handoff" section when non-empty.
+
+Rules: chain_id match = ≤ 7 days; mismatch = single most-recent ≤ 48h. No qualifying bridge → empty string → section omitted.
+
 ### Step 2: Availability probe
 
 Run `availability.py probe(...)` per D5 rules (see pinned decisions). Record which backends are available. If all three are unavailable, emit `"No context backends available — proceeding without warm-up. Run /ark-health to diagnose."` and EXIT 0.
@@ -109,9 +128,24 @@ Each lane has a 90s outer timeout at the subagent level (in addition to the 90s 
 ### Step 5: Evidence + Synthesis
 
 - Pass all lane outputs to `evidence.derive_candidates(...)`
-- Pass the three lane outputs + evidence + `has_omc` (from the `availability.probe(...)` result dict) to `synthesize.assemble_brief(..., has_omc=availability["has_omc"])`. This renders the `OMC detected: yes/no` line at the top of the Context Brief (spec AC8).
+- Pass the three lane outputs + evidence + `has_omc` (from the `availability.probe(...)` result dict) + `prior_bridge` (from Step 1b — may be empty string) to `synthesize.assemble_brief(..., has_omc=availability["has_omc"], prior_bridge=$PRIOR_BRIDGE_CONTENT)`. This renders the `OMC detected: yes/no` line AND the `Prior Session Handoff` section when a qualifying bridge exists.
 - `synthesize.write_brief_atomic(...)` to cache
 - Emit the brief to the session
+
+### Step 5b: Seed OMC wiki (cache miss + prompt path only)
+
+If this was a cache miss AND a prompt (task_text) was supplied AND `.omc/wiki/` exists:
+
+```bash
+if [ -d ".omc/wiki" ] && [ "$CACHE_HIT" != "true" ] && [ -n "$TASK_TEXT" ]; then
+    python3 "$ARK_SKILLS_ROOT/skills/ark-context-warmup/scripts/seed_omc.py" \
+        --wiki-dir ".omc/wiki" --chain-id "$CHAIN_ID" < "$SOURCES_JSON"
+fi
+```
+
+`$SOURCES_JSON` is a temp file containing the JSON array emitted by `evidence.derive_candidates(..., has_omc=True)["seed_sources"]`. Step 5 writes this file after synthesis.
+
+Degradation: no `.omc/wiki/` → skip silent. No prompt → skip (Option E′). Cache hit → skip (seeds already present). Per-source write errors are logged and do not abort the fanout.
 
 ### Step 6: Hand off
 
