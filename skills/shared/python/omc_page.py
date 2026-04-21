@@ -52,7 +52,10 @@ def parse_page(path: Path) -> OMCPage:
 def write_page(path: Path, page: OMCPage, *, exclusive: bool = False) -> None:
     """Write page atomically. If exclusive=True, fail when file exists."""
     fm_text = yaml.safe_dump(page.frontmatter, sort_keys=False).rstrip()
-    text = f"---\n{fm_text}\n---\n\n{page.body}"
+    # parse_page preserves the leading newline after the closing "---"; avoid
+    # duplicating it on round-trip so body_hash stays stable across write+reparse.
+    separator = "\n" if page.body.startswith("\n") else "\n\n"
+    text = f"---\n{fm_text}\n---{separator}{page.body}"
     path.parent.mkdir(parents=True, exist_ok=True)
     if exclusive:
         flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
