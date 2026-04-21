@@ -2,11 +2,17 @@
 
 Invoked from /ark-workflow Step 6.5 action branch before /compact or /clear.
 Uses shared omc_page module. PyYAML required (plugin-standard dep).
+
+Exit codes:
+  0 — bridge written OR .omc/wiki dir absent (silent no-op per SKILL contract)
+  2 — schema rejection; caller must NOT proceed to /compact|/clear
+  3 — too many filename collisions; caller must NOT proceed either
 """
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -17,20 +23,68 @@ sys.path.insert(0, str(_SHARED))
 from omc_page import OMCPage, write_page  # noqa: E402
 
 
+# Full-string generic placeholders. Matched case-insensitively after stripping
+# leading/trailing whitespace and trailing punctuation.
 GENERIC_PATTERNS = {
-    "continue task", "tbd", "todo", "keep going", "none", "n/a", "na",
+    "continue task", "continue", "continuing", "continuing task",
+    "tbd", "todo", "to-do", "to do",
+    "keep going", "keep at it", "proceed",
+    "none", "n/a", "na", "nothing",
+    "work in progress", "wip",
+    "more work", "more to do",
 }
+
+# Token-prefix family. Any input whose first token (after normalization) starts
+# with one of these is treated as filler regardless of the rest.
+FILLER_TOKEN_PREFIXES = (
+    "tbd", "todo", "wip", "fixme", "xxx",
+)
+
 MIN_LENGTH = 20
+
+# Minimum number of distinct word tokens (alnum only, >=2 chars). Filters strings
+# that pass MIN_LENGTH via repetition (e.g., "todo todo todo todo todo").
+MIN_DISTINCT_TOKENS = 3
+
+# Scenario must be a DNS-like slug: starts alnum, then alnum / hyphen, <=32 chars.
+SCENARIO_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,31}$")
+
+
+def _normalize(s: str) -> str:
+    """Lower-case; strip whitespace and common trailing punctuation."""
+    return s.strip().lower().rstrip(".!?,:;'\"`-")
 
 
 def _validate(field_name: str, value: str) -> str | None:
     s = (value or "").strip()
     if not s:
         return f"{field_name} must be non-empty"
-    if s.lower() in GENERIC_PATTERNS:
+    norm = _normalize(s)
+    if norm in GENERIC_PATTERNS:
         return f"{field_name} is generic placeholder ({s!r}) — provide specific detail"
+    first_tok = norm.split()[0] if norm.split() else ""
+    if any(first_tok.startswith(p) for p in FILLER_TOKEN_PREFIXES):
+        return f"{field_name} starts with a filler token ({first_tok!r}) — provide specific detail"
     if len(s) < MIN_LENGTH:
         return f"{field_name} is too short (<{MIN_LENGTH} chars) — provide specific detail"
+    distinct = {t for t in re.findall(r"[A-Za-z0-9]{2,}", s.lower())}
+    if len(distinct) < MIN_DISTINCT_TOKENS:
+        return (
+            f"{field_name} has too few distinct words "
+            f"({len(distinct)}<{MIN_DISTINCT_TOKENS}) — provide specific detail"
+        )
+    return None
+
+
+def _validate_scenario(value: str) -> str | None:
+    s = (value or "").strip()
+    if not s:
+        return "scenario must be non-empty"
+    if not SCENARIO_RE.match(s):
+        return (
+            f"scenario {s!r} is not a DNS-like slug "
+            f"(lowercase alnum + hyphen, <=32 chars, must start alnum)"
+        )
     return None
 
 
@@ -61,10 +115,29 @@ def main() -> int:
     p.add_argument("--git-diff-stat", default="")
     args = p.parse_args()
 
-    for name, val in (("open_threads", args.open_threads), ("next_steps", args.next_steps)):
+    # Structural field validation. Scenario uses a charset slug check;
+    # the free-text fields use _validate (emptiness + generic-filler + distinct-token rules).
+    scenario_err = _validate_scenario(args.scenario)
+    if scenario_err:
+        print(f"wiki-handoff: {scenario_err}.", file=sys.stderr)
+        return 2
+
+    validated_fields: list[tuple[str, str]] = [
+        ("task_text", args.task_text),
+        ("open_threads", args.open_threads),
+        ("next_steps", args.next_steps),
+    ]
+    # done_summary is optional (default=""); only validate when non-empty.
+    if args.done_summary.strip():
+        validated_fields.append(("done_summary", args.done_summary))
+
+    for name, val in validated_fields:
         err = _validate(name, val)
         if err:
-            print(f"wiki-handoff: {err}. Re-invoke with specific file paths / decision points.", file=sys.stderr)
+            print(
+                f"wiki-handoff: {err}. Re-invoke with specific file paths / decision points.",
+                file=sys.stderr,
+            )
             return 2
 
     wiki_dir = Path.cwd() / ".omc" / "wiki"

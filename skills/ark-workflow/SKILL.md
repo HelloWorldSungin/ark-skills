@@ -436,13 +436,16 @@ If `$ENTRY` is non-empty, display it verbatim and pause for user decision before
            --git-diff-stat "$(git diff --stat HEAD~10..HEAD 2>/dev/null || echo '')"
        ```
 
-       Verify exit code 0 before proceeding. On exit code 2 (schema rejection), re-invoke with specific file paths, decision points, and target files — do NOT proceed to `/compact`/`/clear` with an unwritten bridge.
+       Verify exit code 0 before proceeding. Any non-zero exit BLOCKS the destructive action:
+       - **Exit 2 (schema rejection):** re-invoke with specific file paths, decision points, and target files.
+       - **Exit 3 (filename collision limit — >10 bridges in the same second):** wait for the next second and retry, or pass `WIKI_HANDOFF_FIXED_STAMP` with a unique value.
+       - **Any other non-zero:** investigate (likely I/O or permissions); do NOT proceed to `/compact`/`/clear`.
 
-       Then run the user's chosen action (`/compact` or `/clear`), then invoke the probe's `--format record-reset`.
+       Do NOT proceed to `/compact`/`/clear` with an unwritten bridge. Only after exit 0: run the user's chosen action (`/compact` or `/clear`), then invoke the probe's `--format record-reset`.
 
      - If `(c)`: no bridge write (subagent dispatch preserves parent context). No state write; subagent wraps Next step.
 
-**§ Wiki-handoff invariant:** Options `(a)` and `(b)` invoke `/wiki-handoff` BEFORE the destructive action and BEFORE `record-reset`. Schema rejection (exit 2) blocks the action — the LLM must re-invoke with specifics. Option `(c)` does NOT invoke `/wiki-handoff`.
+**§ Wiki-handoff invariant:** Options `(a)` and `(b)` invoke `/wiki-handoff` BEFORE the destructive action and BEFORE `record-reset`. Any non-zero exit code (2 schema, 3 collision, or other I/O) blocks the action — the LLM must resolve the failure and re-invoke. Option `(c)` does NOT invoke `/wiki-handoff`.
      If `$MENU` is empty, proceed silently.
   4. Mark the next TodoWrite task `in_progress`
   5. Announce `Next: [skill] — [purpose]`

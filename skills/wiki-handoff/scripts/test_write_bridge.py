@@ -103,3 +103,71 @@ def test_bridge_frontmatter_has_chain_id_and_tags(tmp_path):
     assert "session-bridge" in text
     assert "source-handoff" in text
     assert "scenario-greenfield" in text
+
+
+# --- Regression tests for review findings H5 / H6 ---
+
+@pytest.mark.parametrize("bad", [
+    "TO-DO",         # casing + hyphen variant
+    "todo.",         # trailing punctuation
+    "TODO!",         # trailing punctuation with bang
+    "continuing",    # single filler token
+    "tbd again",     # starts with filler token
+    "wip wip wip",   # starts with filler prefix
+    "todo todo todo todo",  # repetition fills MIN_LENGTH but low distinct-token count
+])
+def test_H6_harden_generic_bypasses_open_threads(tmp_path, bad):
+    """H6: punctuation, casing, filler-prefix, and low-distinct-token bypasses
+    must be rejected on open_threads."""
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--open-threads": bad}), cwd=tmp_path)
+    assert r.returncode == 2, f"expected exit 2 for bypass {bad!r}; got {r.returncode}, stderr={r.stderr}"
+    assert list((tmp_path / ".omc" / "wiki").glob("session-bridge-*.md")) == []
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "tbd", "continue", "wip"])
+def test_H5_task_text_is_validated(tmp_path, bad):
+    """H5: task_text must be validated too — not only open_threads + next_steps."""
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--task-text": bad}), cwd=tmp_path)
+    assert r.returncode == 2, r.stderr
+    assert list((tmp_path / ".omc" / "wiki").glob("session-bridge-*.md")) == []
+
+
+@pytest.mark.parametrize("bad", ["tbd", "keep going", "todo todo todo"])
+def test_H5_done_summary_validated_when_non_empty(tmp_path, bad):
+    """H5: done_summary is optional (empty OK), but when provided must be substantive."""
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--done-summary": bad}), cwd=tmp_path)
+    assert r.returncode == 2, r.stderr
+
+
+def test_H5_done_summary_empty_is_allowed(tmp_path):
+    """H5: empty done_summary is the documented default — must still accept."""
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--done-summary": ""}), cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+
+
+@pytest.mark.parametrize("bad", [
+    "has spaces",          # space
+    "slash/path",          # slash
+    "colon:inside",        # colon
+    "UPPER",               # uppercase letters
+    "-leading-hyphen",     # must start alnum
+    "x" * 33,              # too long (>32)
+    "",                    # empty
+])
+def test_H5_scenario_sanitization(tmp_path, bad):
+    """H5: scenario must be a DNS-like slug; reject unsafe values."""
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--scenario": bad}), cwd=tmp_path)
+    assert r.returncode == 2, f"scenario {bad!r} should be rejected; got {r.returncode}"
+    assert list((tmp_path / ".omc" / "wiki").glob("session-bridge-*.md")) == []
+
+
+@pytest.mark.parametrize("ok", ["greenfield", "bugfix", "ship", "a", "a1-b2", "x" * 32])
+def test_H5_scenario_accepts_valid_slugs(tmp_path, ok):
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--scenario": ok}), cwd=tmp_path)
+    assert r.returncode == 0, r.stderr

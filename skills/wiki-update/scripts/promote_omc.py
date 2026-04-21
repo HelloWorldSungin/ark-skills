@@ -1,8 +1,11 @@
 """Component 3: /wiki-update Step 3.5 — promote OMC pages to Ark vault."""
 from __future__ import annotations
 
+import hashlib
+import os
 import re
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,6 +64,7 @@ class PromotionReport:
     troubleshooting_created: int = 0
     merged_existing: int = 0
     pending_deletes: List[Path] = field(default_factory=list)
+    written_paths: List[Path] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
 
 
@@ -128,21 +132,52 @@ def translate_frontmatter(omc_fm: dict, *, session_slug: str) -> dict:
     return out
 
 
-def _append_to_session_log(log_path: Path, title: str, body: str) -> None:
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Atomic text write via tmp + os.replace. Cleans up tmp on failure."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp-", suffix=".md")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except Exception:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def _idempotency_marker(content: str) -> str:
+    """12-char content hash embedded as an HTML comment; used to block duplicate appends."""
+    return f"<!-- src:{hashlib.sha256(content.encode('utf-8')).hexdigest()[:12]} -->"
+
+
+def _append_to_session_log(log_path: Path, title: str, body: str) -> bool:
+    """Atomic + idempotent. Returns True iff a write occurred."""
     text = log_path.read_text()
-    marker = "## Issues & Discoveries"
-    insertion = f"\n### {title}\n\n{body}\n"
+    marker = _idempotency_marker(f"{title}\n{body}")
     if marker in text:
-        updated = text.replace(marker, marker + insertion, 1)
+        return False
+    section = "## Issues & Discoveries"
+    insertion = f"\n### {title}\n{marker}\n\n{body}\n"
+    if section in text:
+        updated = text.replace(section, section + insertion, 1)
     else:
-        updated = text + f"\n\n## Issues & Discoveries\n{insertion}"
-    log_path.write_text(updated)
+        updated = text + f"\n\n{section}\n{insertion}"
+    _atomic_write_text(log_path, updated)
+    return True
 
 
-def _merge_into_existing(target: Path, new_body: str) -> None:
+def _merge_into_existing(target: Path, new_body: str) -> bool:
+    """Atomic + idempotent continuation append. Returns True iff a write occurred."""
     text = target.read_text()
-    continuation = f"\n\n## Continuation — {time.strftime('%Y-%m-%d')}\n\n{new_body}\n"
-    target.write_text(text + continuation)
+    marker = _idempotency_marker(new_body)
+    if marker in text:
+        return False
+    continuation = (
+        f"\n\n## Continuation — {time.strftime('%Y-%m-%d')}\n"
+        f"{marker}\n\n{new_body}\n"
+    )
+    _atomic_write_text(target, text + continuation)
+    return True
 
 
 def _create_review_tasknote(bugs_dir: Path, task_prefix: str, title: str,
@@ -162,21 +197,24 @@ def _create_review_tasknote(bugs_dir: Path, task_prefix: str, title: str,
 
 
 def _resolve_existing_vault_page(project_docs: Path, ark_source_path: Optional[str]) -> Optional[Path]:
+    """Resolve ark-source-path inside project_docs with path-traversal containment."""
     if not ark_source_path:
         return None
-    candidate = project_docs / ark_source_path
+    try:
+        root = project_docs.resolve()
+        candidate = (project_docs / ark_source_path).resolve()
+        candidate.relative_to(root)
+    except (OSError, ValueError):
+        return None
     if candidate.exists():
         return candidate
     return None
 
 
 def _find_session_log(project_docs: Path, slug: str) -> Optional[Path]:
+    """Exact-slug match only. Callers must handle None (no silent cross-session fallback)."""
     exact = project_docs / "Session-Logs" / f"{slug}.md"
-    if exact.exists():
-        return exact
-    logs = sorted((project_docs / "Session-Logs").glob("*.md"),
-                  key=lambda p: p.stat().st_mtime, reverse=True)
-    return logs[0] if logs else None
+    return exact if exact.exists() else None
 
 
 def promote(config: PromotionConfig) -> PromotionReport:
@@ -210,10 +248,16 @@ def promote(config: PromotionConfig) -> PromotionReport:
                 continue
 
             if disposition == "dual-write-debug":
+                any_effect = False
                 if log_path:
-                    _append_to_session_log(log_path,
-                                           page.frontmatter.get("title", omc_path.stem),
-                                           page.body)
+                    wrote = _append_to_session_log(
+                        log_path,
+                        page.frontmatter.get("title", omc_path.stem),
+                        page.body,
+                    )
+                    if wrote:
+                        report.written_paths.append(log_path)
+                    any_effect = True
                 tags = set(page.frontmatter.get("tags") or [])
                 if tags & {"pattern", "insight"}:
                     ts_dir = config.project_docs_path / "Troubleshooting"
@@ -225,13 +269,28 @@ def promote(config: PromotionConfig) -> PromotionReport:
                     ts_path = ts_dir / ("troubleshooting-" + omc_path.stem + ".md")
                     write_page(ts_path, OMCPage(frontmatter=new_fm, body=page.body))
                     report.troubleshooting_created += 1
-                report.pending_deletes.append(omc_path)
+                    report.written_paths.append(ts_path)
+                    any_effect = True
+                if any_effect:
+                    report.pending_deletes.append(omc_path)
+                else:
+                    report.errors.append(
+                        f"{omc_path.name}: dual-write-debug — no session log for slug "
+                        f"{config.session_slug!r} and not pattern/insight tagged; OMC source preserved"
+                    )
                 continue
 
             if disposition == "bridge-merge":
                 if log_path:
-                    _append_to_session_log(log_path, "Session Bridge", page.body)
-                report.pending_deletes.append(omc_path)
+                    wrote = _append_to_session_log(log_path, "Session Bridge", page.body)
+                    if wrote:
+                        report.written_paths.append(log_path)
+                    report.pending_deletes.append(omc_path)
+                else:
+                    report.errors.append(
+                        f"{omc_path.name}: bridge-merge — no session log for slug "
+                        f"{config.session_slug!r}; OMC source preserved"
+                    )
                 continue
 
             # auto-promote or stage: build vault frontmatter
@@ -252,6 +311,7 @@ def promote(config: PromotionConfig) -> PromotionReport:
                 staging_dir.mkdir(parents=True, exist_ok=True)
                 target = staging_dir / omc_path.name
                 write_page(target, OMCPage(frontmatter=new_fm, body=page.body))
+                report.written_paths.append(target)
                 bugs_dir = config.tasknotes_path / "Tasks" / "Bug"
                 _create_review_tasknote(bugs_dir, config.task_prefix,
                                           page.frontmatter.get("title", omc_path.stem),
@@ -263,7 +323,9 @@ def promote(config: PromotionConfig) -> PromotionReport:
 
             # auto-promote
             if existing_target:
-                _merge_into_existing(existing_target, page.body)
+                merged = _merge_into_existing(existing_target, page.body)
+                if merged:
+                    report.written_paths.append(existing_target)
                 report.merged_existing += 1
             else:
                 primary_dir = config.project_docs_path / primary_name
@@ -272,12 +334,16 @@ def promote(config: PromotionConfig) -> PromotionReport:
                     primary_dir.mkdir(parents=True, exist_ok=True)
                 target = primary_dir / omc_path.name
                 write_page(target, OMCPage(frontmatter=new_fm, body=page.body))
+                report.written_paths.append(target)
                 report.auto_promoted += 1
             if "edited seed" in reason:
                 report.session_edits_promoted += 1
             report.pending_deletes.append(omc_path)
 
-        except Exception as exc:  # noqa: BLE001
+        except (OSError, ValueError) as exc:
+            # File-level failures: record and move on (OMC source NOT added to pending_deletes).
+            # Programmer errors (TypeError/KeyError/AttributeError) are NOT caught — they propagate
+            # so CI catches real bugs instead of silently reporting them as per-file "errors".
             report.errors.append(f"{omc_path.name}: {exc}")
 
     return report
@@ -286,7 +352,8 @@ def promote(config: PromotionConfig) -> PromotionReport:
 def finalize_deletes(pending: List[Path], *, require: List[Path]) -> Tuple[int, List[str]]:
     """Execute pending deletes only if all `require` paths exist and are non-empty.
 
-    Returns (deleted_count, errors).
+    Returns (deleted_count, errors). If `require` is empty the precondition is
+    vacuously satisfied — callers that want a real gate must pass a non-empty list.
     """
     errors: List[str] = []
     for req in require:

@@ -5,7 +5,8 @@ setup() {
     cp -R "${BATS_TEST_DIRNAME}/../fixtures/mixed/" "${TMPDIR_TEST}/repo"
     cd "${TMPDIR_TEST}/repo"
     mkdir -p vault/Architecture vault/Compiled-Insights vault/Staging \
-             vault/Troubleshooting vault/Session-Logs vault/TaskNotes/Tasks/Bug
+             vault/Troubleshooting vault/Session-Logs vault/TaskNotes/Tasks/Bug \
+             vault/_meta
     cat > vault/Session-Logs/S001-test.md <<'EOF'
 ---
 title: Session 1
@@ -16,6 +17,11 @@ created: 2026-04-20
 
 ## Issues & Discoveries
 
+EOF
+    # Minimal index regen so the transactional delete gate can fire.
+    cat > vault/_meta/generate-index.py <<'EOF'
+import pathlib
+pathlib.Path("index.md").write_text("# index\n")
 EOF
 }
 
@@ -63,6 +69,40 @@ _run() {
     rm -rf .omc
     run _run
     [ "$status" -eq 0 ]
+}
+
+@test "e2e: missing index regen script blocks deletes, returns non-zero (C2)" {
+    rm -f vault/_meta/generate-index.py
+    run _run
+    [ "$status" -eq 1 ]
+    [ -f .omc/wiki/arch-high.md ]  # OMC sources preserved
+    echo "$output" | grep -q "SKIPPED (script missing)"
+    echo "$output" | grep -q "BLOCKED"
+}
+
+@test "e2e: --allow-missing-index-script opts out of the regen gate" {
+    rm -f vault/_meta/generate-index.py
+    run python3 "${BATS_TEST_DIRNAME}/../cli_promote.py" \
+        --repo-root "$(pwd)" --omc-wiki-dir ".omc/wiki" \
+        --project-docs-path "$(pwd)/vault" \
+        --tasknotes-path "$(pwd)/vault/TaskNotes" \
+        --task-prefix "Arktest-" --session-slug "S001-test" \
+        --allow-missing-index-script
+    [ "$status" -eq 0 ]
+    [ ! -f .omc/wiki/arch-high.md ]  # deletes fired
+}
+
+@test "e2e: regen non-zero surfaces stderr in report output (H8)" {
+    cat > vault/_meta/generate-index.py <<'EOF'
+import sys
+print("regen failed for reason X", file=sys.stderr)
+sys.exit(3)
+EOF
+    run _run
+    [ "$status" -eq 1 ]
+    [ -f .omc/wiki/arch-high.md ]  # OMC preserved
+    echo "$output" | grep -q "regen failed for reason X"
+    echo "$output" | grep -q "exit code: 3"
 }
 
 @test "e2e: source-warmup untouched (seed_body_hash matches) is skipped" {
