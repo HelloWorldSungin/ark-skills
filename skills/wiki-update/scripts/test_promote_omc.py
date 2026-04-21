@@ -116,3 +116,98 @@ def test_derive_summary_truncated_to_200():
     body = "Short first. " * 30 + "\n\nSecond."
     s = derive_summary(body)
     assert len(s) <= 200
+
+
+def _write_session_log(repo, slug="S001-test"):
+    logs_dir = repo / "vault" / "Session-Logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    path = logs_dir / f"{slug}.md"
+    path.write_text(
+        "---\ntitle: Session 1\nsession: S001\ntype: session-log\n"
+        "created: 2026-04-20\n---\n\n## Issues & Discoveries\n\n"
+    )
+    return path
+
+
+def _mk_config(repo):
+    return PromotionConfig(
+        repo_root=repo,
+        omc_wiki_dir=repo / ".omc" / "wiki",
+        project_docs_path=repo / "vault",
+        tasknotes_path=repo / "vault" / "TaskNotes",
+        task_prefix="Arktest-",
+        session_slug="S001-test",
+        session_started_at=0.0,
+    )
+
+
+def test_promote_high_arch_lands_in_architecture(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    (repo / "vault" / "Architecture").mkdir(parents=True, exist_ok=True)
+    _write_session_log(repo)
+    report = promote(_mk_config(repo))
+    assert report.auto_promoted >= 1
+    promoted = list((repo / "vault" / "Architecture").glob("*.md"))
+    assert any("JWT" in p.read_text() for p in promoted)
+    # OMC source NOT yet deleted — it's in pending_deletes
+    assert (repo / ".omc/wiki/arch-high.md").exists()
+    assert any(p.name == "arch-high.md" for p in report.pending_deletes)
+
+
+def test_promote_medium_stages_and_creates_tasknote(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    _write_session_log(repo)
+    report = promote(_mk_config(repo))
+    assert report.staged >= 1
+    assert list((repo / "vault" / "Staging").glob("*.md"))
+    assert list((repo / "vault" / "TaskNotes" / "Tasks" / "Bug").glob("*.md"))
+    assert report.tasknotes_created >= 1
+
+
+def test_promote_debugging_pattern_dual_writes(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    log = _write_session_log(repo)
+    report = promote(_mk_config(repo))
+    assert "JWT Refresh Race" in log.read_text()
+    ts = list((repo / "vault" / "Troubleshooting").glob("*.md"))
+    assert len(ts) == 1
+    assert "compiled-insight" in ts[0].read_text()
+    assert report.troubleshooting_created == 1
+
+
+def test_promote_skips_pages_older_than_session_started_at(tmp_path):
+    import os
+    repo = _copy_fixture(tmp_path)
+    _write_session_log(repo)
+    ancient = repo / ".omc/wiki/arch-high.md"
+    t = 0  # Jan 1, 1970
+    os.utime(ancient, (t, t))
+    cfg = _mk_config(repo)
+    cfg.session_started_at = 1_000_000.0  # later than 0
+    report = promote(cfg)
+    # arch-high.md skipped because older than session start
+    assert not any(p.name == "arch-high.md" for p in report.pending_deletes)
+
+
+def test_promote_merges_via_ark_source_path_when_target_exists(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    _write_session_log(repo)
+    # Pre-create a vault page at Architecture/Auth.md (matches ark-source-path in fixture arch-high.md)
+    auth = repo / "vault" / "Architecture" / "Auth.md"
+    auth.parent.mkdir(parents=True, exist_ok=True)
+    auth.write_text("---\ntitle: Auth\ntype: architecture\n---\n\n# Existing\n\nold body.\n")
+    report = promote(_mk_config(repo))
+    assert report.merged_existing >= 1
+    merged_text = auth.read_text()
+    assert "Existing" in merged_text  # old body preserved
+    assert "JWT" in merged_text  # new content appended
+    assert "Continuation" in merged_text
+
+
+def test_promote_pending_deletes_not_executed(tmp_path):
+    repo = _copy_fixture(tmp_path)
+    _write_session_log(repo)
+    report = promote(_mk_config(repo))
+    # No OMC page under pending_deletes is removed yet
+    for pd in report.pending_deletes:
+        assert pd.exists()
