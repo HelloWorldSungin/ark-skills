@@ -280,6 +280,36 @@ obsidian property:set name="status" value="{computed-status}" file="{epic-id}-{s
 
 **TaskNote writes are gated on Obsidian availability.** When Obsidian is unavailable, the fallback `Read`/`Edit` path above must be executed explicitly — do not silently skip TaskNote updates.
 
+### Step 3.5: Promote OMC Wiki Pages
+
+If `.omc/wiki/` exists, promote durable session-authored OMC content into the vault with lossless frontmatter, async staging for medium-confidence items, dual-write for debugging pattern/insight pages, and transactional deletes that only fire after index regen succeeds.
+
+```bash
+python3 "$ARK_SKILLS_ROOT/skills/wiki-update/scripts/cli_promote.py" \
+    --repo-root "$(pwd)" \
+    --omc-wiki-dir ".omc/wiki" \
+    --project-docs-path "$PROJECT_DOCS_PATH" \
+    --tasknotes-path "$TASKNOTES_PATH" \
+    --task-prefix "$TASK_PREFIX" \
+    --session-slug "$SESSION_SLUG"
+```
+
+(The CLI reads the session log's `created:` frontmatter via pyyaml to compute `session_started_at` — no `date -r` shellout.)
+
+Behavior:
+- **Stubs** (auto-captured session-log markers) → skipped.
+- **Environment pages** → skipped (re-derivable from project-memory.json).
+- **Pages older than session start** → skipped (existed before this session, not for this `/wiki-update`).
+- **source-warmup pages with body_hash == seed_body_hash** → skipped (untouched from vault).
+- **source-warmup pages with body_hash != seed_body_hash** → promoted as session-authored.
+- **High confidence** → auto-promoted to `Architecture/` or `Compiled-Insights/` (type via `ark-original-type` when present). If `ark-source-path` resolves to an existing vault page, content is merged under `## Continuation — YYYY-MM-DD` instead of overwriting.
+- **Medium confidence** → staged in `Staging/` + low-priority TaskNote bug under `Tasks/Bug/` (non-interactive).
+- **Debugging pages** → fold inline into session log's "Issues & Discoveries"; if tagged `pattern` or `insight`, also create `Troubleshooting/` cross-link as `type: compiled-insight`.
+- **Session-bridge pages** → merged into session log body.
+- **Deletes** happen only AFTER `cli_promote.py` runs `_meta/generate-index.py` and it returns exit 0. Failed writes or failed index regen preserve OMC sources for retry on the next `/wiki-update`.
+
+Degradation: no `.omc/wiki/` → silent no-op.
+
 ### Step 4: Extract Compiled Insights from the Session Log
 
 This step addresses the **session log knowledge burial** problem (see `vault/Compiled-Insights/Session-Log-Knowledge-Burial.md`): durable findings locked inside chronological session logs are invisible to vault retrieval unless promoted to dedicated insight pages.
