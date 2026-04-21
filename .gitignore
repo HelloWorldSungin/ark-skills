@@ -9,6 +9,9 @@
 !.ark-workflow/audits/**
 
 .omc/
+# Exception: test fixtures that intentionally ship a fake .omc/ tree
+!skills/wiki-update/scripts/fixtures/**/.omc/
+!skills/wiki-update/scripts/fixtures/**/.omc/**
 
 # Python bytecode cache
 **/__pycache__/
