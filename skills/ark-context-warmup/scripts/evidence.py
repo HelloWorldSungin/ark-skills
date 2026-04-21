@@ -41,7 +41,7 @@ def _has_trigger_near_keywords(quote: str, task_tokens: set, window: int = 30) -
     return False
 
 
-def derive_candidates(*, task_normalized, scenario, tasknotes, notebooklm, wiki):
+def derive_candidates(*, task_normalized, scenario, tasknotes, notebooklm, wiki, has_omc=False):
     """Returns a list of evidence candidates per spec D3.
 
     Each candidate: {type, confidence?, id?, detail, reason}
@@ -127,4 +127,32 @@ def derive_candidates(*, task_normalized, scenario, tasknotes, notebooklm, wiki)
         })
     # If wiki is a dict (even with empty matches), this is a legitimate result — no Degraded coverage.
 
-    return out
+    seed_sources = []
+    if has_omc:
+        if notebooklm is not None:
+            for cit in (notebooklm.get("citations") or [])[:3]:
+                body = cit.get("body", "")
+                if len(body) < 200:
+                    continue
+                seed_sources.append({
+                    "title": cit.get("title", ""),
+                    "vault_source_path": cit.get("vault_path") or cit.get("path") or "",
+                    "body": body,
+                    "vault_type": cit.get("type", "architecture"),
+                    "tags": cit.get("tags", []),
+                    "confidence": "high" if cit.get("rank", 99) <= 1 else "medium",
+                })
+        if wiki is not None:
+            for item in (wiki.get("matches") or [])[:3]:
+                body = item.get("body", "")
+                if len(body) < 200:
+                    continue
+                seed_sources.append({
+                    "title": item.get("title", ""),
+                    "vault_source_path": item.get("path") or item.get("vault_path") or "",
+                    "body": body,
+                    "vault_type": item.get("type", "architecture"),
+                    "tags": item.get("tags", []),
+                    "confidence": "high" if item.get("rank", 99) <= 1 else "medium",
+                })
+    return {"candidates": out, "seed_sources": seed_sources}

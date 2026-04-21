@@ -27,7 +27,7 @@ def _run(fixture: dict) -> list:
         tasknotes=inp.get("tasknotes"),
         notebooklm=notebooklm,
         wiki=wiki,
-    )
+    )["candidates"]
 
 
 def _match(candidate: dict, expected: dict) -> bool:

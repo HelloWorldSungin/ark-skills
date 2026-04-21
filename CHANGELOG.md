@@ -2,6 +2,87 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.19.1] - 2026-04-20
+
+Bugfix release addressing `/ark-code-review --thorough` findings against v1.19.0. 2 Critical + 8 High + related Mediums. No schema changes; consumers of `promote_omc`, `cli_promote`, `write_bridge` keep their argparse surface. Adds 89 regression tests (Python + bats); all 298 tests pass.
+
+### Fixed — Critical
+
+- **C1 — Path traversal via `ark-source-path`.** `promote_omc._resolve_existing_vault_page` now calls `.resolve()` + `.relative_to(project_docs)` on the joined path and returns `None` when the resolved target escapes `project_docs`. Previously a crafted `ark-source-path: "../../evil.md"` could cause `_merge_into_existing` to append OMC content to a file outside the vault.
+- **C2 — Transactional-delete gate was load-bearing on index-regen exit code alone.** `cli_promote.py` now gates `finalize_deletes` on THREE conditions: (a) `promote()` recorded zero errors, (b) index regen actually ran and returned 0 (missing script no longer silently counts as success; opt out with `--allow-missing-index-script`), and (c) every path `promote()` wrote still exists and is non-empty. `PromotionReport` gains a `written_paths: List[Path]` field; `cli_promote` passes it as `require=` so `finalize_deletes`'s precondition loop is no longer a no-op.
+
+### Fixed — High
+
+- **H1 — `_append_to_session_log` / `_merge_into_existing` are now atomic AND idempotent.** Both helpers write via `tempfile.mkstemp` + `os.replace` (matching `omc_page.write_page`). Each append embeds a 12-char content-hash marker (`<!-- src:<hash> -->`); retries detect the marker and skip. This closes the retry-appends-duplicates race that defeated the transactional-delete design's intended "safe to re-run after partial failure" guarantee.
+- **H2 — `_find_session_log` no longer silently falls back to the newest `Session-Logs/*.md`.** Returns `None` on exact-slug miss. Callers already guard `if log_path:`; cross-session content contamination via typo / stale slug is eliminated.
+- **H3 — `bridge-merge` and `dual-write-debug` no longer queue OMC delete when nothing was written.** `pending_deletes.append(omc_path)` is now gated on a vault-side effect actually happening (session-log append OR troubleshooting write for dual-write-debug; session-log append for bridge-merge). When nothing happened, the reason is recorded in `report.errors` and the OMC source is preserved for the next run.
+- **H4 — `except Exception` in `promote()` narrowed to `(OSError, ValueError)`.** Programmer errors (`TypeError`, `AttributeError`, `KeyError`) now propagate instead of being absorbed as per-file "error" strings, so CI catches real bugs.
+- **H5 — `/wiki-handoff` schema validation extended to all substantive fields.** `_validate` now applies to `task_text`, `open_threads`, `next_steps` (required) and `done_summary` (optional when empty). `scenario` must match `^[a-z0-9][a-z0-9\-]{0,31}$` (DNS-like slug); previously it was embedded into a tag unchecked.
+- **H6 — `GENERIC_PATTERNS` hardened.** Normalization strips trailing punctuation before comparison; a filler-token-prefix family catches `tbd/todo/wip/fixme/xxx`-prefixed strings; a distinct-word-count check (`MIN_DISTINCT_TOKENS=3`) blocks repetition-padded bypasses like `"todo todo todo todo"`. Rejects variants `"TO-DO"`, `"todo."`, `"TODO!"`, `"continuing"`, `"tbd again"`, `"wip wip wip"` that previously passed.
+- **H7 — `cli_promote.main()` returns non-zero when anything goes wrong.** Previously always returned 0 regardless of `report.errors`, `delete_errors`, or regen exit code. Callers (bash step in `/wiki-update` Step 3.5, CI) now get a real signal.
+- **H8 — Index regen stdout/stderr surfaced on failure.** On `rc != 0` (and on missing-script), `cli_promote` prints the captured output instead of discarding it.
+
+### Fixed — Medium
+
+- **M6 — `/ark-workflow` Step 6.5 documents all write_bridge exit codes as blocking.** Previously only exit 2 (schema rejection) was explicitly called out as a block; exit 3 (>10 collision retries) and other non-zero codes had no LLM-facing guidance. Updated prose gate explicitly covers 2 / 3 / other non-zero with resolution paths.
+- **M10 — `_run_index_regen` now has a 120-second `subprocess.run(..., timeout=120)`.** Prevents a hung regen script from stalling `/wiki-update` indefinitely.
+- **Transactional surface visibility.** `cli_promote` report now prints `Vault paths written: N` and `Delete status: BLOCKED — <reason>` when the gate refuses to unlink. Previously the report showed `Deleted from OMC: 0` with no actionable reason.
+
+### Added — Regression tests
+
+- **`test_promote_omc.py`** (+15 tests): path-traversal acceptance/rejection (C1); `written_paths` population (C2); `finalize_deletes` require-gate on missing / empty / valid paths (C2); idempotent merge + append on retry (H1); `_find_session_log` no-fallback semantics (H2); bridge-merge / dual-write-debug `log_path=None` preservation (H3); programmer-error propagation + OSError capture asymmetry (H4).
+- **`test_cli_promote.py`** (new, +7 tests): end-to-end happy path, missing-regen-script blocks deletes, `--allow-missing-index-script` opt-out, regen rc!=0 blocks, `report.errors` blocks, simulated write-destabilization detected by `require=` gate, `Vault paths written:` surface assertion.
+- **`test_write_bridge.py`** (+21 parametrized cases): GENERIC_PATTERNS bypass hardening (casing / punctuation / filler-prefix / distinct-word variants); `task_text` and `done_summary` validation; `scenario` slug sanitization (accept/reject grid).
+- **`test_promote_omc_e2e.bats`** (+3 tests): C2 missing-regen blocks + non-zero exit; `--allow-missing-index-script` opt-out; H8 regen stderr surfacing.
+
+### Changed
+
+- `skills/ark-workflow/SKILL.md` — Step 6.5 callout expanded to document exit 3 and any other non-zero as blocking.
+- `skills/wiki-update/scripts/cli_promote.py` — new `--allow-missing-index-script` flag.
+
+### Not changed (flagged in review but out-of-scope for bugfix release)
+
+- `translate_frontmatter` still pops `ark-source-path` from vault output (OMC_ONLY_FIELDS). Whether to preserve provenance in vault pages is a schema decision for a future minor release.
+- `read_bridges` still uses `path.stat().st_mtime` instead of the frontmatter `created:` field. Low-impact in normal workflows; defer.
+- `seed_omc` permission inconsistency (`0o644` for O_EXCL, `0o600` for tempfile). Defer.
+
+## [1.19.0] - 2026-04-20
+
+New **OMC↔Ark Wiki Bridge** — connects OMC `/wiki` (per-worktree, gitignored scratchpad) with Ark `/wiki-*` (per-project, git-tracked Obsidian vault). Seeds OMC with cited vault sources on warmup prompt+cache-miss; flushes validated session bridges on v1.17.0 probe's compact/clear; promotes durable OMC content into the vault at `/wiki-update` with lossless frontmatter round-trip and transactional (post-index-regen) deletes. Both advisors (Codex + Gemini) reviewed the design and the implementation plan; Codex flagged 4 HIGH design concerns + 4 HIGH plan concerns, all resolved before implementation.
+
+### Added
+
+- **Shared module** `skills/shared/python/omc_page.py` — OMC page read/write/hash primitives used across wiki-handoff, warmup, and wiki-update. Pyyaml-backed frontmatter, `O_EXCL` atomic writes, `body_hash`, `content_hash_slug(vault_path + content)` → 12-char slug.
+- **`/wiki-handoff` skill** (`skills/wiki-handoff/`) — session-bridge writer with schema enforcement (rejects empty / generic `open_threads` / `next_steps`), `O_EXCL` + suffix-retry collision handling. Invoked from `/ark-workflow` Step 6.5 on `(a) compact` and `(b) clear`; `(c) subagent` skipped.
+- **`seed_omc.py`** in `/ark-context-warmup` — populates `.omc/wiki/` with cited vault sources keyed by `sha256(vault_path + content)[0:12]`; idempotent; per-chain stale cleanup. Writes provenance (`ark-original-type`, `ark-source-path`, `seed_body_hash`, `seed_chain_id`) for lossless round-trip.
+- **`read_bridges.py`** in `/ark-context-warmup` — next-session pickup. Chain-ID affinity: match → 7-day window; mismatch → single most-recent ≤ 48h. Rendered under "Prior Session Handoff" in Context Brief via extended `synthesize.assemble_brief(prior_bridge=...)`.
+- **`evidence.derive_candidates(has_omc=True)`** returns `{"candidates": [...], "seed_sources": [...]}` so warmup Step 5b can feed `seed_omc.py` without extra fanout.
+- **`/wiki-update` Step 3.5 — Promote OMC Wiki Pages** via `cli_promote.py` wrapper:
+  - Stubs, environment pages, untouched source-warmup, pre-session pages → skipped
+  - `high` → auto-promote to `Architecture/` or `Compiled-Insights/`, merge via `ark-source-path` if existing vault page resolves
+  - `medium` → stage in `vault/Staging/` + low-priority TaskNote bug (non-interactive Q4A)
+  - debugging → fold inline into session log; also `vault/Troubleshooting/` cross-link when tagged `pattern`/`insight` (Q5C)
+  - session-bridge → merge into session log body
+- **Transactional delete** — `promote()` returns `pending_deletes`; `cli_promote.py` runs `_meta/generate-index.py` and only executes deletes on exit 0. Failed vault writes or failed index regen preserve OMC sources for retry.
+- **Integration suite** — bats e2e at `skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats`.
+
+### Changed
+
+- `skills/ark-context-warmup/scripts/evidence.py` — `derive_candidates` now returns dict with `candidates` + `seed_sources`. Existing callers updated to read `out["candidates"]`.
+- `skills/ark-context-warmup/scripts/synthesize.py` — `assemble_brief` accepts `prior_bridge` kwarg, renders "Prior Session Handoff" section when non-empty.
+- `skills/ark-context-warmup/SKILL.md` — new Step 1b (bridge read) + Step 5b (OMC seed on cache miss).
+- `skills/ark-workflow/SKILL.md` — Step 6.5 action bullet expanded into `(a)/(b)/(c)` branch block; `(a)` and `(b)` invoke `/wiki-handoff` before the destructive action and before `record-reset`.
+- `skills/wiki-update/SKILL.md` — new Step 3.5 between existing Steps 3 and 4.
+
+### Degradation contract
+
+Silent no-ops throughout: no `.omc/`, no prompt, cache hit, missing vault dirs. Schema rejection blocks destructive action until LLM re-invokes with specifics. Non-portable shellouts removed (`date -r` replaced by pyyaml frontmatter parsing).
+
+### Spec & Plan
+
+- Spec: `docs/superpowers/specs/2026-04-20-omc-wiki-ark-bridge-design.md`
+- Plan: `docs/superpowers/plans/2026-04-20-omc-wiki-ark-bridge.md`
+
 ## [1.18.1] - 2026-04-20
 
 Bugfix release for the `/ark-update` framework. Two independent issues surfaced when running `/ark-update` against the plugin's own repo for the first time since the routing-rules v1.17.0 template bump.
