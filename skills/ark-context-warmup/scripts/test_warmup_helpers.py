@@ -633,7 +633,7 @@ class TestEvidenceCandidates:
             },
             notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
             wiki={"matches": []},
-        )
+        )["candidates"]
         dups = [c for c in out if c["type"] == "Possible duplicate"]
         assert len(dups) == 1
         assert dups[0]["confidence"] == "high"
@@ -654,7 +654,7 @@ class TestEvidenceCandidates:
             },
             notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
             wiki={"matches": []},
-        )
+        )["candidates"]
         dups = [c for c in out if c["type"] == "Possible duplicate"]
         assert len(dups) == 1
         assert dups[0]["confidence"] == "medium"
@@ -674,7 +674,7 @@ class TestEvidenceCandidates:
             },
             notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
             wiki={"matches": []},
-        )
+        )["candidates"]
         dups = [c for c in out if c["type"] == "Possible duplicate"]
         assert dups == []
 
@@ -693,7 +693,7 @@ class TestEvidenceCandidates:
             },
             notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
             wiki={"matches": []},
-        )
+        )["candidates"]
         assert not [c for c in out if c["type"] == "Possible duplicate"]
 
     def test_worktype_alone_not_high(self):
@@ -711,7 +711,7 @@ class TestEvidenceCandidates:
             },
             notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
             wiki={"matches": []},
-        )
+        )["candidates"]
         dups = [c for c in out if c["type"] == "Possible duplicate"]
         assert dups == []
 
@@ -739,7 +739,7 @@ class TestEvidenceCandidates:
             },
             notebooklm=None,
             wiki=None,
-        )
+        )["candidates"]
         dup = [c for c in out if c["type"] == "Possible duplicate"]
         assert any(c["id"] == "ARK-123" and c["confidence"] == "high" for c in dup), (
             "backlog-status TaskNote with component match must surface as "
@@ -763,7 +763,7 @@ class TestEvidenceCandidates:
                 ],
             },
             wiki=None,
-        )
+        )["candidates"]
         assert any(c["type"] == "Possible prior rejection" for c in apostrophed), (
             "apostrophized 'won't do' must still match after tokenization"
         )
@@ -781,7 +781,7 @@ class TestEvidenceCandidates:
                 "session_continue": "",
             },
             wiki={"matches": []},
-        )
+        )["candidates"]
         prs = [c for c in out if c["type"] == "Possible prior rejection"]
         assert len(prs) == 1
         assert prs[0]["confidence"] == "medium"
@@ -799,7 +799,7 @@ class TestEvidenceCandidates:
                 "session_continue": "",
             },
             wiki={"matches": []},
-        )
+        )["candidates"]
         prs = [c for c in out if c["type"] == "Possible prior rejection"]
         assert prs == []
 
@@ -818,7 +818,7 @@ class TestEvidenceCandidates:
             },
             notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
             wiki={"matches": []},
-        )
+        )["candidates"]
         colls = [c for c in out if c["type"] == "Possible in-flight collision"]
         assert len(colls) == 1
         assert colls[0]["confidence"] == "high"
@@ -830,7 +830,7 @@ class TestEvidenceCandidates:
             tasknotes=None,  # lane unavailable
             notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
             wiki={"matches": []},
-        )
+        )["candidates"]
         deg = [c for c in out if c["type"] == "Degraded coverage"]
         assert len(deg) == 1
         assert "tasknotes" in deg[0]["detail"].lower()
@@ -844,7 +844,7 @@ class TestEvidenceCandidates:
             tasknotes={"matches": [], "status_summary": {}, "extracted_component": "unrelated"},
             notebooklm={"citations": [], "bootstrap": "", "session_continue": ""},
             wiki={"matches": []},
-        )
+        )["candidates"]
         deg = [c for c in out if c["type"] == "Degraded coverage"]
         assert deg == []
 
@@ -855,13 +855,54 @@ class TestEvidenceCandidates:
             tasknotes=None,
             notebooklm=None,
             wiki=None,
-        )
+        )["candidates"]
         deg = [c for c in out if c["type"] == "Degraded coverage"]
         assert len(deg) == 3
         details = " ".join(d["detail"].lower() for d in deg)
         assert "tasknotes" in details
         assert "notebooklm" in details
         assert "wiki" in details
+
+    def test_derive_candidates_returns_dict_with_candidates_and_seed_sources(self):
+        out = evidence.derive_candidates(
+            task_normalized="build auth", scenario="greenfield",
+            tasknotes={"matches": []},
+            notebooklm={"citations": [
+                {"title": "Auth", "vault_path": "Architecture/Auth.md",
+                 "body": "x" * 250, "type": "architecture",
+                 "tags": ["auth"], "rank": 1},
+            ]},
+            wiki={"matches": [
+                {"title": "Users", "path": "Architecture/Users.md",
+                 "summary": "s", "rank": 1, "body": "y" * 250, "type": "reference",
+                 "tags": ["users"]},
+            ]},
+            has_omc=True,
+        )
+        assert isinstance(out, dict)
+        assert "candidates" in out
+        assert "seed_sources" in out
+        assert len(out["seed_sources"]) >= 1
+        s = out["seed_sources"][0]
+        for k in ("title", "vault_source_path", "body", "vault_type", "tags", "confidence"):
+            assert k in s
+
+    def test_derive_candidates_omits_seed_sources_when_has_omc_false(self):
+        out = evidence.derive_candidates(
+            task_normalized="x", scenario="greenfield",
+            tasknotes={}, notebooklm={}, wiki={}, has_omc=False,
+        )
+        assert "seed_sources" not in out or out["seed_sources"] == []
+
+    def test_derive_candidates_backward_compat_no_has_omc_kwarg(self):
+        # When caller doesn't pass has_omc, default is False — no seed_sources emitted.
+        out = evidence.derive_candidates(
+            task_normalized="x", scenario="greenfield",
+            tasknotes={}, notebooklm={}, wiki={},
+        )
+        # Pre-existing callers may expect a list — accept both shapes.
+        if isinstance(out, dict):
+            assert "seed_sources" not in out or out["seed_sources"] == []
 
 
 _SYN_PATH = _P(__file__).parent / "synthesize.py"
