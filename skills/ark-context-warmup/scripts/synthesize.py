@@ -46,6 +46,7 @@ def assemble_brief(
     tasknotes_out: str,
     evidence: list,
     has_omc: bool = False,
+    prior_bridge: str | None = None,
 ) -> str:
     # Serialize frontmatter via yaml.safe_dump so task_summary values
     # containing ':', '#', '|', or quotes don't invalidate the block that
@@ -67,12 +68,18 @@ def assemble_brief(
     # Spec AC8: Context Brief includes a one-line "OMC detected: yes/no" row.
     # Sourced from availability.probe() `has_omc` via the calling skill.
     omc_line = f"**OMC detected:** {'yes' if has_omc else 'no'}\n\n"
+    # Prior Session Handoff section — prepended at the top of the body so the
+    # continuity bridge from the previous session is visible before lane output.
+    prior_section = ""
+    if prior_bridge and prior_bridge.strip():
+        prior_section = "### Prior Session Handoff\n" + prior_bridge.strip() + "\n\n"
     return (
         "---\n"
         f"{fm}"
         "---\n\n"
         "## Context Brief\n\n"
         f"{omc_line}"
+        f"{prior_section}"
         "### Where We Left Off\n"
         f"{notebooklm_out or 'Fresh start — no recent session found.'}\n\n"
         "### Recent Project Activity\n"

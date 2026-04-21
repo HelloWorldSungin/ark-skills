@@ -1064,6 +1064,36 @@ class TestSynthesize:
         # At least two distinct tmp names (ensures uniqueness)
         assert len(set(captured_tmp_paths)) == len(captured_tmp_paths)
 
+    def test_prior_bridge_renders_section(self):
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="",
+            evidence=[], has_omc=True,
+            prior_bridge="## Task\n\nPrior work\n\n## Open threads\n\n- pending\n",
+        )
+        assert "### Prior Session Handoff" in brief
+        assert "pending" in brief
+        # Must appear before the first lane-output section so it's visible early.
+        prior_idx = brief.index("### Prior Session Handoff")
+        where_idx = brief.index("### Where We Left Off")
+        assert prior_idx < where_idx
+
+    def test_prior_bridge_omitted_when_none(self):
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="",
+            evidence=[],
+        )
+        assert "### Prior Session Handoff" not in brief
+
+    def test_prior_bridge_omitted_when_empty_string(self):
+        brief = synthesize.assemble_brief(
+            chain_id="CID123", task_hash="hash1234abcd5678", task_summary="x",
+            scenario="greenfield", notebooklm_out="", wiki_out="", tasknotes_out="",
+            evidence=[], prior_bridge="",
+        )
+        assert "### Prior Session Handoff" not in brief
+
 
 _EXEC_PATH = _P(__file__).parent / "executor.py"
 _spec_ex = _ilu.spec_from_file_location("executor", _EXEC_PATH)
