@@ -423,8 +423,26 @@ If `$ENTRY` is non-empty, display it verbatim and pause for user decision before
      ```
      If `$MENU` is non-empty, display it verbatim and pause for user decision. Then:
      - If `proceed`: invoke `--format record-proceed` (no extra args; helper self-detects current level and persists `proceed_past_level: nudge` only when current level is `nudge`; strong is never silenced).
-     - If `(a)` or `(b)`: after `/compact` or `/clear`, invoke `--format record-reset` to explicitly clear `proceed_past_level: null` so the next boundary probes fresh.
-     - If `(c)`: no state write; subagent wraps Next step.
+     - If `(a)` or `(b)`: **before** running `/compact` or `/clear`, the LLM MUST invoke `/wiki-handoff` to flush a validated session bridge to `.omc/wiki/`. See § Wiki-handoff invariant below.
+
+       ```bash
+       python3 "$ARK_SKILLS_ROOT/skills/wiki-handoff/scripts/write_bridge.py" \
+           --chain-id "$CHAIN_ID" --task-text "$TASK_TEXT" --scenario "$SCENARIO" \
+           --step-index "$STEP_IDX" --step-count "$STEP_COUNT" \
+           --session-id "$SESSION_ID" \
+           --open-threads "<LLM-supplied, specific>" \
+           --next-steps "<LLM-supplied, specific>" \
+           --notes "<LLM-supplied>" --done-summary "<LLM-supplied>" \
+           --git-diff-stat "$(git diff --stat HEAD~10..HEAD 2>/dev/null || echo '')"
+       ```
+
+       Verify exit code 0 before proceeding. On exit code 2 (schema rejection), re-invoke with specific file paths, decision points, and target files — do NOT proceed to `/compact`/`/clear` with an unwritten bridge.
+
+       Then run the user's chosen action (`/compact` or `/clear`), then invoke the probe's `--format record-reset`.
+
+     - If `(c)`: no bridge write (subagent dispatch preserves parent context). No state write; subagent wraps Next step.
+
+**§ Wiki-handoff invariant:** Options `(a)` and `(b)` invoke `/wiki-handoff` BEFORE the destructive action and BEFORE `record-reset`. Schema rejection (exit 2) blocks the action — the LLM must re-invoke with specifics. Option `(c)` does NOT invoke `/wiki-handoff`.
      If `$MENU` is empty, proceed silently.
   4. Mark the next TodoWrite task `in_progress`
   5. Announce `Next: [skill] — [purpose]`
