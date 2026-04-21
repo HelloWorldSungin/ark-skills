@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.19.0] - 2026-04-20
+
+New **OMC↔Ark Wiki Bridge** — connects OMC `/wiki` (per-worktree, gitignored scratchpad) with Ark `/wiki-*` (per-project, git-tracked Obsidian vault). Seeds OMC with cited vault sources on warmup prompt+cache-miss; flushes validated session bridges on v1.17.0 probe's compact/clear; promotes durable OMC content into the vault at `/wiki-update` with lossless frontmatter round-trip and transactional (post-index-regen) deletes. Both advisors (Codex + Gemini) reviewed the design and the implementation plan; Codex flagged 4 HIGH design concerns + 4 HIGH plan concerns, all resolved before implementation.
+
+### Added
+
+- **Shared module** `skills/shared/python/omc_page.py` — OMC page read/write/hash primitives used across wiki-handoff, warmup, and wiki-update. Pyyaml-backed frontmatter, `O_EXCL` atomic writes, `body_hash`, `content_hash_slug(vault_path + content)` → 12-char slug.
+- **`/wiki-handoff` skill** (`skills/wiki-handoff/`) — session-bridge writer with schema enforcement (rejects empty / generic `open_threads` / `next_steps`), `O_EXCL` + suffix-retry collision handling. Invoked from `/ark-workflow` Step 6.5 on `(a) compact` and `(b) clear`; `(c) subagent` skipped.
+- **`seed_omc.py`** in `/ark-context-warmup` — populates `.omc/wiki/` with cited vault sources keyed by `sha256(vault_path + content)[0:12]`; idempotent; per-chain stale cleanup. Writes provenance (`ark-original-type`, `ark-source-path`, `seed_body_hash`, `seed_chain_id`) for lossless round-trip.
+- **`read_bridges.py`** in `/ark-context-warmup` — next-session pickup. Chain-ID affinity: match → 7-day window; mismatch → single most-recent ≤ 48h. Rendered under "Prior Session Handoff" in Context Brief via extended `synthesize.assemble_brief(prior_bridge=...)`.
+- **`evidence.derive_candidates(has_omc=True)`** returns `{"candidates": [...], "seed_sources": [...]}` so warmup Step 5b can feed `seed_omc.py` without extra fanout.
+- **`/wiki-update` Step 3.5 — Promote OMC Wiki Pages** via `cli_promote.py` wrapper:
+  - Stubs, environment pages, untouched source-warmup, pre-session pages → skipped
+  - `high` → auto-promote to `Architecture/` or `Compiled-Insights/`, merge via `ark-source-path` if existing vault page resolves
+  - `medium` → stage in `vault/Staging/` + low-priority TaskNote bug (non-interactive Q4A)
+  - debugging → fold inline into session log; also `vault/Troubleshooting/` cross-link when tagged `pattern`/`insight` (Q5C)
+  - session-bridge → merge into session log body
+- **Transactional delete** — `promote()` returns `pending_deletes`; `cli_promote.py` runs `_meta/generate-index.py` and only executes deletes on exit 0. Failed vault writes or failed index regen preserve OMC sources for retry.
+- **Integration suite** — bats e2e at `skills/wiki-update/scripts/integration/test_promote_omc_e2e.bats`.
+
+### Changed
+
+- `skills/ark-context-warmup/scripts/evidence.py` — `derive_candidates` now returns dict with `candidates` + `seed_sources`. Existing callers updated to read `out["candidates"]`.
+- `skills/ark-context-warmup/scripts/synthesize.py` — `assemble_brief` accepts `prior_bridge` kwarg, renders "Prior Session Handoff" section when non-empty.
+- `skills/ark-context-warmup/SKILL.md` — new Step 1b (bridge read) + Step 5b (OMC seed on cache miss).
+- `skills/ark-workflow/SKILL.md` — Step 6.5 action bullet expanded into `(a)/(b)/(c)` branch block; `(a)` and `(b)` invoke `/wiki-handoff` before the destructive action and before `record-reset`.
+- `skills/wiki-update/SKILL.md` — new Step 3.5 between existing Steps 3 and 4.
+
+### Degradation contract
+
+Silent no-ops throughout: no `.omc/`, no prompt, cache hit, missing vault dirs. Schema rejection blocks destructive action until LLM re-invokes with specifics. Non-portable shellouts removed (`date -r` replaced by pyyaml frontmatter parsing).
+
+### Spec & Plan
+
+- Spec: `docs/superpowers/specs/2026-04-20-omc-wiki-ark-bridge-design.md`
+- Plan: `docs/superpowers/plans/2026-04-20-omc-wiki-ark-bridge.md`
+
 ## [1.18.1] - 2026-04-20
 
 Bugfix release for the `/ark-update` framework. Two independent issues surfaced when running `/ark-update` against the plugin's own repo for the first time since the routing-rules v1.17.0 template bump.
