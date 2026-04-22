@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.20.0] - 2026-04-22
+
+Wave 1 of gstack v1.5.1.0 integration (Approach B). Cleanup + wiring; Wave 2 (v1.21.0) ships `/benchmark-models` calibration and data-driven chain-substitution edits.
+
+### Changed
+
+- **`/checkpoint` references renamed to `/context-save`.** 8 stale references across `skills/ark-workflow/` — 1 in SKILL.md, 4 in `references/troubleshooting.md`, 1 each in `chains/hygiene.md`, `chains/bugfix.md`, `chains/greenfield.md`. gstack moved `/checkpoint` to a Claude Code native rewind alias; `/context-save` is the current gstack command. `<checkpoint>` XML tags in `skills/codebase-maintenance/` (different namespace) are unchanged.
+
+### Added
+
+- **Continuous-checkpoint mode wired into Step 6.5 check-off.** Opt-in via gstack config. When `gstack-config get checkpoint_mode` returns `continuous`, each completed chain step drops a WIP commit with a pinned `[gstack-context]` body (Decisions / Remaining / Skill). `git log --grep "WIP:"` now reconstructs chain reasoning across worktrees and clones, which gitignored `.ark-workflow/current-chain.md` cannot. Silent no-op for the default `explicit` mode path. Lock boundary: WIP commits shell out AFTER the chain-file lock releases, no coordination needed. `gstack-config` binary resolver: `GSTACK_CONFIG="${GSTACK_CONFIG:-$HOME/.claude/skills/gstack/bin/gstack-config}"` (NOT on PATH by default). Failure modes — all silent no-ops or warn-and-continue; none block check-off. Full contract table in `skills/ark-workflow/SKILL.md` § Continuous Checkpoint Integration.
+- **`/context-save` as compaction-recovery option (d).** Mid-chain menu: `[a/b/c/proceed]` → `[a/b/c/d/proceed]`. Entry menu: `[b/c/proceed]` → `[b/c/d/proceed]`. Option (d) runs `/context-save --no-stage` (lightweight markdown save under `~/.gstack/`; `--no-stage` preserves dirty worktree) then `/compact`. By design, (d) opts OUT of the Wiki-handoff invariant — different contract from (a)/(b) which require vault schema validation. (c)/(d) both skip `/wiki-handoff`: (c) because subagent dispatch preserves parent context, (d) because the whole point is a lighter exit when vault validation is overkill.
+
+### Tests
+
+- **+3 pytest tests** in `test_step_boundary_render.py` covering option (d) rendering in both mid-chain and entry menus, and the new answer-set shape.
+- **+9 bats tests** in new `scripts/integration/test_continuous_checkpoint.bats` covering every row of the continuous-checkpoint failure-mode table: continuous/explicit/empty/unexpected modes, missing / non-executable binary, non-git-repo, chain-complete remaining label, commit-failure warn-and-continue.
+- **Existing tests updated** for the new menu answer-sets: `test_context_probe.py::TestCliStepBoundary::test_nudge_level_prints_menu`, `test_probe_skill_invocation.bats` entry-menu assertion.
+- All 70 pytest + 23 bats pass.
+
+### Out of scope (deferred to v1.21.0)
+
+- `/benchmark-models` calibration run against the 6 `/ccg` substitution points (Greenfield / Migration / Performance Heavy plan + spec reviews).
+- Data-driven revision of substitution rules in `chains/*`.
+
 ## [1.19.1] - 2026-04-20
 
 Bugfix release addressing `/ark-code-review --thorough` findings against v1.19.0. 2 Critical + 8 High + related Mediums. No schema changes; consumers of `promote_omc`, `cli_promote`, `write_bridge` keep their argparse surface. Adds 89 regression tests (Python + bats); all 298 tests pass.
