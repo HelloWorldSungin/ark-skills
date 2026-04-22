@@ -4,7 +4,7 @@ type: meta
 tags:
   - meta
 summary: "Machine-generated flat catalog of all vault pages."
-last-updated: 2026-04-20
+last-updated: 2026-04-21
 ---
 
 # Index
@@ -50,6 +50,7 @@ last-updated: 2026-04-20
 | [[Session-Logs/S010-Path-B-Uniformity-Refactor.md|Session 8: Path B Uniformity Refactor (audit + 7-commit implementation)]] | session-log | Audited /ark-workflow Path B routing; implemented 2026-04-14 uniformity decision in 7 atomic commits on branch ark-workflow-improve-OMC. All chain Path B engines collapsed to /autopilot except Migration Heavy (/team). Added chain drift lint (R4). 17 blocks / 4 classifier shapes / 5 raw-text hashes. Shipped in v1.16.0 via PR #18 (renumbered from S008 during rebase onto master's S008/S009). |
 | [[Session-Logs/S011-Ark-Workflow-Context-Budget-Probe.md|Session 11: /ark-workflow Context-Budget Probe (v1.17.0 ship)]] | session-log | Shipped v1.17.0: stdlib-only context_probe.py with 6 CLI modes + atomic chain-file helper + session habits coaching block. 22 atomic commits on branch context-management, merged via PR #19 as squash commit 8d42bd8. No P1 blockers in final /ccg review; 7 P2 + 4 P3 follow-ups filed. |
 | [[Session-Logs/S012-Ark-Workflow-Gstack-Planning.md|Session 12: /ark-workflow gstack planning integration + Brainstorm scenario (v1.18.0 ship)]] | session-log | Shipped v1.18.0: wired gstack planning (/autoplan, /plan-*-review, /office-hours) into /ark-workflow and added Brainstorm scenario with Continuous Brainstorm pivot gate. Two /ccg review passes — design-level (6 reworks) and pre-push diff-level (4 fixes). 2 commits on branch gstack-improve, PR #21 open. |
+| [[Session-Logs/S013-Gstack-v1-5-1-0-Integration-Wave1.md|Session 13: gstack v1.5.1.0 integration Wave 1 (v1.20.0)]] | session-log | Shipped v1.20.0 — Wave 1 of gstack v1.5.1.0 integration: 8 /checkpoint refs renamed to /context-save, continuous-checkpoint wired into Step 6.5 (opt-in), /context-save added as compaction-recovery option (d). 4 atomic commits on master; review and security passes both green. |
 | [[TaskNotes/00-Project-Management-Guide.md|Project Management Guide]] | moc | How task IDs, statuses, and task notes work in the ark-skills project. |
 | [[TaskNotes/Tasks/Epic/Arkskill-001-vault-retrieval-tiers.md|Multi-Backend Vault Retrieval Tiers]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-002-ark-context-warmup.md|/ark-context-warmup — Automatic Context Loader]] |  |  |
@@ -59,3 +60,4 @@ last-updated: 2026-04-20
 | [[TaskNotes/Tasks/Epic/Arkskill-006-path-b-uniformity.md|/ark-workflow Path B Uniformity Refactor]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-007-context-budget-probe.md|/ark-workflow Context-Budget Probe (v1.17.0)]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-008-gstack-planning-brainstorm.md|/ark-workflow gstack planning integration + Brainstorm scenario (v1.18.0)]] |  |  |
+| [[TaskNotes/Tasks/Epic/Arkskill-009-gstack-v1-5-1-0-integration.md|gstack v1.5.1.0 integration into /ark-workflow (Waves 1+2)]] |  |  |
