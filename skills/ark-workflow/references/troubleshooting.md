@@ -9,11 +9,11 @@ For medium and heavy tasks with a design phase:
 - Tell the user: **"Design phase complete. Start a fresh Claude Code session and reference the spec at `docs/superpowers/specs/<filename>.md` to begin implementation."**
 
 **Additional handoff points:**
-- **Heavy Bugfix, step 2:** If investigation reveals architectural redesign is needed → `/checkpoint` findings, recommend fresh session with design phase
-- **Heavy Hygiene, step 3:** If audit + investigation reveals systemic issues requiring rewrite → escalate to Heavy Greenfield, `/checkpoint`, fresh session
+- **Heavy Bugfix, step 2:** If investigation reveals architectural redesign is needed → `/context-save` findings, recommend fresh session with design phase
+- **Heavy Hygiene, step 3:** If audit + investigation reveals systemic issues requiring rewrite → escalate to Heavy Greenfield, `/context-save`, fresh session
 - **Heavy Migration, step 4:** After migration plan is committed → session break before implementation
 - **Heavy Performance, step 5:** After optimization plan is committed → session break before implementation
-- **Any scenario, mid-implementation:** If the user explicitly asks to pause, or if output quality has degraded (repeated errors, hallucinated file paths, forgotten context) → suggest `/checkpoint`. Do NOT rely on tool-call counts as a trigger — that's an unreliable proxy.
+- **Any scenario, mid-implementation:** If the user explicitly asks to pause, or if output quality has degraded (repeated errors, hallucinated file paths, forgotten context) → suggest `/context-save`. Do NOT rely on tool-call counts as a trigger — that's an unreliable proxy.
 ## When Things Go Wrong
 
 If a step fails mid-workflow:
@@ -42,7 +42,7 @@ If the task changes class mid-flight:
 **Scenario shift:**
 If investigation or implementation reveals the task is fundamentally a different scenario:
 1. Stop at the current step
-2. Document findings so far (session log or `/checkpoint`)
+2. Document findings so far (session log or `/context-save`)
 3. Re-classify into the correct scenario
 4. If shifting to a scenario with a design phase (e.g., Bugfix → Greenfield), recommend a session break before starting the design phase
 5. Pick up the new scenario's chain from the appropriate step

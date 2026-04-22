@@ -77,7 +77,7 @@
 6. Read spec + plan from `docs/superpowers/specs/`
 7. `/executing-plans` with `/test-driven-development` per step
 8. `/subagent-driven-development` — parallelize independent modules
-9. `/checkpoint` (optional — if pausing mid-implementation)
+9. `/context-save` (optional — if pausing mid-implementation)
 10. `/ark-code-review --thorough` + `/ask codex` **[probe-gated §7]** → `/simplify`
 11. `/qa` (if UI)
 12. `/design-review` (if UI)

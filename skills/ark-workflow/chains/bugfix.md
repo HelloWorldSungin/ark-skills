@@ -52,7 +52,7 @@
 
 0. `/ark-context-warmup` — load recent + relevant project context
 1. `/investigate` — root cause analysis
-2. Re-triage if deeper than expected. **If investigation reveals architectural redesign is needed: `/checkpoint` findings, end session, start fresh with a design phase (pivot to Heavy Greenfield from step 0 — the mandatory `/ark-context-warmup` still runs first).**
+2. Re-triage if deeper than expected. **If investigation reveals architectural redesign is needed: `/context-save` findings, end session, start fresh with a design phase (pivot to Heavy Greenfield from step 0 — the mandatory `/ark-context-warmup` still runs first).**
 3. `/test-driven-development` — write a failing test that reproduces the bug (if not reproducible, document why and proceed)
 4. Fix (structured, may require `/executing-plans`)
 5. `/ark-code-review --thorough` + `/ask codex` **[probe-gated §7]** → `/simplify`

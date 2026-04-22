@@ -72,7 +72,7 @@
 0. `/ark-context-warmup` — load recent + relevant project context
 1. `/codebase-maintenance` — audit
 2. `/investigate` (if any item involves broken/unexpected behavior)
-3. **If audit + investigation reveals systemic issues requiring rewrite: escalate to Heavy Greenfield. `/checkpoint` findings, end session, start fresh with design phase.**
+3. **If audit + investigation reveals systemic issues requiring rewrite: escalate to Heavy Greenfield. `/context-save` findings, end session, start fresh with design phase.**
 4. `/cso` — infrastructure, dependency, secrets audit (this IS the mandatory `/cso` run — no duplicate later)
 5. `/test-driven-development` — tests before restructuring
 6. Implement cleanup
