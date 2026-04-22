@@ -38,7 +38,7 @@ class TestMidChainRender:
         assert "Context at 42%" in menu
         assert "attention-rot zone" in menu
 
-    def test_render_offers_three_options(self):
+    def test_render_offers_four_options(self):
         chain_text = (CHAIN_FIXTURES / "midchain-2of4.md").read_text()
         menu = cp.render_step_boundary_menu(
             level="nudge", pct=28, tokens=200_000, chain_text=chain_text,
@@ -46,7 +46,8 @@ class TestMidChainRender:
         assert "(a) /compact focus on the forward brief" in menu
         assert "(b) /clear" in menu
         assert "(c) Delegate Next step to a subagent" in menu
-        assert "[a/b/c/proceed]" in menu
+        assert "(d) /context-save --no-stage" in menu
+        assert "[a/b/c/d/proceed]" in menu
 
     def test_tokens_unavailable_renders_unknown(self):
         chain_text = (CHAIN_FIXTURES / "midchain-2of4.md").read_text()
@@ -79,7 +80,14 @@ class TestEntryRender:
             level="nudge", pct=24, tokens=240_000, chain_text=chain_text,
         )
         assert "(a) /compact — unavailable" in menu
-        assert "Which option? [b/c/proceed]" in menu  # constrained answer set
+        assert "Which option? [b/c/d/proceed]" in menu  # constrained answer set
+
+    def test_entry_offers_option_d(self):
+        chain_text = (CHAIN_FIXTURES / "entry-0of4.md").read_text()
+        menu = cp.render_step_boundary_menu(
+            level="nudge", pct=24, tokens=240_000, chain_text=chain_text,
+        )
+        assert "(d) /context-save --no-stage" in menu
 
     def test_entry_strong_escalates(self):
         chain_text = (CHAIN_FIXTURES / "entry-0of4.md").read_text()

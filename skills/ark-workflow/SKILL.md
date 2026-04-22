@@ -365,7 +365,7 @@ ENTRY=$(python3 "$ARK_SKILLS_ROOT/skills/ark-workflow/scripts/context_probe.py" 
   --max-age-seconds 300 2>/dev/null)
 ```
 
-If `$ENTRY` is non-empty, display it verbatim and pause for user decision before executing step 1. Apply the same proceed/reset/(c) handling as the per-step probe in the "after each step" bullet below. Entry-time probes pass `--max-age-seconds 300` (5 minutes) so a stale cache file from a previous session is rejected; the helper still prefers `--expected-session-id` when available. The step-boundary mode is reused at entry; the helper auto-detects "zero completed steps" and renders the entry menu (option (a) shown unavailable, answer set `[b/c/proceed]`).
+If `$ENTRY` is non-empty, display it verbatim and pause for user decision before executing step 1. Apply the same proceed/reset/(c) handling as the per-step probe in the "after each step" bullet below. Entry-time probes pass `--max-age-seconds 300` (5 minutes) so a stale cache file from a previous session is rejected; the helper still prefers `--expected-session-id` when available. The step-boundary mode is reused at entry; the helper auto-detects "zero completed steps" and renders the entry menu (option (a) shown unavailable, answer set `[b/c/d/proceed]`).
 
 - Create TodoWrite tasks for each step in the resolved chain
 - Compute task fields for `/ark-context-warmup` (step 0 of every chain). `/ark-workflow` needs the same `ARK_SKILLS_ROOT` resolution as the warm-up skill — mirror `/ark-context-warmup` SKILL.md's Project Discovery section verbatim so dev-mode runs inside the ark-skills worktree resolve helpers from the branch under test rather than a stale installed copy:
@@ -462,8 +462,9 @@ If `$ENTRY` is non-empty, display it verbatim and pause for user decision before
        Do NOT proceed to `/compact`/`/clear` with an unwritten bridge. Only after exit 0: run the user's chosen action (`/compact` or `/clear`), then invoke the probe's `--format record-reset`.
 
      - If `(c)`: no bridge write (subagent dispatch preserves parent context). No state write; subagent wraps Next step.
+     - If `(d)`: no `/wiki-handoff` call. Run `/context-save --no-stage` (lightweight markdown save under `~/.gstack/`; `--no-stage` leaves the dirty worktree alone so mid-chain work isn't committed), then run `/compact`, then invoke the probe's `--format record-reset`.
 
-**§ Wiki-handoff invariant:** Options `(a)` and `(b)` invoke `/wiki-handoff` BEFORE the destructive action and BEFORE `record-reset`. Any non-zero exit code (2 schema, 3 collision, or other I/O) blocks the action — the LLM must resolve the failure and re-invoke. Option `(c)` does NOT invoke `/wiki-handoff`.
+**§ Wiki-handoff invariant:** Options `(a)` and `(b)` invoke `/wiki-handoff` BEFORE the destructive action and BEFORE `record-reset`. Any non-zero exit code (2 schema, 3 collision, or other I/O) blocks the action — the LLM must resolve the failure and re-invoke. Options `(c)` and `(d)` do NOT invoke `/wiki-handoff`: `(c)` dispatches a subagent so parent context is preserved, and `(d)` is by design a lighter exit that skips vault schema validation.
 
 **§ Continuous Checkpoint Integration (gstack v1.5.1.0+):** Strict opt-in. Activates only when `gstack-config get checkpoint_mode` returns the literal string `continuous`. Default for users who have never set the mode is `explicit` — the block is a silent no-op for that majority path.
 

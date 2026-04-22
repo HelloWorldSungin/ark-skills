@@ -248,8 +248,10 @@ def _render_midchain_menu(*, level, pct, tokens, info) -> str:
         f"  (a) /compact focus on the forward brief above.\n"
         f"  (b) /clear, then paste the forward brief above as your opening message.\n"
         f"  (c) Delegate Next step to a subagent (keeps this session lean — only the\n"
-        f"      subagent's conclusion returns, not its tool output).\n\n"
-        f"Which option? [a/b/c/proceed]"
+        f"      subagent's conclusion returns, not its tool output).\n"
+        f"  (d) /context-save --no-stage, then /compact (gstack v1.5.1.0+; lighter\n"
+        f"      markdown save to ~/.gstack/; opts OUT of vault validation).\n\n"
+        f"Which option? [a/b/c/d/proceed]"
     )
 
 
@@ -279,8 +281,10 @@ def _render_entry_menu(*, level, pct, tokens, info) -> str:
         f"  (a) /compact — unavailable (no progress to summarize yet).\n"
         f"  (b) /clear, then paste the forward brief above as your opening message.\n"
         f"  (c) Delegate Step 1 to a subagent (keeps this session lean — only the\n"
-        f"      subagent's conclusion returns, not its tool output).\n\n"
-        f"Which option? [b/c/proceed]"
+        f"      subagent's conclusion returns, not its tool output).\n"
+        f"  (d) /context-save --no-stage, then /compact (gstack v1.5.1.0+; lighter\n"
+        f"      markdown save to ~/.gstack/; opts OUT of vault validation).\n\n"
+        f"Which option? [b/c/d/proceed]"
     )
 
 

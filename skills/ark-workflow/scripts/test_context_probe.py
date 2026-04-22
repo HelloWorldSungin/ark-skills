@@ -519,7 +519,7 @@ class TestCliStepBoundary:
         )
         assert rc == 0, f"stderr: {err}"
         assert "Context at 28%" in out
-        assert "Which option? [a/b/c/proceed]" in out
+        assert "Which option? [a/b/c/d/proceed]" in out
 
     def test_nudge_suppressed_by_proceed_past_level(self, tmp_path):
         chain = tmp_path / "current-chain.md"

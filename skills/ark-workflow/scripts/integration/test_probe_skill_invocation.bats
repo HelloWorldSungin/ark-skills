@@ -35,7 +35,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Context at 28%"* ]]
     [[ "$output" == *"Resuming bugfix chain (medium)"* ]]
-    [[ "$output" == *"[a/b/c/proceed]"* ]]
+    [[ "$output" == *"[a/b/c/d/proceed]"* ]]
 }
 
 @test "step-boundary mode: zero-completed renders entry menu" {
@@ -46,7 +46,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"before chain has started"* ]]
     [[ "$output" == *"(a) /compact — unavailable"* ]]
-    [[ "$output" == *"[b/c/proceed]"* ]]
+    [[ "$output" == *"[b/c/d/proceed]"* ]]
 }
 
 @test "step-boundary mode: nudge with proceed_past_level=nudge is silent" {
