@@ -348,7 +348,10 @@ SESSION_FLAG=()
 if [ -n "$SESSION_ID" ]; then
   SESSION_FLAG=(--expected-session-id "$SESSION_ID")
 fi
+GSTACK_CONFIG="${GSTACK_CONFIG:-$HOME/.claude/skills/gstack/bin/gstack-config}"
 ```
+
+The `gstack-config` binary (gstack v1.5.1.0+) is consulted by the continuous-checkpoint integration in the per-step loop below. It is NOT on `PATH`; resolve via `$GSTACK_CONFIG`. Gracefully no-ops when the binary is missing, so this line is safe to set unconditionally.
 
 **Chain-entry probe** — run before executing step 1 of the chain (only when `HAS_OMC=true`):
 
@@ -411,6 +414,21 @@ If `$ENTRY` is non-empty, display it verbatim and pause for user decision before
        --format check-off --step-index {N} \
        --chain-path .ark-workflow/current-chain.md
      ```
+
+     **Continuous-checkpoint integration** (gstack v1.5.1.0+, opt-in). If the user has set `checkpoint_mode: continuous` in gstack, drop a WIP commit recording what was just decided and what comes next. Runs *after* the Python helper returns, structurally outside the chain-file lock. Default `checkpoint_mode` is `explicit` — this block silently no-ops for most users. Full contract in § Continuous Checkpoint Integration below.
+     ```bash
+     if [ -x "$GSTACK_CONFIG" ]; then
+       CHECKPOINT_MODE=$("$GSTACK_CONFIG" get checkpoint_mode 2>/dev/null)
+       if [ "$CHECKPOINT_MODE" = "continuous" ] && git rev-parse --git-dir >/dev/null 2>&1; then
+         STEP_LABEL=$(awk -v n={N} '/^- \[x\]/ { c++; if (c == n) { sub(/^- \[x\] [0-9]+\. /, ""); print; exit } }' .ark-workflow/current-chain.md)
+         REMAINING_LABEL=$(awk '/^- \[ \]/ { sub(/^- \[ \] [0-9]+\. /, ""); print; exit }' .ark-workflow/current-chain.md)
+         [ -z "$REMAINING_LABEL" ] && REMAINING_LABEL="chain complete"
+         git commit --allow-empty -m "$(printf 'WIP: chain step {N} done\n\n[gstack-context]\nDecisions: %s\nRemaining: %s\nSkill: /ark-workflow\n[/gstack-context]\n' "$STEP_LABEL" "$REMAINING_LABEL")" >/dev/null 2>&1 \
+           || echo "warning: continuous-checkpoint commit skipped (commit failed; check-off still applied)" >&2
+       fi
+     fi
+     ```
+     `{N}` is the same LLM-substituted step-index as `--step-index {N}` above (literal integer at emit time, not a shell variable).
   2. Update the TodoWrite task to `completed`
   3. **Run the step-boundary probe** (only when `HAS_OMC=true`):
      ```bash
@@ -446,6 +464,35 @@ If `$ENTRY` is non-empty, display it verbatim and pause for user decision before
      - If `(c)`: no bridge write (subagent dispatch preserves parent context). No state write; subagent wraps Next step.
 
 **§ Wiki-handoff invariant:** Options `(a)` and `(b)` invoke `/wiki-handoff` BEFORE the destructive action and BEFORE `record-reset`. Any non-zero exit code (2 schema, 3 collision, or other I/O) blocks the action — the LLM must resolve the failure and re-invoke. Option `(c)` does NOT invoke `/wiki-handoff`.
+
+**§ Continuous Checkpoint Integration (gstack v1.5.1.0+):** Strict opt-in. Activates only when `gstack-config get checkpoint_mode` returns the literal string `continuous`. Default for users who have never set the mode is `explicit` — the block is a silent no-op for that majority path.
+
+When active, each completed step drops one WIP commit with a pinned `[gstack-context]` body. `git log --grep "WIP:"` then rebuilds the chain reasoning across worktrees and clones, which `.ark-workflow/current-chain.md` (gitignored) cannot.
+
+**Lock boundary.** The chain-file lock is acquired and released entirely inside the `--format check-off` Python subprocess. The WIP commit shells out from the bash block *after* that subprocess returns, structurally outside the lock. No coordination required.
+
+**Commit body schema (pinned):**
+
+| Field | Source | Example |
+|-------|--------|---------|
+| `Decisions` | The just-completed step's label, parsed from the matching `- [x] N. <label>` line in `current-chain.md` | `/ark-context-warmup — load recent + relevant project context` |
+| `Remaining` | The label of the next `- [ ]` line, or the literal string `chain complete` if none remain | `/investigate — root cause analysis` |
+| `Skill` | Always `/ark-workflow` (the parent orchestrator — steps are checklist items, not skill invocations) | `/ark-workflow` |
+
+**Failure modes (all silent no-ops or warn-and-continue — none block check-off):**
+
+| Condition | Behavior |
+|-----------|----------|
+| `gstack-config` binary not found | Skip silently (gstack absence is normal) |
+| `gstack-config` returns any value other than `continuous` (including `explicit`, empty, or unexpected string) | Skip silently |
+| Not in a git repo (`git rev-parse --git-dir` fails) | Skip silently |
+| Detached HEAD | Allowed — `git commit` works; the WIP commit lands on the detached ref |
+| `git commit` fails for any other reason (pre-commit hook, missing identity, repo-locked) | Emit `warning: ...` to stderr; check-off remains applied; LLM surfaces the warning inline if stderr is non-empty but MUST NOT halt the chain |
+| Commit succeeds but post-commit hook fails | Treated as success (post-commit hooks don't block the commit) |
+
+**Author identity:** Default git config. No synthetic bot identity.
+
+**Integration tests:** `skills/ark-workflow/scripts/integration/test_continuous_checkpoint.bats` duplicates the bash literally and exercises every row of the failure-mode table. When this snippet changes, update both.
      If `$MENU` is empty, proceed silently.
   4. Mark the next TodoWrite task `in_progress`
   5. Announce `Next: [skill] — [purpose]`
