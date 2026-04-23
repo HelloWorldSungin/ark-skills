@@ -2,6 +2,73 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.0] - 2026-04-23
+
+**Layer 3 Shrink-to-Core audit.** Ships the approved "ark-skills Identity Audit — Shrink to Core" plan (design doc under `~/.gstack/projects/HelloWorldSungin-ark-skills/`, approved 2026-04-22). Cuts Layer 3 SKILL.md verbosity without touching Layer 1 (orchestration) or Layer 2 (vault integration).
+
+### Per-skill outcomes
+
+| Skill | Before | After | Reduction | Disposition |
+|-------|-------|-------|-----------|-------------|
+| `/ark-health` | 743 | 378 | 49% | SLIM — bash implementations for 9 checks (5, 6, 8, 10, 11, 16, 18, 20, 22) relocated to `references/check-implementations.md` |
+| `/codebase-maintenance` | 156 | 156 | — | KEEP — 156 LOC router with 4 ark-specific sub-workflows (chain-invoked in all 4 hygiene variants); no upstream equivalent |
+| `/ark-code-review` | 784 | 357 | 54% | SLIM — agent prompts, per-mode report formats, and External Second Opinion framing relocated to 3 reference files; Trust Boundary Notice and operational rules stay inline |
+| `/ark-onboard` | 2650 | 1122 | 58% | SLIM — file templates (801 LOC), externalization plan template (215 LOC), state detection bash (130 LOC), plugin install bash (128 LOC), and centralized-vault repair scenarios (142 LOC) relocated to 5 reference files; wizard UX preserved verbatim |
+
+**Aggregate:** 7,707 LOC → 5,388 LOC across all SKILL.md files (**30% reduction** — hits the design-doc stretch target). At-invocation footprint drops proportionally; `references/*.md` load only on demand.
+
+### Rationale revision
+
+The design doc's original slim rationale cited "overlap with OMC `omc-doctor`" (for `/ark-health`) and "wrapper skills routing to upstream" (for Layer 3 generally). Evidence during execution contradicted that framing: `omc-doctor` (211 LOC) covers OMC-specific cache/version/legacy concerns; `/ark-health` covers ark-project concerns — disjoint domains. Similarly, no upstream plugin replicates `/ark-code-review`'s multi-agent fan-out + epic + plan modes, or `/codebase-maintenance`'s code/vault/skills three-phase sweep. The actual slim pattern is **verbosity reduction via load-on-demand references**, not deletion of upstream-delegable content. Ark-specific IP is preserved in full.
+
+### Invocation audit (methodology)
+
+Before slimming, captured three signals across the full `~/.claude/projects/` transcript history and `vault/Session-Logs/`:
+
+- **G1 mentions** (prose + SKILL.md loads + system-reminders): `/ark-workflow` dominates (25k); `/notebooklm-vault` and `/ark-update` next.
+- **G2 Skill-tool programmatic invocations**: `/notebooklm-vault` (41) and `/codebase-maintenance` (10) are the true chain workhorses; most L2/L3 skills have 0–2 programmatic fires.
+- **G3 session-log authorial mentions**: `/ark-workflow` (45) leads; L3 skills `/ark-onboard` (27), `/ark-health` (21), `/ark-update` (17), `/ark-code-review` (12) are direct-invocation-first (matches the design doc's P1 layered-identity premise).
+
+Captured in the design doc under `## Invocation Audit — 2026-04-23`. Informed audit ordering (Codex-recommended `/ark-health` first, `/ark-onboard` last).
+
+### Verify-then-slim discipline
+
+Every slim commit gated on independent `codex` review before landing. Findings summary:
+
+- **Phase 1 `/ark-health`:** codex clean on first pass (no [P1] / [P2]).
+- **Phase 3 `/ark-code-review`:** codex flagged 2 [P2] NITs — missing `--epic` Code Reviewer prompt variant and inaccurate agent-roster mode-applicability column. Both fixed in `e32c198` before proceeding.
+- **Phase 4 `/ark-onboard`:** codex flagged 3 [P1]s — reference-pointer integrity (backtick/parenthetical-wrapped headings didn't match literal `§` lookups), Greenfield Step 1 wizard UX regression (compressed prompts), design-bullet/step-marker inconsistency. All fixed in `a2e54dd` before release.
+
+### Deferred (out of scope, explicitly named)
+
+- **L1 chain-manifest decoupling** (design-doc Open Question 10). Per-file churn on `/ark-workflow` (5,131 LOC over 6 weeks) comes from inline chain-resolution referencing upstream plugin names. Externalizing chain manifests from SKILL.md is the right fix — target v1.22.0 or later. Not addressed by this slim.
+- **Low-signal L2 candidates** surfaced by the invocation audit (`/wiki-lint`, `/data-ingest`, `/wiki-handoff`, `/tag-taxonomy`, `/cross-linker`, `/wiki-status` at G2=0, low G3). Candidates for a future L2 slim pass — not this audit.
+
+### Added
+
+- **`skills/ark-health/references/check-implementations.md`** (270 LOC) — bash for checks 5, 6, 8, 10, 11, 16, 18, 20, 22.
+- **`skills/ark-code-review/references/agent-prompts.md`** (181 + 14 after fix) — 5 agent prompts + 4 mode variants.
+- **`skills/ark-code-review/references/report-formats.md`** (230 LOC) — per-mode report skeletons (default / `--full` / `--epic` / `--plan` / `--pr` / `--quick`).
+- **`skills/ark-code-review/references/external-second-opinion.md`** (61 LOC) — framing, synthesis detail, cost notice, vendor capacity caveat (trust-boundary operational rules stay inline in SKILL.md).
+- **`skills/ark-onboard/references/templates.md`** (801 LOC) — all embedded file templates (shell scripts, Python, markdown, JSON configs).
+- **`skills/ark-onboard/references/externalize-vault-plan.md`** (215 LOC) — the 199-LOC externalization plan template for Phase 0–3 / rollback.
+- **`skills/ark-onboard/references/state-detection.md`** (130 LOC) — project-state detection bash + flag derivation.
+- **`skills/ark-onboard/references/plugin-install.md`** (128 LOC) — 3-tier plugin install fallback bash.
+- **`skills/ark-onboard/references/centralized-vault-repair.md`** (142 LOC) — 5 centralized-vault repair scenarios.
+
+### Changed
+
+- `skills/ark-health/SKILL.md` — 743 → 378 LOC.
+- `skills/ark-code-review/SKILL.md` — 784 → 357 LOC.
+- `skills/ark-onboard/SKILL.md` — 2650 → 1122 LOC.
+
+### Unchanged
+
+- All Layer 1 skills (`/ark-workflow`, `/ark-context-warmup`).
+- All Layer 2 skills (vault integration — `/notebooklm-vault`, `/wiki-*`, `/tag-taxonomy`, `/cross-linker`, `/data-ingest`, `/claude-history-ingest`).
+- `/codebase-maintenance`, `/ark-tasknotes`, `/ark-update` (KEEP per audit).
+- All public contracts preserved: grep contracts (VAULT_TARGET, embedded opt-out), 22-check rubric, tier classifications, scorecard formats, wizard UX prompts, chain invocation points (`--quick` / `--thorough`).
+
 ## [1.20.0] - 2026-04-22
 
 Wave 1 of gstack v1.5.1.0 integration (Approach B). Cleanup + wiring; Wave 2 (v1.21.0) ships `/benchmark-models` calibration and data-driven chain-substitution edits.
