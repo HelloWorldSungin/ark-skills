@@ -7,11 +7,18 @@ description: Comprehensive multi-agent code review that orchestrates Claude Code
 
 Multi-agent code review that fans out to specialized reviewers, then aggregates findings into a single actionable report. Designed for pre-merge review of branch changes.
 
+Supporting references (load on demand):
+
+- `references/agent-prompts.md` — full agent prompt templates for Step 2 fan-out
+- `references/report-formats.md` — per-mode report templates for Step 3 aggregation
+- `references/external-second-opinion.md` — framing, cost notice, and vendor capacity caveat (operational rules stay inline in § External Second Opinion)
+
 ## Project Discovery
 
 Before running this skill, discover project context per the plugin CLAUDE.md:
-1. Read the project's CLAUDE.md to find: project name, task prefix, vault path, TaskNotes path
-2. Read the vault's `_meta/vault-schema.md` to understand the vault structure
+
+1. Read the project's CLAUDE.md: project name, task prefix, vault path, TaskNotes path
+2. Read the vault's `_meta/vault-schema.md` for the vault structure
 3. Detect the base branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'` (fallback to `master`)
 4. Use discovered values throughout — never hardcode project names or paths
 
@@ -19,11 +26,11 @@ Before running this skill, discover project context per the plugin CLAUDE.md:
 
 ```
 /ark-code-review                              # Default: review current branch vs {base_branch}
-/ark-code-review --quick                      # Fast: code-reviewer only
-/ark-code-review --thorough                   # Full: all agents including error/test analysis
-/ark-code-review --thorough --no-multi-vendor # Thorough WITHOUT external Codex/Gemini fan-out (alias: --no-xv)
-/ark-code-review --full                       # Thorough + auto-detect epic from branch name
-/ark-code-review --epic {task_prefix}001           # Review epic + stories + sessions vs code
+/ark-code-review --quick                      # Fast: code-reviewer only, <60s
+/ark-code-review --thorough                   # Full: all agents + external second opinion
+/ark-code-review --thorough --no-multi-vendor # Thorough WITHOUT external Codex/Gemini (alias: --no-xv)
+/ark-code-review --full                       # Thorough + auto-detected epic context
+/ark-code-review --epic {task_prefix}001      # Review epic + stories + sessions vs code
 /ark-code-review --plan some-feature-slug     # Review code against plan + spec docs
 /ark-code-review --pr 123                     # Review a GitHub PR
 /ark-code-review src/foo.py bar.py            # Review specific files only
@@ -31,216 +38,72 @@ Before running this skill, discover project context per the plugin CLAUDE.md:
 
 ## How It Works
 
-The skill fans out to parallel agents, then aggregates findings into a single report.
+Fan out parallel agents scoped to the changed files; aggregate findings into one report.
 
-### Agents (parallel)
+| Agent | subagent_type | When | Role |
+|-------|---------------|------|------|
+| Code Reviewer | `feature-dev:code-reviewer` | all modes (solo in `--quick`) | Bugs, logic, security. Confidence ≥ 80. `--epic` and `--plan` use shorter variants. |
+| Code Architect | `feature-dev:code-architect` | all modes except `--quick` | Pattern consistency, integration risks. `--epic` / `--plan` use dedicated variants. |
+| Test Coverage Checker | `Explore` | default, `--thorough`, `--full`, `--plan` (not `--quick` / `--epic`) | Maps source → test files, flags gaps. |
+| Silent Failure Hunter | `code-simplifier:code-simplifier` | `--thorough` + `--full` only | Broad catches, missing logging, swallowed exceptions. |
+| Test Analyzer | — | `--thorough` + `--full` only | Deep test-gap analysis: edge cases, error paths, negatives. |
 
-Spawn these as parallel subagents scoped to the changed files:
+After all agents complete, deduplicate overlapping findings (prefer the more specific one) and sort by severity.
 
-| Agent | Type | What It Checks |
-|-------|------|----------------|
-| `feature-dev:code-reviewer` | Agent | Bugs, logic errors, security vulnerabilities, CLAUDE.md compliance. Confidence >= 80 filter. |
-| `feature-dev:code-architect` | Agent | Architecture consistency, pattern violations, integration risks. Checks changes against established project conventions. |
-| **Test Coverage Checker** | Agent (Explore) | Maps changed source files to test files, flags missing/stale tests. |
-
-In `--thorough` mode, also spawn:
-
-| Agent | Type | What It Checks |
-|-------|------|----------------|
-| **Silent Failure Hunter** | Agent | Silent failures, broad catch blocks, missing error logging, swallowed exceptions. |
-| **Test Analyzer** | Agent | Deep test analysis: untested error paths, missing edge cases, negative test gaps. |
-
-### Aggregate & Report
-
-After all agents complete, produce a unified report. Deduplicate findings that overlap between agents (prefer the more specific finding). Sort by severity.
+---
 
 ## Execution Steps
-
-Follow these steps exactly:
 
 ### Step 1: Determine scope
 
 ```bash
-# Get the diff to review
 git diff {base_branch}...HEAD --stat          # overview
 git diff {base_branch}...HEAD --name-only     # changed files list
 git diff {base_branch}...HEAD                 # full diff
 ```
 
-If the user provided specific files, scope all agents to those files only.
-If `--pr N` was passed, use `gh pr diff N` instead.
+If the user provided specific files, scope all agents to those files only. If `--pr N` was passed, use `gh pr diff N` instead.
 
 ### Step 2: Fan out agents
 
-Spawn these agents **in parallel** using the Agent tool. Pass each agent the list of changed files and the diff.
+Spawn the agents from the How It Works table **in parallel** using the Agent tool. Prompt bodies live in `references/agent-prompts.md` — for each agent, read § `<Agent Name>` and substitute `<FILE_LIST>` and `<DIFF>`.
 
-**Agent 1 — Code Reviewer:**
-```
-subagent_type: feature-dev:code-reviewer
-prompt: |
-  Review these changes for bugs, logic errors, security vulnerabilities,
-  and code quality issues. Only report findings with confidence >= 80.
-
-  Changed files: <FILE_LIST>
-  Diff: <DIFF>
-
-  Focus on correctness and security. Skip style issues (linters handle those).
-```
-
-**Agent 2 — Code Architect:**
-```
-subagent_type: feature-dev:code-architect
-prompt: |
-  Review these changes for architecture consistency. Check whether changes
-  follow existing project patterns, module boundaries, and abstractions.
-  Flag integration risks or pattern violations.
-
-  Changed files: <FILE_LIST>
-  Diff: <DIFF>
-
-  Reference existing patterns with file:line. Be specific about what
-  convention is violated and what the correct pattern looks like.
-```
-
-**Agent 3 — Test Coverage Checker (default + thorough):**
-```
-subagent_type: Explore
-prompt: |
-  Analyze test coverage for the changed source files on this branch.
-
-  Changed files: <FILE_LIST>
-
-  For each changed source file, do the following:
-
-  1. MAP to test file — Discover the project's test structure by scanning for:
-     - `tests/` directory structure
-     - Test runner config (pytest.ini, jest.config.*, vitest.config.*)
-     - Test naming patterns used in the project (e.g., test_*.py, *.test.ts, *.spec.ts)
-     Check multiple naming conventions.
-
-  2. CHECK existence — Does the corresponding test file exist?
-
-  3. CHECK staleness — If the test file exists, read both the changed source and the test.
-     Flag if:
-     - New public functions/classes were added to the source but have no test
-     - Existing function signatures changed (params added/removed) but tests weren't updated
-     - New code branches (if/else, try/except) with no corresponding test path
-     - Business logic changes (calculations, thresholds, filters) without regression tests
-
-  4. CATEGORIZE each finding:
-     - MISSING_TEST_FILE: Changed source file has no test file at all
-     - MISSING_FUNCTION_TEST: New or changed public function has no test
-     - STALE_TEST: Test exists but doesn't cover the new behavior
-     - ADEQUATE: Test file exists and appears to cover the changes (briefly note why)
-
-  5. SKIP these (don't need tests):
-     - Config files (*.yaml, *.json, *.toml)
-     - __init__.py with only imports
-     - Templates, static assets, CSS/JS
-     - Documentation, README, CLAUDE.md
-     - Type stubs, pure dataclass definitions with no logic
-
-  Output a structured list:
-  For each changed source file:
-    - Source: <path>
-    - Test: <path or "NONE">
-    - Status: MISSING_TEST_FILE | MISSING_FUNCTION_TEST | STALE_TEST | ADEQUATE | SKIP
-    - Details: <what's missing or why it's adequate>
-    - Suggested test: <brief description of what test to write, if applicable>
-```
-
-**Agent 4 — Silent Failure Hunter (--thorough only):**
-```
-subagent_type: code-simplifier:code-simplifier
-prompt: |
-  Audit error handling in these changed files for silent failures.
-  Check for: broad catch blocks, missing error logging, swallowed exceptions,
-  inappropriate fallback behavior, optional chaining hiding errors.
-
-  Changed files: <FILE_LIST>
-```
-
-**Agent 5 — Test Analyzer (--thorough only):**
-```
-prompt: |
-  Analyze test coverage for these changes. Identify:
-  - Untested error handling paths
-  - Missing edge cases
-  - Critical business logic without tests
-  - Missing negative test cases
-
-  Changed files: <FILE_LIST>
-  Corresponding test files: <TEST_FILES>
-```
+Mode variants override the default prompt for Code Architect (`--epic`) or for both Architect + Code Reviewer (`--plan`). See `references/agent-prompts.md` § Mode variants.
 
 ### Step 3: Aggregate and present
 
-Produce the final report in this format:
+Produce the final report using the Default template from `references/report-formats.md` § Default mode. Other modes switch templates per the rule below:
 
-```markdown
-# Ark Code Review Report
+| Mode | Template |
+|------|----------|
+| default, `--thorough`, `--pr N` | `references/report-formats.md` § Default mode |
+| `--full` | § `--full` mode |
+| `--epic` | § `--epic` mode |
+| `--plan` | § `--plan` mode |
+| `--quick` | § `--quick` mode |
 
-**Branch:** <branch> vs {base_branch}
-**Files changed:** N
-**Reviewers:** code-reviewer, code-architect, test-coverage-checker [, silent-failure-hunter, test-analyzer]
+Report header always includes: **Branch**, **Files changed**, **Reviewers** (list active agents, adding `codex-cli` / `gemini-cli` if External Second Opinion ran). Each finding line: `- [file:line] Description — Found by: <agent>`.
 
-## Critical (must fix before merge)
-- [file:line] Description — Found by: <agent>
+### Step 4: Offer follow-up (MANDATORY — do not skip)
 
-## High (should fix)
-- [file:line] Description — Found by: <agent>
+After presenting the report, offer follow-up actions. All modes **except** `--quick`:
 
-## Medium (consider fixing)
-- [file:line] Description — Found by: <agent>
-
-## Test Coverage
-| Source File | Test File | Status | Details |
-|-------------|-----------|--------|---------|
-| src/foo.py | tests/test_foo.py | ADEQUATE | Covers new bar() method |
-| src/bar.py | NONE | MISSING_TEST_FILE | New module with 3 public functions — needs unit tests |
-| src/baz.py | tests/test_baz.py | STALE_TEST | process() gained a new param `strict` but tests don't exercise it |
-
-**Coverage verdict:** [ALL COVERED / N files need tests / WRITE TESTS BEFORE MERGE]
-
-## Architecture Notes
-- Description — Found by: code-architect
-
-## Simplification Opportunities
-- [file:line] Description (suggestion only, not auto-applied)
-
-## Summary
-X critical, Y high, Z medium issues found. N files need test coverage.
-[Merge recommendation: SAFE / FIX FIRST / WRITE TESTS / NEEDS DISCUSSION]
-```
-
-### Step 4: Offer follow-up (MANDATORY — do not skip this step)
-
-After presenting the report, you MUST offer follow-up actions.
-
-For **all modes** (except --quick):
 - "Want me to fix the critical/high issues?"
 - "Want me to write/update the missing tests?" (if test coverage checker found gaps)
 - "Want me to run `/simplify` on the suggestions?"
 
-For **--pr N** mode (in addition to the above):
-- "Want me to post these findings as comments on PR #N?" (via `gh pr comment`)
-- "Want me to request changes on the PR?" (via `gh pr review --request-changes`)
-- "Or just leave the review here locally?"
+Mode-specific additions:
 
-For **--full** mode:
-- "Want me to fix the critical/high issues?"
-- "Want me to write/update the missing tests?" (if test coverage checker found gaps)
-- "Want me to update the epic/story statuses in the vault?"
-- "Want me to run `/simplify` on the suggestions?"
+| Mode | Additional offers |
+|------|-------------------|
+| `--pr N` | "Post these findings as inline comments on PR #N?" (via `gh pr review N --comment`); "Request changes on the PR?" (via `gh pr review N --request-changes`); "Or leave the review here locally?" |
+| `--full` | "Update the epic/story statuses in the vault?" |
+| `--epic` | "Update the epic/story statuses in the vault?"; "Fix the code quality issues?" |
+| `--plan` | "Fix the code quality issues?"; "Implement the incomplete tasks?" (if tasks remain unchecked); "Update the plan checkboxes to reflect current status?" |
 
-For **--epic** mode:
-- "Want me to update the epic/story statuses in the vault?"
-- "Want me to fix the code quality issues?"
+`--quick` mode does NOT offer follow-up — the quick report stands alone.
 
-For **--plan** mode:
-- "Want me to fix the code quality issues?"
-- "Want me to implement the incomplete tasks?" (if tasks remain unchecked)
-- "Want me to update the plan checkboxes to reflect current status?"
+---
 
 ## Mode-Specific Behavior
 
@@ -248,42 +111,23 @@ For **--plan** mode:
 
 **Goal: finish in under 60 seconds with a short, actionable report.**
 
-1. **Scope down aggressively.** Do NOT review the full branch diff. Instead:
-   - If the user mentions specific files or "the changes I just made", scope to only those files.
-   - Otherwise, use `git diff --name-only` (unstaged) or `git diff --cached --name-only` (staged) to find only the *most recent* uncommitted changes. If nothing is uncommitted, use the last commit only (`git diff HEAD~1 --name-only`).
-   - Never review more than ~10 files in quick mode. If the scope is larger, tell the user to use default mode instead.
-
-2. **Skip code-architect and test coverage checker** — no architecture or test coverage review.
-
-3. **Run only `feature-dev:code-reviewer`** scoped to the narrowed file list. Do NOT spawn a subagent — do the review inline to save overhead.
-
-4. **Produce a minimal report** — no Architecture Notes, no Simplification Opportunities section. Just:
-
-```markdown
-# Quick Review
-
-**Files reviewed:** N
-**Issues:** X high, Y medium
-
-## Findings
-- [file:line] Description (severity)
-
-## Verdict
-[LOOKS GOOD / FIX: <one-liner>]
-```
-
-5. **Do not offer follow-up actions.** The quick report stands alone.
+1. **Scope down aggressively.** Do NOT review the full branch diff:
+   - If the user mentions specific files or "the changes I just made", scope to only those.
+   - Otherwise, use `git diff --name-only` (unstaged) / `git diff --cached --name-only` (staged) for the most recent uncommitted changes. If nothing is uncommitted, use only the last commit (`git diff HEAD~1 --name-only`).
+   - Never review more than ~10 files in quick mode. If the scope is larger, tell the user to use default mode.
+2. **Skip code-architect and test coverage checker.**
+3. **Run only `feature-dev:code-reviewer`** scoped to the narrowed list. Do NOT spawn a subagent — review inline to save overhead.
+4. **Produce the Quick report** per `references/report-formats.md` § `--quick` mode. No follow-up offers.
 
 ### `--thorough` mode
-Run all agents (including silent-failure-hunter and test-analyzer). Use for significant changes, new features, or pre-merge reviews.
 
-**External Second Opinion (opt-out, default-on):** When `HAS_OMC=true` and at least one of `codex`/`gemini` is on PATH, `--thorough` also solicits a vendor-training-biased **second opinion** via `omc ask <vendor>` in parallel (Codex = code-quality lens; Gemini = UI/docs lens). Vendors do NOT see CLAUDE.md or plugin skills — native CC agents remain the conventions-aware layer. Disable with `--no-multi-vendor` (alias `--no-xv`). See **External Second Opinion (Vendor CLIs)** section below for trust-boundary notice, trigger logic, fan-out prompts, synthesis approach, and full degradation table.
+Run all 5 agents (default 3 + Silent Failure Hunter + Test Analyzer). Use for significant changes, new features, or pre-merge reviews.
+
+**Inherits External Second Opinion:** when `HAS_OMC=true` and at least one of `codex`/`gemini` is on PATH, `--thorough` also solicits a vendor-training-biased second opinion via `omc ask`. Disable with `--no-multi-vendor` (alias `--no-xv`). See § External Second Opinion below.
 
 ### `--full` mode
 
-Combines `--thorough` (all 5 code analysis agents) with `--epic` (vault context cross-referencing), auto-detecting the epic from the current branch name.
-
-**Inherits External Second Opinion from `--thorough`:** when `HAS_OMC=true` and at least one of `codex`/`gemini` is on PATH, `--full` also solicits vendor second opinions via `omc ask`. Same `--no-multi-vendor` / `--no-xv` opt-out applies. See **External Second Opinion (Vendor CLIs)** section for the trust-boundary notice and framing — vendors do NOT see CLAUDE.md, plugin skills, vault, or TaskNotes.
+Combines `--thorough` (all 5 agents) with `--epic` (vault cross-referencing), auto-detecting the epic from the current branch name. **Inherits External Second Opinion from `--thorough`.**
 
 #### Step 0: Auto-detect epic from branch name
 
@@ -297,140 +141,52 @@ Combines `--thorough` (all 5 code analysis agents) with `--epic` (vault context 
    c. Score = |branch_tokens ∩ epic_tokens| / |branch_tokens ∪ epic_tokens|
 5. Pick the best match:
    - If best score ≥ 0.6 and no tie → use that epic
-   - If tie or best score < 0.6 → fall back to step 0b
+   - If tie or best score < 0.6 → fall back to Step 0b
 ```
 
-**Step 0b: Fallback — in-progress epics**
+**Step 0b: in-progress-epics fallback**
 
-If branch matching fails:
-```
-1. Search {tasknotes_path}/Tasks/Epic/*.md for frontmatter "status: in-progress"
-2. If 1 match → use it
-3. If 0 matches → warn "No epic found, falling back to --thorough only"
-4. If 2+ matches → present the list, ask user to pick
-```
+1. Search `{tasknotes_path}/Tasks/Epic/*.md` for frontmatter `status: in-progress`
+2. 1 match → use it. 0 matches → warn "No epic found, falling back to --thorough only". 2+ matches → present the list, ask the user.
 
 #### Steps 1-4: Combined thorough + epic
 
 Once the epic is resolved:
 
-1. **Gather vault context** — same as `--epic` mode (Step 1: read epic, stories, sessions via obsidian-cli)
-2. **Determine scope** — same as default mode (git diff {base_branch}...HEAD)
-3. **Fan out all agents in parallel:**
+1. **Gather vault context** — same as `--epic` mode (via `obsidian-cli`)
+2. **Determine scope** — same as default (Step 1 above)
+3. **Fan out all 5 agents in parallel.** Agent 2 (Code Architect) uses the `--epic` variant prompt from `references/agent-prompts.md` and receives the epic context document.
+4. **Produce `--full` report** per `references/report-formats.md` § `--full` mode.
 
-| # | Agent | Source | Notes |
-|---|-------|--------|-------|
-| 1 | Code Reviewer (`feature-dev:code-reviewer`) | default | Confidence ≥80 |
-| 2 | Code Architect (`feature-dev:code-architect`) | `--epic` | Gets epic context doc + diff; checks epic alignment AND architecture |
-| 3 | Test Coverage Checker (Explore) | default | Maps source → test files |
-| 4 | Silent Failure Hunter | `--thorough` | Audits error handling |
-| 5 | Test Analyzer | `--thorough` | Deep test gap analysis |
+### `--epic {task_prefix}001` mode
 
-4. **Produce combined report** — uses the Epic Review Report format with additional thorough-mode sections:
+Reviews an Obsidian TaskNotes epic against the actual code on the branch — the most context-rich mode.
 
-```markdown
-# Full Review Report
-
-**Epic:** <TASK-ID> — <title> (auto-detected from branch)
-**Branch:** <branch> vs {base_branch}
-**Files changed:** N
-**Stories:** N total (X done, Y in-progress, Z not started)
-**Reviewers:** code-reviewer, code-architect, test-coverage-checker, silent-failure-hunter, test-analyzer
-
-## Epic Alignment
-- [PASS/GAP] Goal 1: <assessment>
-- [PASS/GAP] Goal 2: <assessment>
-
-## Story Coverage
-| Story | Status | Code Changes? | Assessment |
-|-------|--------|---------------|------------|
-| <id>  | done   | Yes (3 files) | Fully implemented |
-| <id>  | in-progress | Partial | Missing error handling |
-| <id>  | backlog | No | Not started — blocks merge? |
-
-## Critical (must fix before merge)
-- [file:line] Description — Found by: <agent>
-
-## High (should fix)
-- [file:line] Description — Found by: <agent>
-
-## Medium (consider fixing)
-- [file:line] Description — Found by: <agent>
-
-## Silent Failure Audit
-- [file:line] Description — Found by: silent-failure-hunter
-
-## Test Coverage
-| Source File | Test File | Status | Details |
-|-------------|-----------|--------|---------|
-...
-
-**Coverage verdict:** [ALL COVERED / N files need tests / WRITE TESTS BEFORE MERGE]
-
-## Gaps & Risks
-- Story X has no corresponding code
-- Code in module Y doesn't map to any story (scope creep?)
-- Session-### noted risk Z — not addressed in code
-
-## Architecture Notes
-- Description — Found by: code-architect
-
-## Recommendations
-1. ...
-2. ...
-
-## Merge Readiness
-[READY / BLOCKED BY: <story-ids or issues> / NEEDS DISCUSSION]
-```
-
-### `--epic TASK-ID` mode
-
-Reviews an Obsidian TaskNotes epic against the actual code on the branch. This is the most context-rich review mode — it pulls the full planning context from the vault and cross-references it against what was actually implemented.
-
-#### Step 1: Gather vault context (via obsidian-cli)
-
-Use the `obsidian:obsidian-cli` skill to efficiently query the vault instead of reading raw files.
+#### Step 1: Gather vault context (via `obsidian:obsidian-cli`)
 
 ```
-1. Find and read the epic:
-   obsidian read file="<TASK-ID>-*"
-   -> Extract: title, status, priority, goals, child story wikilinks
-
-2. Find child stories using backlinks:
-   obsidian backlinks file="<TASK-ID>-*"
-   -> This finds all stories whose `projects` frontmatter references the epic
-
-3. For each child story, read properties:
-   obsidian property:read name="status" file="<story-id>-*"
-   -> Extract: task-id, title, status, session, completion criteria
-
-4. Collect session references from:
-   - Epic's `session` property
-   - Each story's `session` property
-   - Deduplicate session IDs
-
-5. For each referenced session log:
-   obsidian read file="Session-###"
-   -> Extract: objective, key accomplishments, next steps
+1. Read the epic:           obsidian read file="<TASK-ID>-*"
+   → title, status, priority, goals, child story wikilinks
+2. Find child stories:      obsidian backlinks file="<TASK-ID>-*"
+   → all stories whose `projects` frontmatter references the epic
+3. For each child story:    obsidian property:read name="status" file="<story-id>-*"
+   → task-id, title, status, session, completion criteria
+4. Collect session refs from: epic's `session` property + each story's `session` property. Deduplicate.
+5. For each session:        obsidian read file="Session-###"
+   → objective, key accomplishments, next steps
 ```
 
-#### Step 2: Build the review context document
-
-Assemble a structured summary:
+#### Step 2: Build the review-context document
 
 ```markdown
 ## Epic: <TASK-ID> — <title>
 Status: <status> | Priority: <priority>
-Goals:
-<goals from epic body>
+Goals: <from epic body>
 
 ## Stories
 ### <story-id> — <title> [status]
 Description: <from story body>
 Completion criteria: <checkboxes>
-
-### <story-id> — <title> [status]
-...
 
 ## Session History
 ### Session-###: <title>
@@ -442,78 +198,22 @@ Next steps: <from session>
 <changed files list>
 ```
 
-#### Step 3: Fan out reviewers
+#### Step 3: Fan out reviewers (parallel)
 
-Run in parallel:
-
-**Agent 1 — Code Architect** (`feature-dev:code-architect`):
-```
-Review whether the code changes on this branch correctly implement the epic's
-goals and stories. Check for:
-- Missing stories that have no corresponding code changes
-- Code changes that don't map to any story (scope creep)
-- Architecture decisions that contradict the epic's stated goals
-- Integration risks between stories
-
-Epic context:
-<REVIEW_CONTEXT_DOC>
-
-Branch diff:
-<DIFF>
-```
-
-**Agent 2 — Code Reviewer** (`feature-dev:code-reviewer`):
-```
-Review code quality of these changes. Confidence >= 80 only.
-Changed files: <FILE_LIST>
-Diff: <DIFF>
-```
+- **Agent 1** — Code Architect (`--epic` variant prompt, `references/agent-prompts.md` § Code Architect variant). Receives the review-context document + diff.
+- **Agent 2** — Code Reviewer (`--epic` variant prompt, `references/agent-prompts.md` § Code Reviewer variant). Shorter than default — the epic context carries the framing. Receives file list + diff.
 
 #### Step 4: Epic review report
 
-```markdown
-# Epic Review Report
-
-**Epic:** <TASK-ID> — <title>
-**Branch:** <branch> vs {base_branch}
-**Stories:** N total (X done, Y in-progress, Z not started)
-
-## Epic Alignment
-- [PASS/GAP] Goal 1: <assessment>
-- [PASS/GAP] Goal 2: <assessment>
-
-## Story Coverage
-| Story | Status | Code Changes? | Assessment |
-|-------|--------|---------------|------------|
-| <id>  | done   | Yes (3 files) | Fully implemented |
-| <id>  | in-progress | Partial | Missing error handling |
-| <id>  | backlog | No | Not started — blocks merge? |
-
-## Code Quality Issues
-- [file:line] Description — Found by: <agent>
-
-## Gaps & Risks
-- Story X has no corresponding code
-- Code in module Y doesn't map to any story (scope creep?)
-- Session-### noted risk Z — not addressed in code
-
-## Recommendations
-1. ...
-2. ...
-
-## Merge Readiness
-[READY / BLOCKED BY: <story-ids> / NEEDS DISCUSSION]
-```
+Per `references/report-formats.md` § `--epic` mode.
 
 ### `--plan SLUG` mode
 
-Reviews code changes against an implementation plan and its companion design spec. This is the in-repo counterpart to `--epic` — while epics live in the Obsidian vault and track high-level goals/stories, plans and specs are detailed implementation blueprints with exact file paths, code snippets, and step-by-step tasks.
-
-Use this when you want to verify that the code on the branch actually matches what was planned — catching missed tasks, spec deviations, and scope drift.
+Reviews code against an in-repo implementation plan and companion design spec. In-repo counterpart to `--epic` — epics live in the vault, plans live in the repo.
 
 #### Step 1: Discover plan and spec files
 
-The argument can be a full filename, a slug (with or without date prefix), or a partial match:
+Argument accepts a full filename, slug, or partial match:
 
 ```
 /ark-code-review --plan research-pipeline
@@ -521,181 +221,78 @@ The argument can be a full filename, a slug (with or without date prefix), or a 
 /ark-code-review --plan pipeline       # partial match
 ```
 
-Discovery logic:
-1. Search for plan files matching `*{SLUG}*.md` in likely locations (project root, docs/, plans/)
-2. If multiple matches, pick the most recent by date prefix. If ambiguous, ask the user.
-3. For the matched plan, check for a companion spec/design file with `-design` or `-spec` suffix.
-4. If the spec file doesn't exist, proceed with plan-only review (warn the user).
+1. Search `*{SLUG}*.md` in project root, `docs/`, `plans/`
+2. Multiple matches → pick the most recent by date prefix; if ambiguous, ask
+3. For the matched plan, look for a companion `-design` or `-spec` file
+4. No spec file → proceed plan-only (warn the user)
 
 #### Step 2: Parse plan and spec
 
-Read both documents and extract structured context:
-
 **From the plan:**
 - Goal statement (top of document)
-- Chunks and tasks (## Chunk N / ### Task N headers)
-- Individual steps with checkbox status (`- [ ]` unchecked, `- [x]` checked)
+- Chunks and tasks (`## Chunk N` / `### Task N` headers)
+- Individual steps with checkbox status (`- [ ]` / `- [x]`)
 - File paths mentioned in each task
 - Commit messages (from `git commit -m` lines in steps)
 
 **From the spec:**
-- Problem statement and solution overview
-- Design decisions table
+- Problem statement, solution overview, design-decisions table
 - Architecture (before/after data flow)
 - Component descriptions with file paths and code snippets
-- Performance targets
-- Testing requirements
+- Performance targets, testing requirements
 
-#### Step 3: Fan out reviewers
+#### Step 3: Fan out reviewers (parallel)
 
-Run in parallel:
-
-**Agent 1 — Plan Conformance Reviewer** (`feature-dev:code-architect`):
-```
-Review whether the code changes on this branch correctly implement the
-plan and spec. Cross-reference each planned task against actual code changes.
-
-For each task in the plan, determine:
-- IMPLEMENTED: Code changes match the task's requirements
-- PARTIAL: Some aspects implemented, others missing
-- NOT_IMPLEMENTED: No corresponding code changes found
-- DEVIATED: Code exists but differs from the spec's prescribed approach
-
-Also check for:
-- Scope creep: Code changes that don't map to any planned task
-- Spec deviations: Architecture/approach differs from what the spec describes
-- Missing design decisions: Spec prescribed a specific choice but code uses something else
-
-Plan + Spec context:
-<PLAN_SPEC_CONTEXT_DOC>
-
-Branch diff:
-<DIFF>
-```
-
-**Agent 2 — Code Reviewer** (`feature-dev:code-reviewer`):
-```
-Review code quality of these changes. Confidence >= 80 only.
-
-Additional context: these changes implement the plan described below.
-Pay special attention to whether the implementation matches the code
-snippets prescribed in the spec (if any diverge, flag it).
-
-Changed files: <FILE_LIST>
-Diff: <DIFF>
-```
-
-**Agent 3 — Test Coverage Checker** (same Explore agent as default mode).
+- **Agent 1** — Plan Conformance Reviewer (`--plan` Code Architect variant, `references/agent-prompts.md`). Receives plan+spec context doc + diff.
+- **Agent 2** — Code Reviewer (`--plan` variant prompt). Receives file list + diff + "these changes implement the plan described below" context.
+- **Agent 3** — Test Coverage Checker (default Explore prompt).
 
 #### Step 4: Plan review report
 
-```markdown
-# Plan Review Report
-
-**Plan:** <filename>
-**Spec:** <filename or "none">
-**Branch:** <branch> vs {base_branch}
-**Tasks:** N total (X implemented, Y partial, Z not started)
-
-## Plan Completion
-| Chunk | Task | Steps | Status | Assessment |
-|-------|------|-------|--------|------------|
-| 1: Foundation | Task 1: Add path constant | 3/3 | IMPLEMENTED | All steps complete, matches spec |
-| 1: Foundation | Task 2: Fix data manager | 4/5 | PARTIAL | Step 5 (commit) pending |
-| 2: Pipeline | Task 3: Create pipeline | 5/6 | IMPLEMENTED | Code matches spec snippets |
-
-**Completion: X/N tasks done (Y%)**
-
-## Spec Conformance
-- [PASS] Component 1: Matches spec architecture
-- [DEVIATION] Component 2: Uses different approach than spec prescribes
-- [GAP] Testing: Spec requires specific test — not implemented
-
-## Code Quality Issues
-- [file:line] Description — Found by: code-reviewer
-
-## Scope Drift
-- Code in <file> doesn't map to any planned task (new? scope creep?)
-- Plan Task N references <file> but no changes were made to it
-
-## Test Coverage
-| Source File | Test File | Status | Details |
-|-------------|-----------|--------|---------|
-...
-
-## Recommendations
-1. ...
-2. ...
-
-## Merge Readiness
-[READY / BLOCKED BY: incomplete tasks / NEEDS DISCUSSION]
-Plan completion must be >= 80% for merge recommendation.
-```
+Per `references/report-formats.md` § `--plan` mode. Plan completion must be ≥ 80% for the merge recommendation to read READY.
 
 ### `--pr N` mode
 
 1. Use `gh pr diff N` for the diff (not `git diff`).
-2. Also run `gh pr view N --json title,url,headRefName,baseRefName` to get PR metadata for the report header.
+2. Run `gh pr view N --json title,url,headRefName,baseRefName` for the report header.
 3. Run full default review (all default agents in parallel).
-4. In the report header, include the PR number, title, and URL.
-5. **After the report, you MUST offer to post findings as PR comments:**
-   - "Want me to post these findings as inline comments on PR #N?" (via `gh pr review N --comment --body "..."`)
-   - "Want me to request changes on the PR?" (via `gh pr review N --request-changes --body "..."`)
-   - "Or just leave the review here locally?"
+4. In the report header, include the PR number, title, and URL (see `references/report-formats.md` § `--pr N` additions).
+5. After the report, offer GitHub actions per § Step 4 table.
+
+---
 
 ## External Second Opinion (Vendor CLIs via `omc ask`)
 
-When `--thorough` (and any mode that inherits it, like `--full`) runs on a host with external vendor CLIs (`codex` and/or `gemini`) installed alongside OMC, the review solicits a **second opinion** from each available vendor. Claude (parent) synthesizes all streams — native + vendor — into the unified report.
+When `--thorough` (or an inheriting mode like `--full`) runs on a host with external vendor CLIs (`codex` and/or `gemini`) installed alongside OMC, the review solicits a second opinion from each available vendor. Claude (parent) synthesizes all streams — native + vendor — into the unified report.
 
-This is **opt-out**: pass `--no-multi-vendor` (alias `--no-xv`) to disable. It is **not a convention-aware review** — the vendors do not see this project's CLAUDE.md, plugin skills, vault content, or TaskNotes. They bring a vendor-training-biased code-quality perspective as a complementary stream to the native CC agents (which remain the conventions-aware layer).
-
-### Framing: what the vendors add (and don't)
-
-| Source | What it brings |
-|---|---|
-| Native CC agents (`code-reviewer`, `code-architect`, …) | Conventions awareness (CLAUDE.md, ark skills), same-context continuity, access to vault/TaskNotes |
-| Codex CLI via `omc ask codex` | OpenAI model family's training-biased code-quality lens — second opinion on bugs, logic, security smells |
-| Gemini CLI via `omc ask gemini` | Google model family's training-biased perspective — second opinion on UI/UX cues and documentation hygiene |
-
-**The value is vendor diversity, not capability expansion.** The native CC review already covers correctness / architecture / tests at parent capacity. The vendor streams are a cheap sanity check: when Codex and the native reviewer both flag the same issue, confidence rises; when only a vendor flags it, you have a specific vendor-diversity signal to weigh.
+**Opt-out:** pass `--no-multi-vendor` (alias `--no-xv`). This is **not a convention-aware review** — the vendors do not see CLAUDE.md, plugin skills, vault, or TaskNotes. They bring a vendor-training-biased code-quality perspective as a complementary stream to the native CC agents. For framing, synthesis detail, cost notice, and the Gemini capacity caveat, see `references/external-second-opinion.md`.
 
 ### Trust Boundary Notice
 
 Sending the diff to external vendors **widens the trust boundary** beyond the local machine. By default, `--thorough` performs this fan-out whenever `codex` or `gemini` is on PATH. Before accepting the default on a new repository, confirm:
 
-- The code in the diff is not regulated, proprietary-under-NDA, or containing secrets. Scan with `git diff --name-only` and inspect the changed files.
-- The installed vendor CLIs are authenticated to accounts that align with your organization's policy for external AI access.
-- If unsure, pass `--no-multi-vendor` (alias `--no-xv`) for this invocation. For a persistent per-project opt-out, add a line to your project CLAUDE.md routing rules and surface the flag in your review wrapper.
+- The code in the diff is not regulated, proprietary-under-NDA, or containing secrets. Scan with `git diff --name-only` and inspect changed files.
+- Installed vendor CLIs are authenticated to accounts that align with your organization's policy for external AI access.
+- If unsure, pass `--no-multi-vendor` (alias `--no-xv`) for this invocation. For a persistent per-project opt-out, add a line to your project CLAUDE.md routing rules.
 
-The vendor streams receive only: `<diff_path>`, `<changed_files_list>`, and a **1-paragraph neutral branch description** written by Claude from public signals (commit messages + filenames). They do **NOT** receive CLAUDE.md, plugin skills, vault content, TaskNotes, or project secrets. Passing those would dilute the vendor-diversity value (the point is an independent view) and widen the trust boundary further.
-
-### Primitive: `omc ask`
-
-Fan-out uses the `omc ask <vendor> "<prompt>"` primitive from the OMC framework. Unlike `omc team` (which spawns tmux panes and requires multi-stage leader orchestration via `omc team api`), `omc ask` is a single-shot invocation that:
-
-- Handles shell/JSON quoting of the prompt argument internally — no injection surface for the review skill to manage.
-- Handles vendor CLI authentication, timeout, and retry concerns.
-- Returns the path to a captured markdown artifact on stdout.
-- Writes the artifact to `.omc/artifacts/ask/<vendor>-<slug>-<ts>.md` for later re-read.
-
-Surface A therefore does **not** require tmux and has no `omc team api list-tasks` JSON-schema dependency.
+The vendor streams receive only: `<diff_path>`, `<changed_files_list>`, and a **1-paragraph neutral branch description** written by Claude from public signals (commit messages + filenames). They do **NOT** receive CLAUDE.md, plugin skills, vault content, TaskNotes, or project secrets. Passing those would dilute the vendor-diversity value and widen the trust boundary further.
 
 ### Trigger conditions (ALL must be true)
 
-1. `--thorough` is set (or inherited via `--full`).
-2. `--no-multi-vendor` / `--no-xv` is **not** present in the user's invocation.
-3. `HAS_OMC=true` (OMC CLI on PATH or cache present; honors `ARK_SKIP_OMC=true` cascade per `skills/ark-workflow/SKILL.md`).
-4. At least one of `codex` / `gemini` is on PATH.
+1. `--thorough` is set (or inherited via `--full`)
+2. `--no-multi-vendor` / `--no-xv` is NOT present
+3. `HAS_OMC=true` (OMC CLI on PATH or cache present; honors `ARK_SKIP_OMC=true` per `skills/ark-workflow/SKILL.md`)
+4. At least one of `codex` / `gemini` is on PATH
 
-If trigger conditions 3 or 4 fail, Surface A is skipped entirely with a one-line notice (see Degradation Table). If only one vendor is present, only that vendor's `omc ask` is invoked.
+If conditions 3 or 4 fail, skip with a one-line notice (see Degradation Table). If only one vendor is present, only that vendor's `omc ask` runs.
 
 ### Fan-out (parallel with native CC agents in Step 2)
 
 **Preparation (single-shot, before fan-out):**
 
-- `DIFF_PATH` — persisted diff path captured in Step 1 of this skill (e.g., `.ark-workflow/review-diff-<ts>.patch`).
-- `CHANGED_FILES` — the newline-separated list from `git diff {base_branch}...HEAD --name-only`.
-- `BRANCH_DESC` — a 1-paragraph neutral summary of what the branch is trying to achieve. Claude writes this from commit messages + filenames only. **No CLAUDE.md content, no vault content, no secrets.**
+- `DIFF_PATH` — persisted diff path from Step 1 (e.g., `.ark-workflow/review-diff-<ts>.patch`)
+- `CHANGED_FILES` — newline-separated list from `git diff {base_branch}...HEAD --name-only`
+- `BRANCH_DESC` — 1-paragraph neutral summary from commit messages + filenames only. **No CLAUDE.md, no vault content, no secrets.**
 
 **Codex fan-out — external second opinion (code-quality lens):**
 
@@ -725,46 +322,23 @@ ${BRANCH_DESC}
 Lens: UI/UX consistency (only if UI files are touched) and documentation hygiene — code-comment drift, missing API docs, README staleness. You do NOT know this project's conventions; do not invent rules to enforce. Only report findings with confidence >= 80. For each finding include [file:line], a one-line description, severity (critical/high/medium), and the reasoning. Skip style/formatting issues — linters handle those. Skip anything that requires seeing code outside the diff to judge confidently."
 ```
 
-Both invocations run in parallel with the native CC agents (Step 2 fan-out). Each returns the artifact path on stdout; wait for both to complete before synthesis.
-
-### Synthesis
-
-After all sources (native + vendor) complete, Claude reads each vendor artifact directly:
-
-```bash
-cat .omc/artifacts/ask/codex-<slug>-<ts>.md
-cat .omc/artifacts/ask/gemini-<slug>-<ts>.md
-```
-
-No JSON parsing, no tmux pane capture — the artifacts are plain markdown. Findings are merged into the unified report; the "Reviewers" header line in the report adds vendor labels:
-
-```
-Reviewers: code-reviewer, code-architect, test-coverage-checker, silent-failure-hunter, test-analyzer, codex-cli, gemini-cli
-```
-
-Findings are deduplicated across all sources (prefer the more specific finding, or the one backed by ark-conventions context). Each entry is tagged with which source surfaced it (e.g., `Found by: codex-cli`).
+Both invocations run in parallel with the native CC agents. Each returns the artifact path on stdout; wait for all to complete before synthesis. See `references/external-second-opinion.md` § Synthesis detail for reading artifacts into the unified report.
 
 ### Degradation table
 
-| `omc` CLI | `codex` | `gemini` | Behavior | Notice |
+| `omc` | `codex` | `gemini` | Behavior | Notice |
 |---|---|---|---|---|
-| ✗ | — | — | Skip Surface A. Native CC review only. | "External second opinion skipped (OMC not installed). See https://github.com/anthropics/oh-my-claudecode." |
-| ✓ | ✗ | ✗ | Skip Surface A. Native CC review only. | "External second opinion skipped (no vendor CLI on PATH). Install `@openai/codex` and/or `@google/gemini-cli` to enable." |
-| ✓ | ✓ | ✗ | Run Codex only. | "Gemini second opinion skipped (CLI not on PATH). Install `@google/gemini-cli` to include it." |
-| ✓ | ✗ | ✓ | Run Gemini only. | "Codex second opinion skipped (CLI not on PATH). Install `@openai/codex` to include it." |
-| ✓ | ✓ | ✓ | Full fan-out (both vendors in parallel). | (none — both second opinions active) |
+| ✗ | — | — | Skip. Native CC review only. | "External second opinion skipped (OMC not installed). See https://github.com/anthropics/oh-my-claudecode." |
+| ✓ | ✗ | ✗ | Skip. Native CC review only. | "External second opinion skipped (no vendor CLI on PATH). Install `@openai/codex` and/or `@google/gemini-cli` to enable." |
+| ✓ | ✓ | ✗ | Codex only. | "Gemini second opinion skipped (CLI not on PATH). Install `@google/gemini-cli` to include it." |
+| ✓ | ✗ | ✓ | Gemini only. | "Codex second opinion skipped (CLI not on PATH). Install `@openai/codex` to include it." |
+| ✓ | ✓ | ✓ | Full fan-out (both vendors in parallel). | (none) |
 
-The same skip-with-notice applies when `--no-multi-vendor` / `--no-xv` is present ("External second opinion disabled by `--no-multi-vendor` flag."). `ARK_SKIP_OMC=true` cascades into this table via the `HAS_OMC=false` row (OMC CLI effectively unavailable).
+Same skip-with-notice applies when `--no-multi-vendor` / `--no-xv` is present ("External second opinion disabled by `--no-multi-vendor` flag."). `ARK_SKIP_OMC=true` cascades into this table via the `HAS_OMC=false` row.
 
-Per-vendor runtime failures (exit code ≠ 0 from `omc ask`) further downgrade to "synthesize on remaining streams"; failed-vendor notes appear in the report's footer.
+Per-vendor runtime failures (exit ≠ 0 from `omc ask`) downgrade to "synthesize on remaining streams"; failed-vendor notes appear in the report's footer.
 
-### Vendor capacity caveat (Gemini)
-
-During live testing, Gemini preview models (`gemini-3.1-pro-preview` class) have returned `MODEL_CAPACITY_EXHAUSTED` (HTTP 429) under burst load. When this happens, `omc ask gemini` exits non-zero; treat it as a per-vendor runtime failure per the table above and continue synthesis on the remaining streams. The failure is on the vendor side, not the ark-code-review skill. Retry the Gemini stream manually later if full coverage matters for that review.
-
-### Cost notice
-
-Each `omc ask` invocation is a separate call to the vendor's API. For Heavy diffs with dual-vendor fan-out, the cost delta over native-only review is two additional vendor API calls per `--thorough`. If you have a per-review cost ceiling, use `--no-multi-vendor` to opt out for that invocation, or uninstall the vendor CLI you don't want consulted.
+---
 
 ## Post-Review Actions
 
@@ -773,11 +347,11 @@ Each `omc ask` invocation is a separate call to the vendor's API. For Heavy diff
 - Verify service health endpoints
 - Run staging smoke tests
 
-**If no deployment targets are defined:** Skip deployment checks.
+**If no deployment targets are defined:** skip deployment checks.
 
 ## Important Notes
 
-- **Linters handle style** — All agents skip formatting/style issues since linters catch those automatically.
-- **Confidence threshold** — `feature-dev:code-reviewer` uses >= 80 confidence. Other agents should also avoid low-confidence findings.
-- **Large diffs** — If >4000 lines, consider splitting the review by directory or module rather than reviewing everything at once.
-- **Don't auto-fix** — This skill is advisory. Present findings and let the user decide what to fix.
+- **Linters handle style.** All agents skip formatting/style issues.
+- **Confidence threshold.** `feature-dev:code-reviewer` uses ≥ 80. Other agents also avoid low-confidence findings.
+- **Large diffs.** If > 4000 lines, split the review by directory or module.
+- **Don't auto-fix.** This skill is advisory. Present findings; let the user decide what to fix.
