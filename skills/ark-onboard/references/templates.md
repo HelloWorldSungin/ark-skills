@@ -6,7 +6,7 @@ Templates the wizard writes during Greenfield, Migration, and Repair paths. SKIL
 
 ---
 
-## `scripts/setup-vault-symlink.sh`
+## scripts/setup-vault-symlink.sh
 
 **Contract (grep-friendly):** exactly one line matches `^VAULT_TARGET="[^"]*"\s*$`, value begins with `$HOME/`. Repair and check #20 rely on this.
 
@@ -54,7 +54,7 @@ Idempotent: re-running when `vault` is already a valid symlink is a no-op.
 
 ---
 
-## `.git/hooks/post-checkout`
+## .git/hooks/post-checkout
 
 Install under `<common_git_dir>/hooks/post-checkout` (shared across worktrees). Get the path via `git rev-parse --git-common-dir`.
 
@@ -70,7 +70,7 @@ exec "$(git rev-parse --show-toplevel)/scripts/setup-vault-symlink.sh"
 
 ---
 
-## `.superset/config.json` merge (append-only)
+## .superset/config.json merge
 
 Only run if `<project_repo>/.superset/config.json` already exists. Append via Python JSON merge (preserves existing entries):
 
@@ -94,7 +94,7 @@ PY_EOF
 
 ---
 
-## Vault repo `.gitignore`
+## Vault repo .gitignore
 
 For centralized vault repo at `<vault_repo_path>`. `NotebookLM sync-state.json is tracked — NOT ignored.`
 
@@ -123,7 +123,7 @@ Write `<vault_repo_path>/.notebooklm/sync-state.json`:
 
 ---
 
-## `00-Home.md`
+## 00-Home.md
 
 Write `{vault_path}/00-Home.md` (standalone) OR `{vault_path}/{project_docs_path}/00-Home.md` (monorepo).
 
@@ -158,7 +158,7 @@ last-updated: {today}
 
 ---
 
-## `_meta/vault-schema.md`
+## _meta/vault-schema.md
 
 ```markdown
 ---
@@ -214,7 +214,7 @@ All pages use YAML frontmatter with these standard fields:
 
 ---
 
-## `_meta/taxonomy.md`
+## _meta/taxonomy.md
 
 ```markdown
 ---
@@ -260,7 +260,7 @@ last-updated: {today}
 
 ---
 
-## `_meta/generate-index.py`
+## _meta/generate-index.py
 
 Scans `.md` files, extracts frontmatter `title` + `summary`, writes `index.md`. Excludes `_Templates/`, `_Attachments/`, `_meta/`, `.obsidian/`. `chmod +x` after writing.
 
@@ -378,7 +378,7 @@ if __name__ == "__main__":
 
 ---
 
-## Page templates (`_Templates/`)
+## Page templates
 
 Use Obsidian template `{{date}}` and `{{title}}` placeholders — expanded at Obsidian template-insertion time, not by the wizard.
 
@@ -559,7 +559,7 @@ last-updated: {{date}}
 
 ---
 
-## `TaskNotes/00-Project-Management-Guide.md`
+## TaskNotes/00-Project-Management-Guide.md
 
 ```markdown
 ---
@@ -611,7 +611,7 @@ Use `/ark-tasknotes` to create tasks via the TaskNotes MCP, or create markdown f
 
 ---
 
-## Obsidian config files (`.obsidian/`)
+## Obsidian config files
 
 ### `.obsidian/app.json`
 
@@ -654,7 +654,7 @@ Use `/ark-tasknotes` to create tasks via the TaskNotes MCP, or create markdown f
 
 ---
 
-## TaskNotes plugin `data.json`
+## TaskNotes plugin data.json
 
 Gitignored per plugin. Ships Ark-specific defaults so users don't need the GUI. Adjust `apiPort` if the user runs multiple Obsidian instances (8080/8081/8082).
 
@@ -720,7 +720,7 @@ Gitignored per plugin. Ships Ark-specific defaults so users don't need the GUI. 
 
 ---
 
-## Obsidian Git plugin `data.json`
+## Obsidian Git plugin data.json
 
 ```json
 {
@@ -739,7 +739,7 @@ Gitignored per plugin. Ships Ark-specific defaults so users don't need the GUI. 
 
 ---
 
-## `.mcp.json` TaskNotes MCP entry (merge-compatible)
+## .mcp.json TaskNotes MCP entry
 
 Merge into existing `.mcp.json` (project root), or create if absent.
 
@@ -758,7 +758,7 @@ Or via CLI: `claude mcp add --transport http --scope project tasknotes http://lo
 
 ---
 
-## NotebookLM config (`{vault_path}/.notebooklm/config.json`)
+## NotebookLM config
 
 ```json
 {
@@ -776,7 +776,7 @@ Tell the user to fill in `notebooks.main.id` after creating a notebook in Notebo
 
 ---
 
-## CLAUDE.md template (new project)
+## CLAUDE.md template
 
 ```markdown
 # {Project Name}

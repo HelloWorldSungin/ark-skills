@@ -264,29 +264,79 @@ If not a git repo, offer `git init`. If working tree dirty, warn and ask to stas
 
 ### Step 1 of 18 — Gather project info
 
-Ask for 4 fields:
+Ask the user 5 prompts with the centralized-vault defaulting behavior:
 
-**Prompt 1 — Project name:** `Project name? (e.g., my-new-project)` — lowercase-kebab recommended; warn otherwise.
-
-**Prompt 2 — Task prefix:** `Task prefix? (e.g., ArkNew-) — must end with -` — reject `ArkNew` (no dash) or `ArkNew--` (double dash).
-
-**Prompt 3 — Vault layout:** Standalone (flat) or Monorepo (project docs in subdir).
-
-**Prompt 4 — Centralized vault location:** compute default per `Default path detection` above; show the literal `$HOME/` form, not expanded. Path validation: must start with `$HOME/` or `~/` (normalize); the resolved path must not already exist OR exist-and-be-empty.
-
-```bash
-case "$USER_PATH" in
-  '$HOME/'*) ;;  # OK
-  '~/'*) USER_PATH="\$HOME/${USER_PATH#'~/'}" ;;  # normalize
-  *)
-    echo "ERROR: Vault path must be under \$HOME so tracked metadata stays portable."
-    echo "To use an external drive, symlink it: ln -s /Volumes/Drive/vaults \$HOME/Vaults"
-    # Re-prompt
-    ;;
-esac
+**Prompt 1 — Project name:**
+```
+Project name? (e.g., my-new-project)
 ```
 
-**Prompt 5 — Embedded escape hatch (rare):** `Use embedded vault inside the project repo instead? [y/N]`. If yes, branch to embedded sub-flow (skip Steps 2a–2d, proceed with legacy `./vault/` setup). Otherwise continue to Step 2.
+**Prompt 2 — Task prefix:**
+```
+Task prefix? (e.g., ArkNew-) — must end with `-`
+```
+
+**Prompt 3 — Vault layout:**
+```
+Vault layout?
+  [S] Standalone — flat, project docs at vault root
+  [M] Monorepo   — project docs in a subdirectory under vault root
+Choose [S/M]:
+```
+
+**Prompt 4 — Centralized vault location:**
+
+Compute the default by detecting whether `$HOME/.superset` exists:
+
+```bash
+if [ -d "$HOME/.superset" ]; then
+  DEFAULT_PATH="\$HOME/.superset/vaults/<project>"
+else
+  DEFAULT_PATH="\$HOME/Vaults/<project>"
+fi
+```
+
+Substitute `<project>` with the project name from Prompt 1. Show the literal `$HOME/` form (not expanded) as the default:
+
+```
+Where should the centralized vault live?
+Default: $DEFAULT_PATH
+[press Enter to accept, or type a $HOME-prefixed path]
+```
+
+**Prompt 5 — Embedded escape hatch (rare):**
+
+```
+Use embedded vault inside the project repo instead? [y/N]
+The centralized layout lets multiple worktrees and the Obsidian app share
+one source of truth. Pick embedded only if you explicitly want the vault
+committed to the project repo.
+```
+
+**Validate each answer before proceeding:**
+
+- **Task prefix:** Must end with exactly one `-`. Reject `ArkNew` (no dash) or `ArkNew--` (double dash).
+- **Project name:** Lowercase-kebab-case recommended. Warn but allow otherwise.
+- **Vault path (if user accepted centralized):**
+  - Must start with `$HOME/` or `~/` (normalize `~/` to `$HOME/`). Reject any other absolute path:
+    ```bash
+    case "$USER_PATH" in
+      '$HOME/'*) ;;  # OK
+      '~/'*) USER_PATH="\$HOME/${USER_PATH#'~/'}" ;;  # normalize
+      *)
+        echo "ERROR: Vault path must be under \$HOME so tracked metadata stays portable."
+        echo "To use an external drive, symlink it: ln -s /Volumes/Drive/vaults \$HOME/Vaults"
+        echo "Then point the wizard at the \$HOME path."
+        # Re-prompt
+        ;;
+    esac
+    ```
+  - The resolved absolute path (`eval echo "$USER_PATH"`) must not already exist, OR must exist and be empty. If it exists with content from a different project, refuse (see Step 2a edge case).
+- **Vault path (if user picked embedded):** Default to `./vault/` inside the project repo. Still reject if the path already exists.
+
+**If user picked embedded:** branch to the embedded sub-flow — skip centralized-vault Steps 2a–2d and proceed with the legacy `./vault/` setup.
+
+**Otherwise:** Continue to Step 2 (Python check), then Steps 2a–2d (centralized setup).
 
 ### Step 2 of 18 — Verify Python 3.10+
 
@@ -436,7 +486,7 @@ Write from `references/templates.md § Obsidian config files`:
 
 ### Step 10 of 18 — Create/update CLAUDE.md
 
-If CLAUDE.md missing, create from `references/templates.md § CLAUDE.md template (new project)`. If present but missing fields, update with vault/prefix/TaskNotes rows.
+If CLAUDE.md missing, create from `references/templates.md § CLAUDE.md template`. If present but missing fields, update with vault/prefix/TaskNotes rows.
 
 For **centralized** layout (default): no extra row needed — check #20 defaults to `pass` when the `vault` symlink resolves.
 
@@ -1066,7 +1116,7 @@ Changes: {N} fixes applied, {N} upgrades added
 - **MemPalace wing distinction.** Check 15 covers the vault content wing; Check 16 covers the conversation history wing. Independent.
 - **Zero-GUI plugin setup.** Step 11 downloads plugin binaries from GitHub releases using the Obsidian registry. Step 12 generates `data.json` for both plugins with Ark-specific defaults. User only enables plugins in Obsidian — no manual configuration. Falls back to reference vault copy, then manual install.
 - **MCP check is config-only.** Check 13 verifies `mcpServers.tasknotes` presence in `.mcp.json`, not endpoint reachability.
-- **Clear step markers.** Each step includes "You are at Step X of Y" so progress is trackable.
+- **Clear step markers.** Each step heading includes "Step X of Y" numbering (e.g., `### Step 1 of 18 — …`) so progress is trackable at a glance.
 - **No hardcoded references.** No project names, vault paths, or task prefixes are hardcoded. All values come from user input or runtime detection.
 - **`/ark-health` is authoritative** for all 22 check definitions. If this convenience summary drifts, that skill wins.
 - **Reference material load-on-demand.** Templates, plan templates, state-detection bash, plugin-install bash, and repair-scenario bash live in `references/*.md`. The agent loads what it needs when it needs it, cutting the at-invocation footprint without losing any operational detail.
