@@ -42,11 +42,11 @@ Fan out parallel agents scoped to the changed files; aggregate findings into one
 
 | Agent | subagent_type | When | Role |
 |-------|---------------|------|------|
-| Code Reviewer | `feature-dev:code-reviewer` | default + all modes | Bugs, logic, security. Confidence ≥ 80. |
-| Code Architect | `feature-dev:code-architect` | default + all modes | Pattern consistency, integration risks. `--epic` / `--plan` variants. |
-| Test Coverage Checker | `Explore` | default + thorough | Maps source → test files, flags gaps. |
-| Silent Failure Hunter | `code-simplifier:code-simplifier` | `--thorough` | Broad catches, missing logging, swallowed exceptions. |
-| Test Analyzer | — | `--thorough` | Deep test-gap analysis: edge cases, error paths, negatives. |
+| Code Reviewer | `feature-dev:code-reviewer` | all modes (solo in `--quick`) | Bugs, logic, security. Confidence ≥ 80. `--epic` and `--plan` use shorter variants. |
+| Code Architect | `feature-dev:code-architect` | all modes except `--quick` | Pattern consistency, integration risks. `--epic` / `--plan` use dedicated variants. |
+| Test Coverage Checker | `Explore` | default, `--thorough`, `--full`, `--plan` (not `--quick` / `--epic`) | Maps source → test files, flags gaps. |
+| Silent Failure Hunter | `code-simplifier:code-simplifier` | `--thorough` + `--full` only | Broad catches, missing logging, swallowed exceptions. |
+| Test Analyzer | — | `--thorough` + `--full` only | Deep test-gap analysis: edge cases, error paths, negatives. |
 
 After all agents complete, deduplicate overlapping findings (prefer the more specific one) and sort by severity.
 
@@ -201,7 +201,7 @@ Next steps: <from session>
 #### Step 3: Fan out reviewers (parallel)
 
 - **Agent 1** — Code Architect (`--epic` variant prompt, `references/agent-prompts.md` § Code Architect variant). Receives the review-context document + diff.
-- **Agent 2** — Code Reviewer (default prompt). Receives file list + diff.
+- **Agent 2** — Code Reviewer (`--epic` variant prompt, `references/agent-prompts.md` § Code Reviewer variant). Shorter than default — the epic context carries the framing. Receives file list + diff.
 
 #### Step 4: Epic review report
 

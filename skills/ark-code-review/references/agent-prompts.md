@@ -135,6 +135,19 @@ prompt: |
   <DIFF>
 ```
 
+### Code Reviewer variant (`--epic` mode)
+
+Use instead of Agent 1 default when `--epic` mode is active. Shorter than the default because the epic context provides the framing.
+
+```
+subagent_type: feature-dev:code-reviewer
+prompt: |
+  Review code quality of these changes. Confidence >= 80 only.
+
+  Changed files: <FILE_LIST>
+  Diff: <DIFF>
+```
+
 ### Plan Conformance Reviewer (`--plan` mode)
 
 Use instead of Agent 2 default when `--plan` mode is active.
