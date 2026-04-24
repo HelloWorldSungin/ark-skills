@@ -156,6 +156,7 @@ Summary of the 22 checks (pass conditions; full semantics + bash in `/ark-health
 | 14d | MemPalace palace read sanity | Full (warn-only) | `mempalace_search` via shim returns valid response (no HNSW segfault) |
 | 15 | MemPalace wing indexed | Full | `mempalace status` shows wing for project |
 | 16 | History auto-index hook | Full | `~/.claude/hooks/ark-history-hook.sh` exists AND registered in `.claude/settings.json` |
+| 16b | History hook content drift | Full (warn-only) | Installed `~/.claude/hooks/ark-history-hook.sh` is byte-identical to plugin's current copy |
 | 17 | NotebookLM CLI installed | Full | `notebooklm` CLI on PATH |
 | 18 | NotebookLM config | Full | `.notebooklm/config.json` with non-empty notebook ID |
 | 19 | NotebookLM authenticated | Full | `notebooklm auth check --test` exits 0 |
@@ -169,6 +170,7 @@ Running diagnostics: run all 22 checks in sequence, never abort on failure. For 
 - Check 10 staleness: `warn` (not fail)
 - Check 20 vault-externalized: `warn` (never fails)
 - Checks 14b, 14c, 14d if Check 14a failed: `skip` — "requires MemPalace plugin (check 14a)"
+- Check 16b if Check 16 failed: `skip` — "requires check 16"
 - Checks 15, 16 if Check 14 failed: `skip` — "requires MemPalace (check 14)"
 - Checks 18, 19 if Check 17 failed: `skip` — "requires NotebookLM CLI (check 17)"
 - Full-tier checks (14–19) below Full tier: `upgrade`

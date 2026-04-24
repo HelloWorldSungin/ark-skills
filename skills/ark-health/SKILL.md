@@ -393,6 +393,43 @@ Five sub-conditions. Conditions 1–2 determine pass/fail; conditions 3–5 are 
 - Unlocks: auto-index Claude sessions into MemPalace on session exit (zero LLM tokens per session)
 - Bash + warn fixes: `references/check-implementations.md` § Check 16
 
+**Check 16b — History hook content drift** | Tier: Full | Returns: `warn` | Requires Check 16
+
+Detects when the installed copy at `~/.claude/hooks/ark-history-hook.sh` diverges from the plugin's current version — for example, after a plugin upgrade that added the palace-global cross-wing mutex (v1.21.1). The user must re-run `install-hook.sh` to pick up the new script; a version-only plugin upgrade doesn't touch the already-installed copy.
+
+```bash
+INSTALLED="$HOME/.claude/hooks/ark-history-hook.sh"
+PLUGIN_COPY=""
+
+# Find the plugin's current copy — prefer the installed plugin cache,
+# fall back to CWD (dev/test mode on the ark-skills repo itself).
+for candidate in \
+  "$HOME/.claude/plugins/cache/ark-skills/ark-skills"/*/skills/claude-history-ingest/hooks/ark-history-hook.sh \
+  "$HOME/.claude/plugins/cache/ark-skills/skills/claude-history-ingest/hooks/ark-history-hook.sh" \
+  "$(pwd)/skills/claude-history-ingest/hooks/ark-history-hook.sh"; do
+  if [ -f "$candidate" ]; then
+    PLUGIN_COPY="$candidate"
+    break
+  fi
+done
+
+if [ ! -f "$INSTALLED" ]; then
+  echo "SKIP: hook not installed (see Check 16)"
+elif [ -z "$PLUGIN_COPY" ]; then
+  echo "SKIP: cannot locate plugin's reference copy"
+elif cmp -s "$INSTALLED" "$PLUGIN_COPY"; then
+  echo "PASS: installed hook matches plugin's current version"
+else
+  echo "WARN: installed hook drifts from plugin copy — re-install to pick up latest"
+fi
+```
+
+- **Pass:** `cmp -s` reports installed file is byte-identical to the plugin's current copy.
+- **Skip:** Check 16 failed (nothing installed) OR plugin's reference copy can't be located (dev environments where neither the cache path nor CWD has it).
+- **Warn:** Files differ. Re-install: `bash skills/claude-history-ingest/hooks/install-hook.sh`.
+- **Why this matters:** plugin upgrades don't overwrite `~/.claude/hooks/*`. A user still running a v1.20.x copy after upgrading the plugin to v1.21.1 is missing the cross-wing mutex and remains exposed to the HNSW write race that the release closes.
+- **Requires:** Check 16 (hook installed).
+
 **Check 17 — NotebookLM CLI installed** | Tier: Full | Non-blocking upgrade
 
 ```bash
@@ -474,6 +511,7 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 1. **Run all 22 checks in sequence.** Do not abort on failure.
    - Checks 7–20: if Check 4 failed (CLAUDE.md missing), record `skip` with message "cannot check — CLAUDE.md missing". Checks 21, 22 are exempt.
    - Checks 14b, 14c, 14d: if Check 14a failed, record `skip` with message "requires MemPalace plugin (check 14a)".
+   - Check 16b: if Check 16 failed (hook not installed), record `skip` with message "requires check 16".
    - Checks 15, 16, 18, 19: if the prerequisite failed, record `skip` with message "requires check N".
 
 2. **Classify each result** with one of four outcomes:
@@ -482,7 +520,7 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking (Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 20, Check 22) |
+| `~~` | Warning | Non-blocking (Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22) |
 | `--` | Available upgrade | Feature not installed, above current tier |
 | `>>` | Informational | State display only (Check 14c MemPalace hook state — always passes) |
 
@@ -493,7 +531,7 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 - **Standard:** no fail in checks 1–13 (TaskNotes MCP configured)
 - **Full:** no fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
 
-Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 20 vault externalized, 22 plugin version) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
+Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 16b history hook content drift, 20 vault externalized, 22 plugin version) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
 
 4. **Emit scorecard** per the Output Format below. Always end with `Run /ark-onboard to fix or upgrade`.
 
@@ -542,6 +580,9 @@ Integrations
   ~~  MemPalace palace read -- crashed + HNSW drift detected
       Fix: run quarantine_stale_hnsw() one-liner in check 14d; then restart Claude Code
       Upstream: MemPalace #1062 (self-heal on MCP startup; retire check 14d when merged)
+  ~~  History hook -- installed copy drifts from plugin's current version
+      Fix: bash skills/claude-history-ingest/hooks/install-hook.sh to re-install
+      Note: plugin upgrades don't overwrite ~/.claude/hooks/; re-run after every bump
   --  OMC plugin -- not installed
       Unlock: /ark-workflow Path B (autonomous execution)
       Install: https://github.com/anthropics/oh-my-claudecode

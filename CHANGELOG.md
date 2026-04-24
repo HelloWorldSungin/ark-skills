@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.2] - 2026-04-23
+
+### Added
+
+- **`/ark-health` Check 16b — History hook content drift.** Detects when `~/.claude/hooks/ark-history-hook.sh` (the installed copy) diverges from the plugin's current version. Plugin upgrades don't overwrite files under `~/.claude/hooks/`, so a user who installed the hook at v1.20.x and upgraded to v1.21.1 is missing the cross-wing mutex and still exposed to the HNSW write race v1.21.1 closes. The check runs `cmp -s` against the plugin cache's current copy and warns with the `install-hook.sh` re-run action. Skipped when Check 16 fails (no hook installed).
+
+### Notes
+
+- **Why not `/ark-update`?** Per the existing `target-profile.yaml` convention ("hooks are `/ark-onboard repair` territory, not `/ark-update`"), hook drift is detected by `/ark-health` and fixed by re-running `install-hook.sh`. Adding a Phase 1 destructive migration to /ark-update would contradict that rule.
+- **Paired with:** `/ark-onboard` Integrations checklist gains row 16b for completeness.
+
 ## [1.21.1] - 2026-04-23
 
 **T2 MCP-first via the MemPalace Claude Code plugin, layered onto the v1.21.0 Shrink-to-Core slim.** Consolidates three internal patches (T2 plugin install + CCG-review correctness fixes + cross-wing race fix) into one release, since the underlying intent was always one logical change. Adopts the v1.21.0 references/ structure — new bash stays inline alongside the existing checks rather than expanding the references files.
