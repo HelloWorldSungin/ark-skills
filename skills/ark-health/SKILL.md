@@ -185,6 +185,186 @@ command -v mempalace 2>/dev/null && mempalace --version 2>/dev/null && echo "PAS
 - Upgrade action: prefer `pipx install "mempalace>=3.0.0,<4.0.0"`; fallback `pip install` if `pipx` unavailable
 - Unlocks: T2 retrieval for `/wiki-query` (deep synthesis, experiential recall) + history auto-index hook
 
+**Check 14a — MemPalace plugin installed (user scope)** | Tier: Full | Returns: `warn`
+
+The Claude Code plugin wires the MemPalace MCP server into every session, giving the LLM native access to 19 memory tools for T2 reads without a CLI round-trip.
+
+```bash
+# Block-aware parse: `claude plugin list` emits one block per plugin, each
+# starting with "  ❯ <name>@<marketplace>" and continuing until the next "  ❯ ".
+# We must scope Version/Scope/Status checks to the mempalace block — scanning
+# the whole output as one stream false-PASSes when a DIFFERENT plugin is the
+# user-scope/enabled one.
+claude plugin list 2>/dev/null | awk '
+  /^  ❯ / {in_target = ($0 ~ /^  ❯ mempalace@/); next}
+  in_target && /Scope: user/ {scope=1}
+  in_target && /Status: ✔ enabled/ {enabled=1}
+  END {exit !(scope && enabled)}
+' && echo "PASS" || echo "WARN: plugin not installed at user scope"
+```
+
+- **Pass:** `mempalace` plugin present at user scope and enabled.
+- **Warn / Available upgrade action:**
+  ```bash
+  # One-time shim — plugin declares command: mempalace-mcp but pip ships it as a module
+  cat > ~/.local/bin/mempalace-mcp <<'EOF'
+  #!/bin/bash
+  exec "$(pipx environment --value PIPX_LOCAL_VENVS)/mempalace/bin/python" -m mempalace.mcp_server "$@"
+  EOF
+  chmod +x ~/.local/bin/mempalace-mcp
+  claude plugin marketplace add milla-jovovich/mempalace
+  claude plugin install --scope user mempalace@mempalace
+  ```
+- **Requires:** Check 14 (pip package) — plugin depends on the CLI for its `hook` subcommand.
+- **Unlocks:** Auto-MCP server on every Claude Code session (19 tools for T2 reads), `/mempalace:*` slash commands, auto-save Stop/PreCompact hooks.
+
+**Check 14b — MemPalace MCP server responds** | Tier: Full | Returns: `warn`
+
+> **Note:** this probe verifies that Claude Code has the plugin's MCP wired up AND the shim actually starts. It does NOT prove the *current interactive session* has the `mcp__mempalace__*` tools loaded — that's only knowable from inside the session. If this PASSes but the tools aren't showing, restart Claude Code.
+
+```bash
+# Probe 1: Claude Code's `claude mcp list` emits lines like
+#   "plugin:mempalace:mempalace: mempalace-mcp  - ✓ Connected"
+# when the plugin registered its MCP config and the shim is reachable.
+if claude mcp list 2>/dev/null | grep -qE '^plugin:mempalace:.*- *✓ Connected'; then
+  echo "PASS"
+elif command -v mempalace-mcp >/dev/null 2>&1; then
+  # Probe 2 (fallback): shim exists — do a stdio `initialize` handshake.
+  # Portable timeout: `timeout`/`gtimeout` aren't on stock macOS, so use perl
+  # (universally available) which sets an alarm before exec-ing the target.
+  HANDSHAKE=$(
+    echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"health","version":"0"}},"id":1}' \
+      | perl -e 'alarm 5; exec @ARGV' mempalace-mcp 2>/dev/null
+  )
+  if echo "$HANDSHAKE" | grep -q '"protocolVersion"'; then
+    echo "PASS"
+  else
+    echo "WARN: shim exists but MCP initialize handshake failed"
+  fi
+else
+  echo "WARN: MCP not reachable — plugin not wired and no shim on PATH"
+fi
+```
+
+- **Pass:** Plugin-declared MCP server is listed as Connected in `claude mcp list` OR the shim responds to `initialize` within 5s.
+- **Warn paths:**
+  - `claude mcp list` doesn't show mempalace → plugin not registered; re-run Check 14a upgrade.
+  - Shim exists but handshake fails → shim points at a broken venv; re-run `/ark-onboard` Step 13 to rebuild on Python 3.13.
+  - Neither works → nothing to restart; run the full Step 13/13b flow.
+- **Requires:** Check 14a.
+- **Unlocks:** T2 reads via `mcp__mempalace__*` tools in a restarted Claude Code session.
+
+**Check 14c — MemPalace hook state (informational)** | Tier: Full | Returns: `pass` (both states)
+
+> mempalace 3.3.2 ships [#1023](https://github.com/MemPalace/mempalace/pull/1023) (PID-file guard on the plugin's auto-ingest hook) and [#784](https://github.com/MemPalace/mempalace/pull/784) (per-source-file `mine_lock`), so the plugin's own Stop/PreCompact hooks are meaningfully safer than they were initially. Neutralizing them is a defense-in-depth choice, not a corruption-prevention requirement. Revisit retiring this check entirely once upstream [#976](https://github.com/MemPalace/mempalace/pull/976) / [#991](https://github.com/MemPalace/mempalace/pull/991) / [#1062](https://github.com/MemPalace/mempalace/pull/1062) land.
+
+```bash
+# JSON-aware: check `.hooks.Stop` and `.hooks.PreCompact` specifically.
+# A raw grep would false-warn on any hooks.json that mentions those strings
+# outside the `.hooks` path (e.g., in a description), and it tells us nothing
+# about whether the hooks are actually *active* (non-empty array).
+ACTIVE=""
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  HAS_ACTIVE_HOOK=$(python3 - "$f" 2>/dev/null <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    h = d.get("hooks", {}) or {}
+    active = bool(h.get("Stop")) or bool(h.get("PreCompact"))
+    print("1" if active else "0")
+except Exception:
+    print("0")
+PY
+)
+  [ "$HAS_ACTIVE_HOOK" = "1" ] && ACTIVE="$ACTIVE $f"
+done < <(find "$HOME/.claude/plugins/cache/mempalace/mempalace" -name hooks.json 2>/dev/null)
+
+if [ -z "$ACTIVE" ]; then
+  echo "PASS: mempalace hooks neutralized (defense-in-depth)"
+else
+  echo "PASS: mempalace hooks active (plugin auto-save enabled — relying on #1023 + #784 serialization)"
+fi
+```
+
+- **Pass — state A (hooks neutralized):** No cached `hooks.json` has `.hooks.Stop` or `.hooks.PreCompact`. Auto-save via plugin is off; the LLM must explicitly call `mempalace_add_drawer` / `diary_write` to save memories.
+- **Pass — state B (hooks active):** Plugin auto-save is enabled, relying on mempalace 3.3.2's #1023 PID guard + #784 per-file locks. Cross-wing mine races are addressed at the ark-skills layer by the palace-global mutex in `skills/claude-history-ingest/hooks/ark-history-hook.sh`, not by this plugin.
+- **When to prefer state A:** palace past ~30k drawers, frequent multi-session workflows, or recent corruption recovery.
+- **When to prefer state B:** smaller palace, fewer parallel sessions, you want auto-save convenience.
+- **Neutralize command** (B → A):
+  ```bash
+  for f in $(find ~/.claude/plugins/cache/mempalace/mempalace -name hooks.json); do
+    [ -f "$f.pre-1092-disable" ] || cp "$f" "$f.pre-1092-disable"
+    python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['hooks']={}; d['description']='DISABLED defense-in-depth for #1092/#1109'; json.dump(d, open(p,'w'), indent=2)" "$f"
+  done
+  ```
+- **Un-neutralize command** (A → B):
+  ```bash
+  for backup in $(find ~/.claude/plugins/cache/mempalace/mempalace -name 'hooks.json.pre-1092-disable'); do
+    mv "$backup" "${backup%.pre-1092-disable}"
+  done
+  ```
+- **Requires:** Check 14a (plugin installed).
+
+**Check 14d — MemPalace palace read sanity** | Tier: Full | Returns: `warn`
+
+> Exercises the HNSW read path via a real `mempalace_search` through the shim. If the palace read crashes, check for HNSW/SQLite drift (the corruption pattern in [#1092](https://github.com/MemPalace/mempalace/issues/1092)) and offer the `quarantine_stale_hnsw()` recovery.
+
+```bash
+if ! command -v mempalace-mcp >/dev/null 2>&1; then
+  echo "SKIP: mempalace-mcp shim not on PATH (check 14a upgrade action)"
+else
+  PROBE_OUT=$(
+    printf '%s\n%s\n%s\n' \
+      '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"health","version":"0"}},"id":1}' \
+      '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+      '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"mempalace_search","arguments":{"query":"health probe","limit":1}},"id":2}' \
+      | perl -e 'alarm 20; exec @ARGV' mempalace-mcp 2>/dev/null
+  )
+
+  # MCP wraps tool output as escaped JSON inside content[].text, so the sentinel
+  # "total_before_filter" appears as \"total_before_filter\". Match without quote
+  # anchors to catch both forms.
+  if echo "$PROBE_OUT" | grep -q 'total_before_filter'; then
+    echo "PASS: palace read path healthy"
+  else
+    PALACE="$HOME/.mempalace/palace"
+    SQ_AGE=$(stat -f %m "$PALACE/chroma.sqlite3" 2>/dev/null)
+    DRIFT_SEG=""
+    if [ -n "$SQ_AGE" ]; then
+      for seg in "$PALACE"/*-*-*-*-*; do
+        [ -f "$seg/data_level0.bin" ] || continue
+        SEG_AGE=$(stat -f %m "$seg/data_level0.bin" 2>/dev/null)
+        [ -z "$SEG_AGE" ] && continue
+        DRIFT=$((SQ_AGE - SEG_AGE))
+        [ "$DRIFT" -gt 3600 ] && DRIFT_SEG="$seg (${DRIFT}s drift)"
+      done
+    fi
+    if [ -n "$DRIFT_SEG" ]; then
+      echo "WARN: palace read crashed + HNSW drift detected at $DRIFT_SEG — run quarantine_stale_hnsw (see below)"
+    else
+      echo "WARN: palace read crashed with no obvious drift — inspect /tmp/mempalace-mcp-last.log"
+    fi
+  fi
+fi
+```
+
+- **Pass:** Shim's `mempalace_search` returns a valid JSON-RPC response with `"total_before_filter"`.
+- **Warn (drift detected):** HNSW segment's `data_level0.bin` is more than 1 hour older than `chroma.sqlite3` — matches the [#1000](https://github.com/MemPalace/mempalace/pull/1000) drift signature. Recovery:
+  ```bash
+  $(pipx environment --value PIPX_LOCAL_VENVS)/mempalace/bin/python -c "
+  from mempalace.backends.chroma import quarantine_stale_hnsw
+  renamed = quarantine_stale_hnsw('$HOME/.mempalace/palace')
+  print('Quarantined segments:', renamed)
+  "
+  # Then restart Claude Code. Plugin MCP server reopens, chromadb writes a fresh segment
+  # from chroma.sqlite3. The quarantined dir is renamed to `<uuid>.drift-YYYYMMDD-HHMMSS`
+  # — not deleted — so you can recover if the heuristic misfires.
+  ```
+- **Warn (crashed, no drift):** HNSW corruption without drift signature — more severe. Options: (a) `mempalace repair`, (b) full nuke + re-mine (lossy).
+- **Requires:** Check 14a (plugin), Check 14b (MCP server responds).
+- **Self-heal opportunity:** when upstream [#1062](https://github.com/MemPalace/mempalace/pull/1062) lands (wires `quarantine_stale_hnsw()` automatically on MCP startup), this check can be retired.
+
 **Check 15 — MemPalace wing indexed** | Tier: Full | Requires Check 14
 
 Covers the vault content wing (indexed by `mine-vault.sh`). The conversation history wing is separate — see Check 16.
@@ -293,6 +473,7 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 
 1. **Run all 22 checks in sequence.** Do not abort on failure.
    - Checks 7–20: if Check 4 failed (CLAUDE.md missing), record `skip` with message "cannot check — CLAUDE.md missing". Checks 21, 22 are exempt.
+   - Checks 14b, 14c, 14d: if Check 14a failed, record `skip` with message "requires MemPalace plugin (check 14a)".
    - Checks 15, 16, 18, 19: if the prerequisite failed, record `skip` with message "requires check N".
 
 2. **Classify each result** with one of four outcomes:
@@ -301,8 +482,9 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking (Check 10 staleness, Check 16 hook-state drift, Check 20, Check 22) |
+| `~~` | Warning | Non-blocking (Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 20, Check 22) |
 | `--` | Available upgrade | Feature not installed, above current tier |
+| `>>` | Informational | State display only (Check 14c MemPalace hook state — always passes) |
 
 3. **Assign tier** from the highest level where no Critical or Standard check returns `fail`. Warn, skip, and upgrade outcomes never demote tier.
 
@@ -311,7 +493,7 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 - **Standard:** no fail in checks 1–13 (TaskNotes MCP configured)
 - **Full:** no fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
 
-Check 21 (OMC plugin) is tier-agnostic. Warn-only checks (10, 20, 22) and upgrade-only checks (14, 17, 18, 21) are advisory — they surface in the scorecard but never block tier classification.
+Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 20 vault externalized, 22 plugin version) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
 
 4. **Emit scorecard** per the Output Format below. Always end with `Run /ark-onboard to fix or upgrade`.
 
@@ -347,6 +529,19 @@ Integrations
   --  MemPalace -- not installed
       Unlock: T2 retrieval for /wiki-query
       Install: pipx install "mempalace>=3.0.0,<4.0.0"
+  ~~  MemPalace plugin -- not installed (user scope)
+      Unlock: Auto-MCP server on all Claude Code sessions (19 read tools for T2)
+      Install: claude plugin marketplace add milla-jovovich/mempalace && claude plugin install --scope user mempalace@mempalace
+      Note: requires the `mempalace-mcp` shim — see check 14a for the one-liner
+  ~~  MemPalace MCP -- not reachable this session
+      Fix: restart Claude Code to pick up the plugin's MCP server, or verify the shim at ~/.local/bin/mempalace-mcp
+  >>  MemPalace hooks -- active (plugin auto-save on, relying on #1023 + #784)
+      Optional: neutralize for defense-in-depth on large palaces — see check 14c
+  >>  MemPalace hooks -- neutralized (defense-in-depth, auto-save off)
+      Revisit: consider re-enabling after 2-week soak on 3.3.2 — see check 14c
+  ~~  MemPalace palace read -- crashed + HNSW drift detected
+      Fix: run quarantine_stale_hnsw() one-liner in check 14d; then restart Claude Code
+      Upstream: MemPalace #1062 (self-heal on MCP startup; retire check 14d when merged)
   --  OMC plugin -- not installed
       Unlock: /ark-workflow Path B (autonomous execution)
       Install: https://github.com/anthropics/oh-my-claudecode
@@ -362,6 +557,7 @@ Run /ark-onboard to fix or upgrade
 - `!!` → indented `Fix:` line
 - `~~` → indented `Refresh:` / `Fix:` / `Reset:` line (Check 16 hook drift uses `Fix:` or `Reset:` per sub-warning)
 - `--` → indented `Unlock:` + `Install:` or `Check:` line
+- `>>` → state-display only; indented `Optional:`, `Revisit:`, or `Note:` line (Check 14c MemPalace hook state)
 - Singular/plural: `1 fix`, not `1 fixes`
 - Always end with: `Run /ark-onboard to fix or upgrade`
 

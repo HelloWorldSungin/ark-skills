@@ -107,14 +107,14 @@ Use the first available backend appropriate for the query type.
 | Tier | Backend | Best For | Token Cost |
 |------|---------|----------|------------|
 | T1 | NotebookLM | Factual lookups, pre-synthesized answers | ~500 |
-| T2 | MemPalace | Deep context, synthesis, experiential recall | ~2,500 |
+| T2 | MemPalace | Deep context, synthesis, experiential recall (MCP tools for reads; CLI for ingest) | ~2,500 |
 | T3 | Obsidian-CLI (via `obsidian:obsidian-cli` skill) | Full-text search, inline mentions | ~119 + reads |
 | T4 | index.md scan | Structured browse, page discovery, zero-dep fallback | ~2,100 |
 
 ### Availability Checks
 
 - **T1:** `notebooklm` CLI authenticated + config exists at `{vault_path}/.notebooklm/config.json` OR `.notebooklm/config.json` in project root
-- **T2:** `mempalace` installed + project-specific wing exists in `mempalace status`
+- **T2:** MemPalace MCP server reachable (`mcp__mempalace__*` tools available) for reads; `mempalace` CLI installed for ingest (`mempalace mine`). CLI search is NOT a valid T2 fallback — `mempalace search` segfaults in `chromadb/api/rust.py:_query` (upstream, tracked at [#1092](https://github.com/MemPalace/mempalace/issues/1092)/[#1132](https://github.com/MemPalace/mempalace/issues/1132)), and `mempalace status` hits SQLite's 32k-variable limit on palaces past ~32k drawers ([#802](https://github.com/MemPalace/mempalace/issues/802)). If MCP is unreachable, skip T2 entirely.
 - **T3:** Obsidian app running. Always invoke via `obsidian:obsidian-cli` skill.
 - **T4:** `{vault_path}/index.md` exists. Always available.
 
@@ -122,7 +122,8 @@ Use the first available backend appropriate for the query type.
 
 When a preferred tier is unavailable, log before falling back:
 - "T1 not available — NotebookLM config not found at {vault_path}/.notebooklm/config.json or .notebooklm/config.json. Falling back to T4."
-- "T2 not available — MemPalace wing '{wing}' not found. Run `bash skills/shared/mine-vault.sh` to index. Falling back to T4."
+- "T2 not available — MemPalace MCP server unreachable. CLI search is broken upstream (#1092/#1132), so skipping T2. Falling back to T3/T4."
+- "T2 wing missing — MemPalace wing '{wing}' not indexed. Run `bash skills/shared/mine-vault.sh` via MCP (CLI mine still works). Falling back to T4."
 - "T3 not available — Obsidian not responsive. Falling back to T4."
 
 ### Query Routing

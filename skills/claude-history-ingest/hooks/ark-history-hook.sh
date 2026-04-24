@@ -74,6 +74,27 @@ if mkdir "$LOCK" 2>/dev/null; then
         exit 0
     fi
 
+    # Palace-global mutex: prevents cross-wing mine races on the shared HNSW segment.
+    # mempalace 3.3.2 ships:
+    #   - #1023 PID-file guard for `mempalace hook run` auto-ingest (doesn't apply here — we call `mempalace mine` directly)
+    #   - #784 per-source-file locks in the miner (prevents duplicate drawer inserts, not HNSW segment contention)
+    # Neither protects against two `mempalace mine` processes for DIFFERENT wings writing
+    # the same HNSW segment at the same time — still the root cause of upstream #1092.
+    # Until #976/#991/#1062 land, we serialize cross-wing at the ark-skills layer.
+    GLOBAL_LOCK="$HOME/.mempalace/palace/.ark-global-mine-mutex"
+    mkdir -p "$HOME/.mempalace/palace" 2>/dev/null
+    # Stale-lock recovery: 10 min (longer than a typical mine, short enough to unstick a crashed run)
+    if [ -d "$GLOBAL_LOCK" ]; then
+        G_AGE=$(( $(date +%s) - $(stat -f %m "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+        [ "$G_AGE" -gt 600 ] && rmdir "$GLOBAL_LOCK" 2>/dev/null
+    fi
+    if ! mkdir "$GLOBAL_LOCK" 2>/dev/null; then
+        echo "[$(date '+%H:%M:%S')] ark-history-hook: another wing's mine is active on this palace — skipping this session's mine" >> "$STATE_DIR/mine.log"
+        rmdir "$LOCK" 2>/dev/null
+        echo "{}"
+        exit 0
+    fi
+
     nohup bash -c "
         if mempalace mine \"$MINE_TARGET\" --mode convos --wing=\"$WING\" 2>>\"$STATE_DIR/mine.log\"; then
             echo 0 > \"$FAIL_FILE\"
@@ -93,6 +114,7 @@ if mkdir "$LOCK" 2>/dev/null; then
             echo \$((PREV + 1)) > \"$FAIL_FILE\"
         fi
         rmdir \"$LOCK\" 2>/dev/null
+        rmdir \"$GLOBAL_LOCK\" 2>/dev/null
     " &>/dev/null &
 fi
 

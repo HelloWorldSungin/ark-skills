@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.1] - 2026-04-23
+
+**T2 MCP-first via the MemPalace Claude Code plugin, layered onto the v1.21.0 Shrink-to-Core slim.** Consolidates three internal patches (T2 plugin install + CCG-review correctness fixes + cross-wing race fix) into one release, since the underlying intent was always one logical change. Adopts the v1.21.0 references/ structure — new bash stays inline alongside the existing checks rather than expanding the references files.
+
+### Added
+
+- **`/ark-onboard` Step 13b — MemPalace Claude Code plugin install (Greenfield, optional but recommended).** Authors `~/.local/bin/mempalace-mcp` shim (plugin's bundled `.mcp.json` declares command `mempalace-mcp` but the pip package ships the server as `python -m mempalace.mcp_server`), validates `~/.local/bin` is on PATH, hard-fails if the pipx venv python is missing rather than falling back to system python3 (unsafe). [Y/n/c] prompt: Y installs plugin + shim, N skips entirely, C keeps CLI but skips plugin.
+- **`/ark-health` Check 14a — MemPalace plugin installed (user scope).** Block-aware awk parse of `claude plugin list` (scoped to the `mempalace@` block to avoid false-PASS when a different plugin is the user-scope/enabled one). Returns `warn`.
+- **`/ark-health` Check 14b — MemPalace MCP server responds.** Two probes: `claude mcp list` for plugin-registered MCP, fallback shim handshake via `perl -e 'alarm 5; exec @ARGV'` (portable timeout — `timeout`/`gtimeout` aren't on stock macOS). Returns `warn`.
+- **`/ark-health` Check 14c — MemPalace hook state (informational).** JSON-aware Python parse of `.hooks.Stop` and `.hooks.PreCompact` in cached `hooks.json` — never warns, always passes, just reports state A (neutralized) vs state B (active). New `>>` symbol in the scorecard for state-display checks.
+- **`/ark-health` Check 14d — MemPalace palace read sanity.** Exercises the HNSW read path via a real `mempalace_search` through the shim. On crash, detects HNSW/SQLite drift signature ([#1000](https://github.com/MemPalace/mempalace/pull/1000)) and surfaces the `quarantine_stale_hnsw()` recovery one-liner. Returns `warn`. Retire when upstream [#1062](https://github.com/MemPalace/mempalace/pull/1062) lands.
+- **Cross-wing mine mutex** in `skills/claude-history-ingest/hooks/ark-history-hook.sh`. Non-blocking mkdir on `~/.mempalace/palace/.ark-global-mine-mutex`; if another wing's `mempalace mine` is running, skip this session and log. Stale-lock recovery at 10 min. Closes the cross-wing concurrent-writer race that produced 38k-drawer palace corruption (the in-repo per-wing lock didn't cover it; upstream [#1023](https://github.com/MemPalace/mempalace/pull/1023) PID guard and [#784](https://github.com/MemPalace/mempalace/pull/784) per-source-file lock don't cover it either). Retire when upstream [#976](https://github.com/MemPalace/mempalace/pull/976) (HNSW thread-safety) lands.
+
+### Changed
+
+- **`/ark-onboard` Step 13 pins Python 3.13 + chromadb 1.5.7.** Python 3.14's ABI shifts hit a chromadb cp39-abi3 wheel SIGSEGV in MCP vector query ([#1109](https://github.com/MemPalace/mempalace/issues/1109)); chromadb 1.5.8 introduced a vector-query regression and concurrent-writer corruption risk ([#1092](https://github.com/MemPalace/mempalace/issues/1092) / [#1132](https://github.com/MemPalace/mempalace/issues/1132)). Step 13 now: preflights `pipx` and `python3.13` (auto-installs via Homebrew on macOS), reads existing install's interpreter from the venv directly (NOT `pipx list --short`, which shows the package version, not the interpreter), gates `MEMPALACE_OK=true` on exit code from each branch, and pins chromadb to 1.5.7 via `pipx runpip mempalace install`.
+- **`/ark-onboard` Integrations checklist** gains rows 14a/14b/14c/14d under existing row 14, with the skip rule "checks 14b/14c/14d skip if 14a failed."
+- **`/ark-health` tier policy** updated to enumerate warn-returning checks (10, 14a, 14b, 14d, 20, 22) and informational checks (14c) explicitly. Added `>>` symbol to the result table and output-format rules.
+- **CLAUDE.md T2 retrieval block.** MCP for reads, CLI for ingest only. CLI search fallback dropped — `mempalace search` segfaults in `chromadb/api/rust.py:_query` upstream ([#1092](https://github.com/MemPalace/mempalace/issues/1092) / [#1132](https://github.com/MemPalace/mempalace/issues/1132)) and `mempalace status` hits SQLite's 32k-variable limit on palaces past ~32k drawers ([#802](https://github.com/MemPalace/mempalace/issues/802)). If MCP is unreachable, skip T2 entirely.
+
+### Notes
+
+- v1.20.1, v1.20.2, v1.20.3 were never published — they exist only as ancestor commits to this release. The three corrections collapsed into one consolidated entry above (the v1.20.x series is summarized in the commit message).
+- **Defense-in-depth, not corruption-prevention.** mempalace 3.3.2's #1023 PID guard + #784 per-file lock make the plugin's auto-save hooks meaningfully safer than at v1.20.1. Neutralizing them is now an opt-in choice (Check 14c) — the cross-wing race is closed at the ark-skills layer by the new mutex.
+- **Retire watchpoints.** Check 14d → upstream #1062. Mutex → upstream #976. Re-evaluate the chromadb 1.5.7 pin and Python 3.13 pin once #976 / #991 / #1062 land.
+
 ## [1.21.0] - 2026-04-23
 
 **Layer 3 Shrink-to-Core audit.** Ships the approved "ark-skills Identity Audit — Shrink to Core" plan (design doc under `~/.gstack/projects/HelloWorldSungin-ark-skills/`, approved 2026-04-22). Cuts Layer 3 SKILL.md verbosity without touching Layer 1 (orchestration) or Layer 2 (vault integration).

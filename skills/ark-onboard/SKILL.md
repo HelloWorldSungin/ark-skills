@@ -150,6 +150,10 @@ Summary of the 22 checks (pass conditions; full semantics + bash in `/ark-health
 | 12 | Obsidian vault plugins | Standard | `tasknotes/main.js` + `obsidian-git/main.js` in `.obsidian/plugins/` |
 | 13 | TaskNotes MCP | Standard | `mcpServers.tasknotes` in `.mcp.json` (config-only — Obsidian must be running for endpoint to respond) |
 | 14 | MemPalace installed | Full | `mempalace` CLI on PATH |
+| 14a | MemPalace plugin installed | Full (warn-only) | `mempalace@mempalace` plugin present at user scope per `claude plugin list` |
+| 14b | MemPalace MCP reachable | Full (warn-only) | Plugin-declared MCP server discoverable via `claude mcp list` OR `mempalace-mcp` shim answers initialize handshake |
+| 14c | MemPalace hook state | Full (informational) | Always passes — reports state A (neutralized) or state B (active) |
+| 14d | MemPalace palace read sanity | Full (warn-only) | `mempalace_search` via shim returns valid response (no HNSW segfault) |
 | 15 | MemPalace wing indexed | Full | `mempalace status` shows wing for project |
 | 16 | History auto-index hook | Full | `~/.claude/hooks/ark-history-hook.sh` exists AND registered in `.claude/settings.json` |
 | 17 | NotebookLM CLI installed | Full | `notebooklm` CLI on PATH |
@@ -164,6 +168,7 @@ Running diagnostics: run all 22 checks in sequence, never abort on failure. For 
 - Checks 7–20 with CLAUDE.md missing (Check 4 = fail): record `skip` — "cannot check — CLAUDE.md missing". Checks 21, 22 are exempt.
 - Check 10 staleness: `warn` (not fail)
 - Check 20 vault-externalized: `warn` (never fails)
+- Checks 14b, 14c, 14d if Check 14a failed: `skip` — "requires MemPalace plugin (check 14a)"
 - Checks 15, 16 if Check 14 failed: `skip` — "requires MemPalace (check 14)"
 - Checks 18, 19 if Check 17 failed: `skip` — "requires NotebookLM CLI (check 17)"
 - Full-tier checks (14–19) below Full tier: `upgrade`
@@ -523,25 +528,168 @@ fi
 
 ### Step 13 of 18 — Install MemPalace (Full tier only)
 
-Skip to Step 16 if Quick/Standard.
+Skip to Step 15 if Quick/Standard.
+
+**Known pin constraints** (as of 2026-04-23, revisit when upstream lands fixes):
+
+- **Python 3.13 required.** Python 3.14's ABI shifts hit a chromadb Rust-binding SIGSEGV in the MCP vector-query path on the `cp39-abi3` wheel. Tracked at [MemPalace #1109](https://github.com/MemPalace/mempalace/issues/1109).
+- **chromadb 1.5.7 required (NOT 1.5.8).** 1.5.8 introduced a vector-query regression and concurrent-writer corruption risk. Tracked at [MemPalace #1092](https://github.com/MemPalace/mempalace/issues/1092) / [#1132](https://github.com/MemPalace/mempalace/issues/1132).
+- **`mempalace status` CLI crashes on palaces past ~32k drawers** ([#802](https://github.com/MemPalace/mempalace/issues/802)) — unavoidable CLI bug. Use the MCP `mempalace_status` tool instead.
 
 ```bash
-command -v mempalace 2>/dev/null && echo "MemPalace already installed: $(mempalace --version 2>/dev/null)" && MEMPALACE_OK=true
+# Preflight 1: pipx must exist (we rely on it for isolated venvs)
+if ! command -v pipx >/dev/null 2>&1; then
+  echo "WARNING: pipx not installed. Install via: brew install pipx (macOS) or python3 -m pip install --user pipx (Linux)."
+  MEMPALACE_OK=false
+fi
 
+# Preflight 2: Python 3.13 available
 if [ -z "$MEMPALACE_OK" ]; then
-  if command -v pipx 2>/dev/null; then
-    pipx install "mempalace>=3.0.0,<4.0.0"
-  elif command -v pip 2>/dev/null; then
-    pip install "mempalace>=3.0.0,<4.0.0"
-  else
-    echo "WARNING: Neither pipx nor pip available. Install manually: pip install 'mempalace>=3.0.0,<4.0.0'"
-    echo "Skipping — continuing without MemPalace."
+  PY313="$(command -v python3.13 2>/dev/null)"
+  if [ -z "$PY313" ]; then
+    if command -v brew >/dev/null 2>&1; then
+      echo "Installing Python 3.13 via Homebrew..."
+      brew install python@3.13 && PY313="$(command -v python3.13)"
+    fi
+  fi
+  if [ -z "$PY313" ]; then
+    echo "WARNING: Python 3.13 not found. On Linux: install via apt/pyenv. On macOS: install Homebrew first."
     MEMPALACE_OK=false
+  fi
+fi
+
+# Check existing install's interpreter version by asking the venv's python directly
+# (DO NOT parse `pipx list --short` — that shows the package version, not the interpreter).
+if [ -z "$MEMPALACE_OK" ] && command -v mempalace >/dev/null 2>&1; then
+  VENV_PY="$(pipx environment --value PIPX_LOCAL_VENVS 2>/dev/null)/mempalace/bin/python"
+  if [ -x "$VENV_PY" ]; then
+    INSTALLED_PY="$("$VENV_PY" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)"
+    if [ "$INSTALLED_PY" = "3.13" ]; then
+      echo "MemPalace already installed on Python 3.13."
+      MEMPALACE_OK=true
+    else
+      echo "MemPalace installed on Python $INSTALLED_PY — reinstalling on 3.13..."
+      if pipx reinstall --python "$PY313" mempalace; then
+        MEMPALACE_OK=true
+      else
+        echo "ERROR: pipx reinstall failed. Leaving the Python $INSTALLED_PY install in place (still works for CLI mine)."
+        MEMPALACE_OK=false
+      fi
+    fi
+  fi
+fi
+
+# Fresh install on Python 3.13
+if [ -z "$MEMPALACE_OK" ]; then
+  echo "Installing mempalace on Python 3.13 via pipx..."
+  if pipx install --python "$PY313" "mempalace>=3.3.2,<4.0.0"; then
+    MEMPALACE_OK=true
+  else
+    MEMPALACE_OK=false
+  fi
+fi
+
+# Pin chromadb to 1.5.7 (critical — 1.5.8 crashes on vector query).
+if [ "$MEMPALACE_OK" = "true" ]; then
+  INSTALLED_CHROMA="$(pipx runpip mempalace show chromadb 2>/dev/null | awk '/^Version:/ {print $2}')"
+  if [ "$INSTALLED_CHROMA" != "1.5.7" ]; then
+    echo "Pinning chromadb to 1.5.7 (was $INSTALLED_CHROMA)..."
+    pipx runpip mempalace install "chromadb==1.5.7" || echo "WARNING: chromadb pin failed — MCP may segfault on vector query."
   fi
 fi
 ```
 
 If install fails, warn and skip. Non-blocking.
+
+**Step 13b: Install MemPalace Claude Code plugin (optional but recommended).**
+
+The plugin auto-starts the MemPalace MCP server on every Claude Code session at user scope — giving LLM-native access to the 19 MCP tools for T2 reads without a CLI round-trip. Only meaningful if Step 13 succeeded.
+
+```bash
+# Skip if CLI install failed
+[ "$MEMPALACE_OK" = "false" ] && echo "Skipping plugin — CLI not installed." && SKIP_PLUGIN=true
+
+# Detect if plugin is already installed at user scope.
+# Block-aware parse: each plugin in `claude plugin list` is a block starting
+# with "  ❯ <name>@<marketplace>". Scanning the whole stream false-PASSes when
+# a different plugin is the user-scope/enabled one.
+if [ -z "$SKIP_PLUGIN" ]; then
+  if claude plugin list 2>/dev/null | awk '
+    /^  ❯ / {in_target = ($0 ~ /^  ❯ mempalace@/); next}
+    in_target && /Scope: user/ {scope=1}
+    in_target && /Status: ✔ enabled/ {enabled=1}
+    END {exit !(scope && enabled)}
+  '; then
+    echo "MemPalace plugin already installed at user scope."
+    PLUGIN_OK=true
+  fi
+fi
+```
+
+If not installed, prompt the user:
+
+```
+MemPalace Claude Code plugin not detected. Install now? [Y/n/c]
+
+[Y] Install plugin + MCP shim (recommended for macOS + Python 3.13 + chromadb 1.5.7)
+[N] Skip entirely (CLI-only, no MCP tools this session)
+[C] CLI stays, skip the plugin (if MCP setup looks fragile on your system)
+
+The plugin auto-starts an MCP server on every Claude Code session, adding
+19 memory tools and /mempalace:* slash commands.
+```
+
+On yes:
+
+```bash
+# The plugin's bundled .mcp.json declares command: mempalace-mcp, but the pip
+# package ships the server as `python -m mempalace.mcp_server`. Create a shim
+# so the plugin's declared MCP config works unchanged.
+#
+# HARD REQUIREMENT: the pipx venv python must exist. Falling back to system
+# python3 is unsafe — it may lack the mempalace module or hit a broken 3.14
+# install. If the venv is missing, abort the plugin install; the CLI-only
+# path still works.
+MEMPALACE_VENV_PYTHON="$(pipx environment --value PIPX_LOCAL_VENVS 2>/dev/null)/mempalace/bin/python"
+if [ ! -x "$MEMPALACE_VENV_PYTHON" ]; then
+  echo "ERROR: mempalace pipx venv not found at $MEMPALACE_VENV_PYTHON."
+  echo "Run Step 13 first, or reinstall: pipx reinstall --python python3.13 mempalace"
+  SKIP_PLUGIN=true
+fi
+
+if [ -z "$SKIP_PLUGIN" ]; then
+  mkdir -p "$HOME/.local/bin"
+  cat > "$HOME/.local/bin/mempalace-mcp" <<EOF
+#!/bin/bash
+# Shim for the MemPalace Claude Code plugin.
+exec $MEMPALACE_VENV_PYTHON -m mempalace.mcp_server "\$@"
+EOF
+  chmod +x "$HOME/.local/bin/mempalace-mcp"
+
+  # Verify ~/.local/bin is in PATH — Claude Code inherits the user's PATH when
+  # launching the plugin's MCP server. If it's missing, the plugin's
+  # "command: mempalace-mcp" will fail at session start and the install will
+  # look successful but do nothing.
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*)
+      echo "✓ ~/.local/bin is in PATH"
+      ;;
+    *)
+      echo "WARNING: ~/.local/bin is NOT in PATH. Claude Code will not find the mempalace-mcp shim."
+      echo "Add this line to your shell rc (~/.zshrc or ~/.bashrc):"
+      echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+      echo "Then restart your shell and re-run this step."
+      ;;
+  esac
+
+  claude plugin marketplace add milla-jovovich/mempalace
+  claude plugin install --scope user mempalace@mempalace
+fi
+```
+
+**Supply-chain note:** `claude plugin marketplace add` does not expose commit-SHA pinning. The marketplace refreshes on `claude plugin update` and picks up whatever is on the remote's default branch. Audit marketplace contents at `~/.claude/plugins/marketplaces/mempalace/` if you need tighter supply-chain guarantees.
+
+After install, tell the user to restart Claude Code so the new MCP server is picked up. If install fails, warn and continue — Step 14 still works via the CLI alone.
 
 ### Step 14 of 18 — Vault mining + history hook (Full tier only)
 
