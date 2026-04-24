@@ -401,17 +401,26 @@ Detects when the installed copy at `~/.claude/hooks/ark-history-hook.sh` diverge
 INSTALLED="$HOME/.claude/hooks/ark-history-hook.sh"
 PLUGIN_COPY=""
 
-# Find the plugin's current copy — prefer the installed plugin cache,
-# fall back to CWD (dev/test mode on the ark-skills repo itself).
-for candidate in \
+# Find the plugin's current copy. The cache may contain MULTIPLE versions
+# (e.g., 1.16.0/, 1.20.0/, 1.21.x/) accumulated across upgrades. Pick the
+# highest by VERSION, not alphabetical — under shell glob `1.20.0` sorts
+# AFTER `1.16.0` only via `sort -V`. Falsely matching against an older cached
+# copy would mask exactly the drift this check is designed to catch.
+PLUGIN_COPY=$(ls -1 \
   "$HOME/.claude/plugins/cache/ark-skills/ark-skills"/*/skills/claude-history-ingest/hooks/ark-history-hook.sh \
-  "$HOME/.claude/plugins/cache/ark-skills/skills/claude-history-ingest/hooks/ark-history-hook.sh" \
-  "$(pwd)/skills/claude-history-ingest/hooks/ark-history-hook.sh"; do
-  if [ -f "$candidate" ]; then
-    PLUGIN_COPY="$candidate"
-    break
-  fi
-done
+  2>/dev/null | sort -V | tail -1)
+
+# Fallbacks: legacy cache layout (no version subdir), then dev-mode CWD.
+if [ -z "$PLUGIN_COPY" ] || [ ! -f "$PLUGIN_COPY" ]; then
+  for fallback in \
+    "$HOME/.claude/plugins/cache/ark-skills/skills/claude-history-ingest/hooks/ark-history-hook.sh" \
+    "$(pwd)/skills/claude-history-ingest/hooks/ark-history-hook.sh"; do
+    if [ -f "$fallback" ]; then
+      PLUGIN_COPY="$fallback"
+      break
+    fi
+  done
+fi
 
 if [ ! -f "$INSTALLED" ]; then
   echo "SKIP: hook not installed (see Check 16)"

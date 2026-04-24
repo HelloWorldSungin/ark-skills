@@ -1,6 +1,6 @@
 {
   "name": "ark-skills",
-  "version": "1.21.2",
+  "version": "1.21.3",
   "description": "Shared skills for ArkNode projects: Obsidian vault management (wiki-lint, cross-linker, tag-taxonomy), NotebookLM integration, TaskNotes with Linear sync, code review, codebase maintenance, Claude history ingest via MemPalace, onboarding wizard, health diagnostics, and version-driven project migration.",
   "author": {
     "name": "HelloWorldSungin",

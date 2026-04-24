@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.3] - 2026-04-23
+
+### Fixed
+
+- **`/ark-health` Check 16b path-resolver bug.** The shell glob `~/.claude/plugins/cache/ark-skills/ark-skills/*/skills/...` returns matches in **alphabetical** order, not version order — `1.16.0` sorts before `1.20.0` and `1.21.x`. The original `for candidate ... break` loop picked the first match, which on any system that has accumulated multiple cached plugin versions resolved to the OLDEST copy. That defeats the check's purpose: the installed hook can match an older cached copy (because the older copy happened to be byte-identical to what was installed at the time) while genuinely being stale relative to the live plugin. Caught pre-push by running the bash directly against the live cache (six versions present: 1.16.0 through 1.21.0). Fix: pipe the glob through `sort -V | tail -1` to pick the highest version. Fallback chain to legacy single-version cache layout + dev-mode CWD preserved.
+
 ## [1.21.2] - 2026-04-23
 
 ### Added
