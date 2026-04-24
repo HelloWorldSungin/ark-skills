@@ -631,11 +631,12 @@ fi
 If not installed, prompt the user:
 
 ```
-MemPalace Claude Code plugin not detected. Install now? [Y/n/c]
+MemPalace Claude Code plugin not detected. Install now? [Y/n]
 
 [Y] Install plugin + MCP shim (recommended for macOS + Python 3.13 + chromadb 1.5.7)
-[N] Skip entirely (CLI-only, no MCP tools this session)
-[C] CLI stays, skip the plugin (if MCP setup looks fragile on your system)
+[N] Skip the plugin — CLI install from Step 13 stays in place, but Claude Code
+    sessions won't have the mempalace_* MCP tools natively. You can still use
+    the CLI for mining and later install the plugin by re-running /ark-onboard.
 
 The plugin auto-starts an MCP server on every Claude Code session, adding
 19 memory tools and /mempalace:* slash commands.
@@ -661,12 +662,28 @@ fi
 
 if [ -z "$SKIP_PLUGIN" ]; then
   mkdir -p "$HOME/.local/bin"
-  cat > "$HOME/.local/bin/mempalace-mcp" <<EOF
+  SHIM_PATH="$HOME/.local/bin/mempalace-mcp"
+
+  # Refuse to clobber a pre-existing symlink — `cat > ...` follows it and
+  # overwrites the target, which could be anywhere. User-writable target,
+  # same-user threat, but still trivially avoidable.
+  if [ -L "$SHIM_PATH" ]; then
+    echo "ERROR: $SHIM_PATH is a symlink. Remove it before re-running Step 13b."
+    SKIP_PLUGIN=true
+  fi
+
+  if [ -z "$SKIP_PLUGIN" ]; then
+    # Write to tempfile + mv for atomic swap. Quote the interpreter path in the
+    # generated shim (handles pipx env paths with spaces on macOS).
+    SHIM_TMP=$(mktemp)
+    cat > "$SHIM_TMP" <<EOF
 #!/bin/bash
 # Shim for the MemPalace Claude Code plugin.
-exec $MEMPALACE_VENV_PYTHON -m mempalace.mcp_server "\$@"
+exec "$MEMPALACE_VENV_PYTHON" -m mempalace.mcp_server "\$@"
 EOF
-  chmod +x "$HOME/.local/bin/mempalace-mcp"
+    chmod +x "$SHIM_TMP"
+    mv "$SHIM_TMP" "$SHIM_PATH"
+  fi
 
   # Verify ~/.local/bin is in PATH — Claude Code inherits the user's PATH when
   # launching the plugin's MCP server. If it's missing, the plugin's

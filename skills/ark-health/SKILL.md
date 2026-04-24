@@ -314,13 +314,18 @@ fi
 if ! command -v mempalace-mcp >/dev/null 2>&1; then
   echo "SKIP: mempalace-mcp shim not on PATH (check 14a upgrade action)"
 else
+  # Tee stderr to a log file so the "inspect /tmp/mempalace-mcp-last.log" warn
+  # message below actually points at evidence. Stdout stays clean for the sentinel grep.
   PROBE_OUT=$(
     printf '%s\n%s\n%s\n' \
       '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"health","version":"0"}},"id":1}' \
       '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
       '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"mempalace_search","arguments":{"query":"health probe","limit":1}},"id":2}' \
-      | perl -e 'alarm 20; exec @ARGV' mempalace-mcp 2>/dev/null
+      | perl -e 'alarm 20; exec @ARGV' mempalace-mcp 2>>/tmp/mempalace-mcp-last.log
   )
+
+  # Portable mtime — BSD `stat -f %m` on macOS, GNU `stat -c %Y` on Linux.
+  _mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }
 
   # MCP wraps tool output as escaped JSON inside content[].text, so the sentinel
   # "total_before_filter" appears as \"total_before_filter\". Match without quote
@@ -329,12 +334,12 @@ else
     echo "PASS: palace read path healthy"
   else
     PALACE="$HOME/.mempalace/palace"
-    SQ_AGE=$(stat -f %m "$PALACE/chroma.sqlite3" 2>/dev/null)
+    SQ_AGE=$(_mtime "$PALACE/chroma.sqlite3")
     DRIFT_SEG=""
     if [ -n "$SQ_AGE" ]; then
       for seg in "$PALACE"/*-*-*-*-*; do
         [ -f "$seg/data_level0.bin" ] || continue
-        SEG_AGE=$(stat -f %m "$seg/data_level0.bin" 2>/dev/null)
+        SEG_AGE=$(_mtime "$seg/data_level0.bin")
         [ -z "$SEG_AGE" ] && continue
         DRIFT=$((SQ_AGE - SEG_AGE))
         [ "$DRIFT" -gt 3600 ] && DRIFT_SEG="$seg (${DRIFT}s drift)"

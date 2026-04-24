@@ -18,6 +18,49 @@ FAIL_COUNT_MAX=3      # Circuit breaker: disable after N consecutive failures
 
 mkdir -p "$STATE_DIR"
 
+# === PORTABLE HELPERS ===
+# Age-only stale-lock recovery allowed a legitimate long-running mine to be
+# whacked by a later session. acquire_lock() writes the holder PID into the
+# lock dir; contenders check `kill -0 $pid` first, fall back to age only when
+# the PID file is missing. Also unifies stat across BSD (macOS) and GNU (Linux).
+mtime() {
+    stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
+}
+
+# acquire_lock <lock_dir> <stale_age_seconds> — returns 0 on acquire, 1 on contended.
+# Semantics:
+#   - PID file present + alive  → contended (return 1)
+#   - PID file present + dead   → stale, reclaim regardless of age
+#   - PID file missing + fresh  → contended (new lock still being initialized)
+#   - PID file missing + stale  → age-based reclaim
+acquire_lock() {
+    local lock="$1" stale_age="$2" holder age
+    if [ -d "$lock" ]; then
+        holder=$(cat "$lock/pid" 2>/dev/null || true)
+        if [ -n "$holder" ]; then
+            if kill -0 "$holder" 2>/dev/null; then
+                return 1  # holder alive — contended
+            fi
+            # Holder dead — reclaim immediately, age irrelevant
+            rm -rf "$lock" 2>/dev/null || true
+        else
+            age=$(( $(date +%s) - $(mtime "$lock") ))
+            if [ "$age" -gt "$stale_age" ]; then
+                rm -rf "$lock" 2>/dev/null || true
+            else
+                return 1  # no PID evidence + too new to clear
+            fi
+        fi
+    fi
+    mkdir "$lock" 2>/dev/null || return 1
+    echo $$ > "$lock/pid"
+    return 0
+}
+
+release_lock() {
+    rm -rf "$1" 2>/dev/null || true
+}
+
 # === READ HOOK INPUT ===
 INPUT=$(cat)
 
@@ -59,17 +102,12 @@ fi
 
 # === LAYER 1: INDEX (background, zero LLM tokens) ===
 LOCK="$STATE_DIR/${WING}.lock"
-# Stale lock recovery: if lock is older than 5 minutes, assume the process died
-if [ -d "$LOCK" ]; then
-    LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCK" 2>/dev/null || echo 0) ))
-    [ "$LOCK_AGE" -gt 300 ] && rmdir "$LOCK" 2>/dev/null
-fi
-if mkdir "$LOCK" 2>/dev/null; then
+if acquire_lock "$LOCK" 300; then
     # mine only accepts directories, not single files — dedup is file-level so this is still incremental
     if [ -d "$CLAUDE_PROJECT" ]; then
         MINE_TARGET="$CLAUDE_PROJECT"
     else
-        rmdir "$LOCK" 2>/dev/null
+        release_lock "$LOCK"
         echo "{}"
         exit 0
     fi
@@ -83,14 +121,9 @@ if mkdir "$LOCK" 2>/dev/null; then
     # Until #976/#991/#1062 land, we serialize cross-wing at the ark-skills layer.
     GLOBAL_LOCK="$HOME/.mempalace/palace/.ark-global-mine-mutex"
     mkdir -p "$HOME/.mempalace/palace" 2>/dev/null
-    # Stale-lock recovery: 10 min (longer than a typical mine, short enough to unstick a crashed run)
-    if [ -d "$GLOBAL_LOCK" ]; then
-        G_AGE=$(( $(date +%s) - $(stat -f %m "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
-        [ "$G_AGE" -gt 600 ] && rmdir "$GLOBAL_LOCK" 2>/dev/null
-    fi
-    if ! mkdir "$GLOBAL_LOCK" 2>/dev/null; then
-        echo "[$(date '+%H:%M:%S')] ark-history-hook: another wing's mine is active on this palace — skipping this session's mine" >> "$STATE_DIR/mine.log"
-        rmdir "$LOCK" 2>/dev/null
+    if ! acquire_lock "$GLOBAL_LOCK" 600; then
+        echo "[$(date '+%H:%M:%S')] ark-history-hook: another wing's mine is active on this palace (pid $(cat "$GLOBAL_LOCK/pid" 2>/dev/null || echo '?')) — skipping this session's mine" >> "$STATE_DIR/mine.log"
+        release_lock "$LOCK"
         echo "{}"
         exit 0
     fi
@@ -113,8 +146,8 @@ if mkdir "$LOCK" 2>/dev/null; then
             PREV=\$(cat \"$FAIL_FILE\" 2>/dev/null || echo 0)
             echo \$((PREV + 1)) > \"$FAIL_FILE\"
         fi
-        rmdir \"$LOCK\" 2>/dev/null
-        rmdir \"$GLOBAL_LOCK\" 2>/dev/null
+        rm -rf \"$LOCK\" 2>/dev/null
+        rm -rf \"$GLOBAL_LOCK\" 2>/dev/null
     " &>/dev/null &
 fi
 

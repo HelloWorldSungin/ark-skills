@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.4] - 2026-04-23
+
+### Fixed
+
+- **Cross-wing mine mutex now PID-aware, not age-only.** The v1.21.1 mutex in `skills/claude-history-ingest/hooks/ark-history-hook.sh` used a 10-minute mtime check to recover stale locks — but a legitimate `mempalace mine` running past 10 minutes could have its live lock wiped by a later session, reopening the exact HNSW write race the release closes. Replaced with an `acquire_lock()` helper that writes the holder PID into the lock dir; contenders check `kill -0 $pid` first and only fall back to age-based cleanup when the PID file is missing. Applied to both the per-wing lock (`$STATE_DIR/$WING.lock`) and the palace-global lock (`~/.mempalace/palace/.ark-global-mine-mutex`).
+- **Portable `stat` across macOS + Linux.** The hook and `/ark-health` Check 14d used `stat -f %m` (BSD mtime), which on GNU/Linux is filesystem-format info, not file-mtime — silent mis-probe for Linux users. New `mtime()` / `_mtime()` helper tries BSD form first, falls back to GNU `stat -c %Y`.
+- **Check 14d warn text now points at real evidence.** The probe previously discarded stderr with `2>/dev/null` while the warn message told users to "inspect `/tmp/mempalace-mcp-last.log`" — a log that didn't exist. Probe now appends stderr to the log so the diagnostic pointer is actually actionable.
+- **Step 13b shim writer hardened.** Refuses to write when `~/.local/bin/mempalace-mcp` is a pre-existing symlink (cat `>` follows symlinks and would clobber the target). Write is now atomic via tempfile + `mv`. Generated shim quotes the interpreter path (`exec "$MEMPALACE_VENV_PYTHON"`) so pipx env paths with spaces don't break it.
+
+### Changed
+
+- **Step 13b prompt simplified from [Y/n/c] to [Y/n].** The [C] ("CLI stays, skip plugin") option was redundant — same user-visible outcome as [N], and [C] being non-standard (usually means Cancel) was a UX trap. [N] helptext now clarifies that CLI install from Step 13 stays in place.
+
+### Notes
+
+- All four fixes caught by a /ccg tri-model review (Codex + Gemini) run pre-push. Zero downstream-user behavior changes if the issues never triggered — but on Linux, under long-mine workloads, or with pre-existing `~/.local/bin/mempalace-mcp` symlinks, the pre-v1.21.4 code had real failure modes.
+- Deferred from this release: relocating the new Check 14a/14b/14c/14d/16b bash blocks into `references/check-implementations.md` to honor the v1.21.0 Shrink-to-Core direction. Tracked as Arkskill-011.
+
 ## [1.21.3] - 2026-04-23
 
 ### Fixed
