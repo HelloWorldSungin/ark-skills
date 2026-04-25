@@ -4,7 +4,7 @@ type: meta
 tags:
   - meta
 summary: "Machine-generated flat catalog of all vault pages."
-last-updated: 2026-04-21
+last-updated: 2026-04-25
 ---
 
 # Index
@@ -34,6 +34,7 @@ last-updated: 2026-04-21
 | [[Compiled-Insights/TaskNotes-MCP-Integration-Model.md|TaskNotes MCP Integration — Architecture & Limitations]] | compiled-insight | TaskNotes MCP is an HTTP endpoint inside Obsidian (not standalone), with limited schema — custom frontmatter requires post-edit or direct markdown write. |
 | [[Compiled-Insights/TaskNotes-Status-Triage-Design.md|TaskNotes Status & Triage — Design Decisions]] | compiled-insight | ark-tasknotes status uses MCP-first data gathering with LLM triage — no algorithmic scoring. Six-section report with opinionated work plan recommendations. |
 | [[Compiled-Insights/Vault-Hosting-Evolution.md|Vault Hosting Evolution — Submodules to Standalone Repos]] | compiled-insight | Vaults evolved from submodules in ark-skills to standalone repos at ~/.superset/vaults/, symlinked from projects. As of v1.11.0 this is /ark-onboard's greenfield default; embedded is an explicit escape hatch. |
+| [[Compiled-Insights/Vault-Layout-Detection-Structural-vs-Config.md|Vault Layout Detection — Structural Markers Beat Config Strings]] | compiled-insight | Three-round recurring bug in notebooklm-vault-sync.sh — symlink traversal + standalone vs wrapped layout — kept resurfacing because retrieval scripts branched on the vault_root config string. Structural detection (marker dirs at vault root) survives misconfig where config-string parsing does not, and recurring fixes in the same file family are a layout-typing architectural smell. |
 | [[Compiled-Insights/Vault-Retrieval-Tier-Architecture.md|Vault Retrieval Tier Architecture — T1-T4 Design]] | compiled-insight | Four-tier retrieval: NotebookLM (T1, ~500 tokens), MemPalace (T2, ~2500), Obsidian-CLI (T3, ~119+reads), index.md (T4, ~2100). Routing by query type, not corpus. Key finding: MemPalace on vault pages scored 8/10 vs 0/10 on conversations alone. |
 | [[Session-Logs/2026-04-14-stage5-self-test-evidence.md|Stage-5 Self-Test Gate Evidence — ark-update v1.14.0 pre-release]] | session-log | Complete Stage-5 self-test gate evidence for /ark-update v1.14.0 pre-release. All parts passed. |
 | [[Session-Logs/2026-04-14-step11-review-findings.md|Step 11 — /codex + /ark-code-review findings + triage]] | session-log | Two-lane review of shipped /ark-update framework. 1 P1 fixed (gate-flag test coverage), 2 P1 codex-only deferred (atomic writes — bounded blast radius), 11 P2/P3 deferred to v1.1 ADR. |
@@ -61,3 +62,5 @@ last-updated: 2026-04-21
 | [[TaskNotes/Tasks/Epic/Arkskill-007-context-budget-probe.md|/ark-workflow Context-Budget Probe (v1.17.0)]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-008-gstack-planning-brainstorm.md|/ark-workflow gstack planning integration + Brainstorm scenario (v1.18.0)]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-009-gstack-v1-5-1-0-integration.md|gstack v1.5.1.0 integration into /ark-workflow (Waves 1+2)]] |  |  |
+| [[TaskNotes/Tasks/Task/Arkskill-010-retire-cross-wing-mutex-when-mempalace-976-merges.md|Retire cross-wing mutex + revisit hook strategy when MemPalace #976 merges]] |  | Watch MemPalace #976 (HNSW thread-safety). When merged, retire palace-global mutex and revisit dropping our custom Stop-hook in favor of the plugin's native auto-ingest. |
+| [[TaskNotes/Tasks/Task/Arkskill-011-relocate-check-14-and-16b-bash-to-references.md|Relocate Check 14a/14b/14c/14d/16b bash blocks to references/ (shrink-to-core follow-up)]] |  | v1.21.0 Shrink-to-Core moved heavy bash to references/. v1.21.1/2 added new checks inline. Relocate them to honor the original direction once they've stabilized. |
