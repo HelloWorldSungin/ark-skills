@@ -54,6 +54,39 @@ else
 fi
 SYNC_STATE_FILE="$VAULT_NOTEBOOKLM/sync-state.json"
 
+# --- Vault layout classifier ---
+# Computes once at script load. Three layouts are possible across the Ark
+# project matrix; downstream code routes off this enum instead of re-deriving
+# from VAULT_ROOT_REL + structural checks at every call site. v1.21.5 shipped
+# the structural-detection fix; v1.21.6 consolidates the matrix into one place.
+#
+#   STANDALONE_DIRECT       — vault_root: ".".  Config lives inside the vault;
+#                             VAULT_ROOT is the parent of the config dir.
+#                             Typical for embedded vaults.
+#   STANDALONE_CENTRALIZED  — vault_root != ".", BUT the resolved VAULT_ROOT
+#                             carries marker dirs (_meta/, _Templates/,
+#                             TaskNotes/) directly at root. Typical for the
+#                             centralized-vault default (v1.11.0+) — the
+#                             config sits in the project repo, the vault sits
+#                             across a symlink to ~/.superset/vaults/<proj>/.
+#   WRAPPED                 — vault_root != ".", and the resolved VAULT_ROOT
+#                             contains a project subdirectory (e.g.
+#                             vault/ArkNode-Poly/) which carries the markers.
+#                             Monorepo / wrapped layout.
+VAULT_LAYOUT=""
+
+classify_vault_layout() {
+    if [[ "$VAULT_ROOT_REL" == "." ]]; then
+        VAULT_LAYOUT="STANDALONE_DIRECT"
+    elif [[ -d "$VAULT_ROOT/_meta" ]] || [[ -d "$VAULT_ROOT/_Templates" ]] || [[ -d "$VAULT_ROOT/TaskNotes" ]]; then
+        VAULT_LAYOUT="STANDALONE_CENTRALIZED"
+    else
+        VAULT_LAYOUT="WRAPPED"
+    fi
+}
+
+classify_vault_layout
+
 # Excluded path segments (applied as "path contains /<excl>/ or ends with /<excl>")
 EXCLUDES=(".obsidian" ".git" ".notebooklm" ".claude-plugin" "_Templates" "_Attachments" "TaskNotes" "_meta")
 
@@ -280,48 +313,44 @@ is_excluded() {
     return 1
 }
 
-# --- Detect a standalone vault by structure ---
-# A standalone vault has its metadata directories (_meta/, _Templates/, TaskNotes/)
-# directly at the vault root, with no wrapping project subdirectory. This makes
-# the layout self-describing: even if the project-level config writes
-# vault_root: "vault" (centralized + standalone, written by /ark-onboard), the
-# script can detect the layout from disk and scan correctly.
-is_standalone_vault() {
-    local root="$1"
-    [[ -d "$root/_meta" ]] || [[ -d "$root/_Templates" ]] || [[ -d "$root/TaskNotes" ]]
-}
-
 # --- Determine scan base directory ---
-# Standalone vault: scan VAULT_ROOT directly (root-level .md + all non-excluded subdirs).
-#   Detected via vault_root: "." OR by structure (marker directories at root).
-# Wrapped vault: scan the first non-excluded project subdirectory (e.g. vault/ArkNode-Poly/).
+# Routes off the VAULT_LAYOUT enum classified at script load.
+#   STANDALONE_DIRECT, STANDALONE_CENTRALIZED  -> scan VAULT_ROOT directly.
+#   WRAPPED                                     -> scan the first non-excluded
+#                                                  project subdirectory (e.g.
+#                                                  vault/ArkNode-Poly/).
 resolve_scan_base() {
     local mode="$1"
     local scan_base
 
-    if [[ "$VAULT_ROOT_REL" == "." ]] || is_standalone_vault "$VAULT_ROOT"; then
-        scan_base="$VAULT_ROOT"
-    else
-        # Wrapped: discover the project subdirectory
-        local candidate name
-        scan_base=""
-        for candidate in "$VAULT_ROOT"/*/; do
-            [[ -d "$candidate" ]] || continue
-            name=$(basename "$candidate")
-            local skip=false
-            for excl in "${EXCLUDES[@]}"; do
-                if [[ "$name" == "$excl" ]]; then
-                    skip=true
+    case "$VAULT_LAYOUT" in
+        STANDALONE_DIRECT|STANDALONE_CENTRALIZED)
+            scan_base="$VAULT_ROOT"
+            ;;
+        WRAPPED)
+            local candidate name
+            scan_base=""
+            for candidate in "$VAULT_ROOT"/*/; do
+                [[ -d "$candidate" ]] || continue
+                name=$(basename "$candidate")
+                local skip=false
+                for excl in "${EXCLUDES[@]}"; do
+                    if [[ "$name" == "$excl" ]]; then
+                        skip=true
+                        break
+                    fi
+                done
+                if [[ "$skip" == "false" ]]; then
+                    scan_base="$VAULT_ROOT/$name"
                     break
                 fi
             done
-            if [[ "$skip" == "false" ]]; then
-                scan_base="$VAULT_ROOT/$name"
-                break
-            fi
-        done
-        [[ -n "$scan_base" ]] || die "Wrapped vault at $VAULT_ROOT has no project subdirectory (all subdirs excluded)."
-    fi
+            [[ -n "$scan_base" ]] || die "Wrapped vault at $VAULT_ROOT has no project subdirectory (all subdirs excluded)."
+            ;;
+        *)
+            die "Unknown VAULT_LAYOUT: '$VAULT_LAYOUT' (classify_vault_layout did not run?)"
+            ;;
+    esac
 
     if [[ "$mode" == "sessions-only" ]]; then
         scan_base="$scan_base/Session-Logs"
@@ -771,6 +800,7 @@ main() {
     echo "NotebookLM Vault Sync"
     echo "  Config: $CONFIG_FILE"
     echo "  Vault root: $VAULT_ROOT"
+    echo "  Layout: $VAULT_LAYOUT"
     echo "  Mode: $mode"
     echo "  Notebooks: ${NOTEBOOK_KEYS[*]}"
     for key in "${NOTEBOOK_KEYS[@]}"; do

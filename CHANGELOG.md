@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.6] - 2026-04-25
+
+### Refactored
+
+- **Single layout classifier in `notebooklm-vault-sync.sh`.** Closes the architectural follow-up flagged in the v1.21.5 notes — the bug-fix release defended against scattered ad-hoc `vault_root` branching but didn't consolidate it. v1.21.6 introduces a `VAULT_LAYOUT` enum (`STANDALONE_DIRECT | STANDALONE_CENTRALIZED | WRAPPED`) computed once at script load by `classify_vault_layout()`. `resolve_scan_base` now switches on the enum instead of re-deriving from `VAULT_ROOT_REL` plus structural marker checks. The `is_standalone_vault` helper from v1.21.5 is retired (its body is the classifier's middle branch). The startup banner now prints `Layout:` so the classifier's verdict is visible in any debug session — historically this matrix kept drifting silently from what `/ark-onboard` and `/notebooklm-vault setup` write, so making it loud is part of the fix.
+
+### Notes
+
+- Behavior-preserving. Verified by re-running the v1.21.5 mechanical repro matrix against the patched script: `STANDALONE_CENTRALIZED` on the live `ark-trade-agent` vault with synthetic `vault_root: "vault"` config; `STANDALONE_DIRECT` on the vault-side config with `vault_root: "."`; `WRAPPED` on a synthetic monorepo vault where markers nest inside a project subdirectory. All three classify correctly. `bash -n` clean.
+- Sister script `skills/shared/mine-vault.sh` was checked and does not need the same treatment — it reads `VAULT_PATH` from CLAUDE.md and scans wholesale via `find -L`, never branching on layout.
+
 ## [1.21.5] - 2026-04-25
 
 ### Fixed
