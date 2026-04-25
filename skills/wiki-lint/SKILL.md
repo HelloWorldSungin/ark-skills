@@ -88,8 +88,96 @@ Details:
 [list each issue with file path]
 ```
 
+## Skill-Graph Lint Mode (plugin repo only)
+
+When run in the ark-skills plugin repo (presence of `skills/*/SKILL.md`), six
+additional checks audit the skill graph itself. These are skipped silently in
+downstream vault repos.
+
+Run via the Python helper:
+
+```bash
+python3 skills/wiki-lint/scripts/skill_graph_audit.py
+```
+
+The script exits 1 if any HARD error is found, else 0. Findings are tagged
+`ERROR` (HARD) or `WARN` (soft) per the rules below.
+
+### Check 8: Catalog Drift
+
+- **HARD** error if `find skills -maxdepth 2 -name SKILL.md` (excluding
+  `shared/`) and the parsed catalog rows in `skills/AGENTS.md` (Subdirectories
+  section), `README.md` (Available Skills table), and `CLAUDE.md` (Available
+  Skills bullets) disagree on the set of skills present.
+- **WARN** when descriptions for the same skill diverge across catalogs
+  (Jaccard word similarity < 0.30).
+
+### Check 9: Section-Anchor Refs
+
+Find every `references/<file>.md § Section X.Y` citation across `skills/`.
+Resolve each by walking ancestors of the citing file (chain prose often elides
+the parent skill in the path). Heading scheme is dual:
+
+- `## Section N — Title` for top-level
+- `### N.M Title` for sub-numbering (no "Section" prefix)
+
+**WARN** if either the cited file or the cited section is unresolvable.
+
+### Check 10: Description Shape (heuristic)
+
+For each `SKILL.md` frontmatter `description`:
+
+- **WARN** if shorter than 50 chars or longer than ~500 chars.
+- **WARN** if no recognized trigger verb appears (use/run/audit/search/...).
+  This is a heuristic, not a phrase-match — three canonical atom skills
+  (`/wiki-status`, `/tag-taxonomy`, `/cross-linker`) do not contain literal
+  "Use when"/"Do NOT use" phrases and are correct.
+- **WARN** when two descriptions overlap on word-set Jaccard > 0.55 — suggests
+  the router may pick wrong; consider adding a negative-routing clause.
+
+Never errors. The lint does not enforce a literal description template.
+
+### Check 11: Active-Body Length
+
+**WARN** at 500 lines per the published skill-design guidance. Do **not**
+auto-trigger refactor — `/ark-workflow/SKILL.md`, `/ark-onboard/SKILL.md`, and
+`/ark-health/SKILL.md` all exceed 500 today and have load-bearing sections
+(Project Discovery, Scenario Detection, Triage, Chain Lookup, Condition
+Resolution Dispatch, Condition Definitions) that cannot move into `references/`
+without behavior loss. The warn is informational.
+
+### Check 12: Chain Reachability
+
+Parse each `skills/ark-workflow/chains/*.md`, extract the leading-token
+slash-command from every backtick span (so `/ark-code-review --quick` resolves
+to `/ark-code-review`). Cross-check against:
+
+- The internal skill set (`find skills -maxdepth 2 -name SKILL.md`)
+- `skills/ark-workflow/references/external-skills.yaml` (canonical external
+  registry maintained per Arkskill-012-S2)
+
+**WARN** on any unclassified slash-command — likely typo, renamed skill, or a
+new external dependency that needs a registry entry.
+
+### Check 13: Compound-to-Compound Calls
+
+Soft signal that an orchestrating skill (a "compound") invokes another
+compound. Compound detection is heuristic: any internal `SKILL.md` with a
+`chains/` subdir, or whose body invokes ≥ 2 distinct internal slash-commands.
+
+**WARN** soft. Live examples in this repo are correct (`/ark-code-review` and
+`/codebase-maintenance` from chains, `/wiki-handoff` from `/ark-workflow` Step
+6.5, `/ark-onboard` ↔ `/ark-update` ↔ `/ark-health` cross-references). The
+guardrail (per `skills/AGENTS.md` § Composition Guardrails) is **not** "no
+compound calls another compound" — it's "only via explicit chain steps with
+conditions resolved before presentation, with bounded mode/argument and a
+documented handback point."
+
 ## Skipped Checks (not applicable to Ark vaults)
 
 - Provenance drift — Ark vaults don't use `provenance:` markers
 - Stale content by timestamp — no source-tracking manifest
 - Contradiction detection — too expensive for routine lint
+- Version-state lint (VERSION/plugin.json/marketplace.json/CHANGELOG
+  consistency) — belongs in `/ark-update` or a separate release lint, not
+  here.

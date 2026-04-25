@@ -2,35 +2,65 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.21.6] - 2026-04-25
-
-### Refactored
-
-- **Single layout classifier in `notebooklm-vault-sync.sh`.** Closes the architectural follow-up flagged in the v1.21.5 notes — the bug-fix release defended against scattered ad-hoc `vault_root` branching but didn't consolidate it. v1.21.6 introduces a `VAULT_LAYOUT` enum (`STANDALONE_DIRECT | STANDALONE_CENTRALIZED | WRAPPED`) computed once at script load by `classify_vault_layout()`. `resolve_scan_base` now switches on the enum instead of re-deriving from `VAULT_ROOT_REL` plus structural marker checks. The `is_standalone_vault` helper from v1.21.5 is retired (its body is the classifier's middle branch). The startup banner now prints `Layout:` so the classifier's verdict is visible in any debug session — historically this matrix kept drifting silently from what `/ark-onboard` and `/notebooklm-vault setup` write, so making it loud is part of the fix.
-
-### Notes
-
-- Behavior-preserving. Verified by re-running the v1.21.5 mechanical repro matrix against the patched script: `STANDALONE_CENTRALIZED` on the live `ark-trade-agent` vault with synthetic `vault_root: "vault"` config; `STANDALONE_DIRECT` on the vault-side config with `vault_root: "."`; `WRAPPED` on a synthetic monorepo vault where markers nest inside a project subdirectory. All three classify correctly. `bash -n` clean.
-- Sister script `skills/shared/mine-vault.sh` was checked and does not need the same treatment — it reads `VAULT_PATH` from CLAUDE.md and scans wholesale via `find -L`, never branching on layout.
-
-## [1.21.5] - 2026-04-25
+## [1.22.1] - 2026-04-25
 
 ### Fixed
 
 - **`/notebooklm-vault` sync fails on centralized + standalone vault layouts.** Three independent bugs in `skills/notebooklm-vault/scripts/notebooklm-vault-sync.sh` that combined to make a fresh `/ark-onboard` Standalone Full-tier project unable to upload sources on the first `/notebooklm-vault setup`:
   - **Bug 1 — `find` did not traverse the vault symlink.** `build_vault_file_list` ran `find "$scan_base" -name "*.md" -type f` against a symlink path. macOS BSD find (and GNU find on Linux) does not descend into symlinked directories without `-L`, so discovery returned 0 files and sync exited cleanly with `Added: 0`. Fixed by adding `-L`.
   - **Bug 2 — `notebooklm source list ... --json 2>&1` corrupted the JSON piped to `jq`.** notebooklm-py v0.3.3 logs a runtime warning to stderr on empty notebooks (`Sources data for <id> is not a list (type=NoneType)`). With `2>&1`, that timestamped warning landed at the start of the captured buffer and `jq` failed parsing at the timestamp's `:`. Fixed at both occurrences (`fetch_notebook_sources` and the `dedupe_and_heal_notebook` refresh) by capturing stderr to a tempfile and only surfacing it on non-zero exit. Other source-list call sites in the same script already used the safer `2>/dev/null` pattern.
-  - **Bug 3 — `resolve_scan_base` mis-routed standalone vaults that hit the `vault_root: "vault"` config branch.** A centralized + standalone project's project-level config carries `vault_root: "vault"` (it has to — the config lives in the project repo, the vault sits across a symlink). The script took the string at face value and walked for a wrapping project subdirectory. Standalone vaults have no such subdirectory, so the script landed on the first non-excluded subdirectory — `Session-Logs/` on a fresh Ark vault, which is empty. Sync ran to completion with a misleading `WARN: No files discovered in <vault>/Session-Logs`. Fixed with a new `is_standalone_vault()` helper that detects standalone layouts structurally (marker dirs `_meta/`, `_Templates/`, or `TaskNotes/` directly at vault root), independent of the config string. The script now treats config-string and structural detection as either-or signals.
+  - **Bug 3 — `resolve_scan_base` mis-routed standalone vaults that hit the `vault_root: "vault"` config branch.** A centralized + standalone project's project-level config carries `vault_root: "vault"` (it has to — the config lives in the project repo, the vault sits across a symlink). The script took the string at face value and walked for a wrapping project subdirectory. Standalone vaults have no such subdirectory, so the script landed on the first non-excluded subdirectory — `Session-Logs/` on a fresh Ark vault, which is empty. Sync ran to completion with a misleading `WARN: No files discovered in <vault>/Session-Logs`.
 
 ### Changed
 
-- **`/notebooklm-vault` setup step 4 now branches on layout.** Previously wrote a project-level `.notebooklm/config.json` with `vault_root: "vault"` unconditionally — fine for monorepo layouts but redundant (and historically the source of the Bug 3 misconfig) for standalone vaults. Setup now detects layout via the same marker-dir signal: for standalone, it fills in the existing vault-side config (already written by `/ark-onboard` Step 15) and skips creating a project-level config; for monorepo, it writes the project-level config as before. Narrative across `Project Discovery`, `Architecture`, `Centralized Vault Awareness`, and `Important Notes` sections updated to qualify "tracked, authoritative" by layout.
+- **`/notebooklm-vault` setup step 4 now branches on layout.** Previously wrote a project-level `.notebooklm/config.json` with `vault_root: "vault"` unconditionally — fine for monorepo layouts but redundant (and historically the source of the Bug 3 misconfig) for standalone vaults. Setup now detects layout via marker-dir signal: for standalone, it fills in the existing vault-side config (already written by `/ark-onboard` Step 15) and skips creating a project-level config; for monorepo, it writes the project-level config as before. Narrative across `Project Discovery`, `Architecture`, `Centralized Vault Awareness`, and `Important Notes` sections updated to qualify "tracked, authoritative" by layout.
 - **`/ark-onboard` layout diagram annotated.** The project-repo `.notebooklm/config.json` row in the centralized-vault layout diagram now marks itself as monorepo-only and notes that standalone vaults rely solely on the vault-side config.
+
+### Refactored
+
+- **Single layout classifier in `notebooklm-vault-sync.sh`.** Closes the architectural follow-up that the bug-fix portion above flagged. Introduces a `VAULT_LAYOUT` enum (`STANDALONE_DIRECT | STANDALONE_CENTRALIZED | WRAPPED`) computed once at script load by `classify_vault_layout()`. `resolve_scan_base` now switches on the enum instead of re-deriving from `VAULT_ROOT_REL` plus structural marker checks at every call site. The `is_standalone_vault` helper introduced earlier in this release is retired — its body is the classifier's middle branch. The startup banner now prints `Layout:` so the classifier's verdict is visible in any debug session — historically this matrix drifted silently from what `/ark-onboard` and `/notebooklm-vault setup` write, so making it loud is part of the fix.
 
 ### Notes
 
-- This is the third round of "symlinks + standalone layout" fixes in `notebooklm-vault-sync.sh` (after `a30dbbb` and `172fc39`). Recurring bugs in the same file family are an architectural smell — the layout matrix (standalone-direct / standalone-centralized / wrapped) is being handled with ad-hoc branches scattered across multiple call sites that keep drifting from what `/ark-onboard` and `/notebooklm-vault setup` write. A follow-up worth tracking: consolidate into a single `vault_layout_type()` enum-returning pass at script start, then route off the enum everywhere. Compiled insight at `vault/Compiled-Insights/Vault-Layout-Detection-Structural-vs-Config.md` captures the pattern.
+- This is the third round of "symlinks + standalone layout" fixes in `notebooklm-vault-sync.sh` (after `a30dbbb` and `172fc39`). Recurring bugs in the same file family are an architectural smell — handled in the same release by consolidating the layout matrix into a single classifier (above). Compiled insight at `vault/Compiled-Insights/Vault-Layout-Detection-Structural-vs-Config.md` captures the pattern.
+- Behavior-preserving classifier verified across all three layouts: `STANDALONE_CENTRALIZED` on the live `ark-trade-agent` vault with synthetic `vault_root: "vault"` config; `STANDALONE_DIRECT` on the vault-side config with `vault_root: "."`; `WRAPPED` on a synthetic monorepo vault where markers nest inside a project subdirectory. `bash -n` clean.
+- Sister script `skills/shared/mine-vault.sh` was checked and does not need the same treatment — it reads `VAULT_PATH` from CLAUDE.md and scans wholesale via `find -L`, never branching on layout.
 - Verification gap: end-to-end success against a live `/ark-onboard` + `/notebooklm-vault setup` against a fresh standalone project requires interactive NotebookLM auth and was not exercised in this release. Mechanical repros (find symlink: 0 → 11 files; marker detection on the live ark-trade-agent vault returns true; `resolve_scan_base` with synthetic broken state lands on vault root and EXCLUDES filter leaves exactly `00-Home.md` + `index.md`) are the verification evidence.
+
+## [1.22.0] - 2026-04-24
+
+### Added
+
+- **`Arkskill-012-S2`: external skills registry.** New `skills/ark-workflow/references/external-skills.yaml` enumerates the 33 external slash-commands referenced from `skills/ark-workflow/chains/*.md` (gstack, OMC, superpowers, vendor-cli) with their condition gates. Mandatory dependency for the chain-reachability lint added in S3.
+- **`Arkskill-012-S3`: skill-graph audit mode for `/wiki-lint`.** New `skills/wiki-lint/scripts/skill_graph_audit.py` runs six checks on the plugin repo:
+  1. **Catalog drift** — HARD error on count mismatch between filesystem ground truth and the parsed catalogs in `skills/AGENTS.md`, `README.md`, and `CLAUDE.md`; WARN on description divergence.
+  2. **Section-anchor refs** — verifies `references/<file>.md § Section X.Y` cites resolve under the dual `## Section N` / `### N.M` heading scheme used in this repo.
+  3. **Description shape** — heuristic warns on length, missing trigger verbs, or high cross-skill description overlap. Not a phrase-match for "Use when / Do NOT use" — three canonical atom skills don't have those phrases and are correct.
+  4. **Active-body length** — informational warn at 500 lines (Anthropic guidance). Does not auto-trigger refactor; load-bearing sections in `/ark-workflow`, `/ark-onboard`, `/ark-health` cannot move into `references/`.
+  5. **Chain reachability** — extracts leading-token slash-commands from chain backtick spans (so `/ark-code-review --quick` resolves to `/ark-code-review`); cross-checks against internal SKILL.md set ∪ external registry. Warns on unclassified.
+  6. **Compound-to-compound calls** — soft warn only. Per the design doc, live examples in this repo are correct; the lint is informational, not a block.
+- **`Arkskill-012-S4`: composition guardrails text in `skills/AGENTS.md`.** New `### Composition Guardrails` subsection adopting the exception-aware wording from the epic. Replaces the rejected v2 wording ("Compounds do not invoke other compounds"); the "molecules sequence atoms" tier sentence was never in the codebase to begin with and stays out — `/ark-context-warmup` is a molecule-shaped prelude that runs as step 0 of every chain, so the sentence would be technically false.
+
+### Notes
+
+- **`Arkskill-012-S5` had no work to do.** Section-anchor lint surfaced zero broken refs after the dual-scheme resolver landed — the design doc's suspicion that `omc-integration.md § Section 4.1` was silently broken was based on a literal-string grep that didn't account for the `### 4.1 ...` sub-numbering. The existing cites are valid.
+- Final audit state: 0 errors, 36 soft warnings (3 description-drift, 1 description-shape, 3 active-body-length, 29 compound-to-compound). All 36 are expected — they document known signal that the epic explicitly classified as soft.
+- Design rationale and `/codex` consult+challenge transcripts: `vault/Compiled-Insights/Skill-Graph-Hardening-Pass.md`. Epic + stories: `vault/TaskNotes/Tasks/Epic/Arkskill-012-skill-graph-hardening-pass.md`.
+
+## [1.21.5] - 2026-04-24
+
+### Fixed
+
+- **Catalog drift surfaced by `/codex` challenge.** Three skill catalogs disagreed on counts and contents:
+  - `README.md` claimed 19 skills (lines 3, 132, 151, 176–177); now 20. Added `/wiki-handoff` row to the Available Skills table.
+  - `skills/AGENTS.md` claimed 18 skills; now 20. Added `ark-update/` and `wiki-handoff/` rows. `/ark-health` description corrected from "19-check" to "22-check" (matches `ark-health/SKILL.md` and `ark-onboard/SKILL.md`).
+  - `CLAUDE.md` Available Skills section was missing `/ark-update` and `/wiki-handoff`; `/ark-health` line claimed "20 checks" instead of 22. Both corrected.
+- Filesystem ground truth: `find skills -maxdepth 2 -name SKILL.md` returns 20.
+
+### Notes
+
+- Documentation-only patch. No skill behavior changes.
+- Catalog-drift lint (and the broader skill-graph hardening pass it belongs to) is tracked under `Arkskill-012`. See `vault/Compiled-Insights/Skill-Graph-Hardening-Pass.md` for the design rationale, including the `/codex` consult+challenge transcript that drove this v3 plan.
 
 ## [1.21.4] - 2026-04-23
 

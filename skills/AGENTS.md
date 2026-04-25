@@ -5,7 +5,7 @@
 
 ## Purpose
 
-The 18 Claude Code skills published by this plugin. Each subdirectory is one skill; each skill has a `SKILL.md` whose YAML frontmatter defines the trigger string that makes Claude Code invoke it. Skills fall into five categories: workflow orchestration, core workflows, task automation, onboarding, and vault maintenance.
+The 20 Claude Code skills published by this plugin. Each subdirectory is one skill; each skill has a `SKILL.md` whose YAML frontmatter defines the trigger string that makes Claude Code invoke it. Skills fall into five categories: workflow orchestration, core workflows, task automation, onboarding, and vault maintenance.
 
 ## Subdirectories
 
@@ -15,6 +15,7 @@ The 18 Claude Code skills published by this plugin. Each subdirectory is one ski
 |-----------|---------|
 | `ark-workflow/` | Task triage and skill chain orchestration — entry point for all non-trivial work. |
 | `ark-context-warmup/` | Context loader that runs as step 0 of every `/ark-workflow` chain. Also invokable standalone. |
+| `wiki-handoff/` | Writes a validated session bridge page to `.omc/wiki/` before `/compact` or `/clear`. Invoked from `/ark-workflow` Step 6.5 action branch. |
 
 ### Core
 
@@ -35,7 +36,8 @@ The 18 Claude Code skills published by this plugin. Each subdirectory is one ski
 | Directory | Purpose |
 |-----------|---------|
 | `ark-onboard/` | Interactive setup wizard — greenfield, vault migration, partial repair. **Exempt from context-discovery.** |
-| `ark-health/` | 19-check diagnostic scorecard for the Ark ecosystem. **Exempt from context-discovery.** |
+| `ark-health/` | 22-check diagnostic scorecard for the Ark ecosystem. **Exempt from context-discovery.** |
+| `ark-update/` | Version-driven migration framework. Converges downstream projects to the current ark-skills target profile via additive replays + pending destructive migrations. Distinct from `/ark-onboard` repair (failure-driven). |
 
 ### Vault Maintenance
 
@@ -114,6 +116,12 @@ Python `__pycache__/` is gitignored and must never be committed.
 - **Early exits for missing prerequisites.** Skills that depend on a vault check `HAS_VAULT` and bail out with an actionable message (e.g. "Run `/wiki-setup` first") rather than proceeding with half-state.
 - **Four-tier retrieval with logged fallbacks.** Never silently drop to a lower tier — tell the user which tier failed and why.
 - **Context-discovery over hardcoded paths.** If you find yourself typing a specific vault path or task prefix inside a skill file, stop and route it through `CLAUDE.md` instead.
+
+### Composition Guardrails
+
+Top-level orchestrators may sequence other orchestrating skills only through explicit chain steps, with conditions resolved before presentation. Do not rely on implicit nested routing. Avoid compound-to-compound calls unless the target has a bounded mode/argument and a documented handback point.
+
+Live examples that satisfy this rule today: `/ark-workflow` chains call `/ark-code-review --{weight}` (bounded mode), `/codebase-maintenance` (multi-step but explicit), and conditionally `/wiki-handoff` (Step 6.5). Each has a documented handback step. The `/wiki-lint` skill-graph audit (Check 13) emits soft warnings on every compound-to-compound call so they can be reviewed periodically; it does not block them.
 
 ## Dependencies
 
