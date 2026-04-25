@@ -87,7 +87,9 @@ When writing `VAULT_TARGET` into the tracked setup script, always store the `$HO
 
 <project_repo>/
 ├── vault → <vault_repo_path>/        (symlink, git-ignored)
-├── .notebooklm/config.json          (vault_root: "vault", tracked)
+├── .notebooklm/config.json          (monorepo only: vault_root: "vault", tracked.
+│                                     Standalone vaults skip this file — the
+│                                     vault-side config is authoritative.)
 ├── .gitignore                        (contains `vault`)
 ├── <common_git_dir>/hooks/post-checkout   (installed, not tracked)
 ├── .superset/config.json             (optional — if already present)

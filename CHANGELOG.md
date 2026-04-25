@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.5] - 2026-04-25
+
+### Fixed
+
+- **`/notebooklm-vault` sync fails on centralized + standalone vault layouts.** Three independent bugs in `skills/notebooklm-vault/scripts/notebooklm-vault-sync.sh` that combined to make a fresh `/ark-onboard` Standalone Full-tier project unable to upload sources on the first `/notebooklm-vault setup`:
+  - **Bug 1 — `find` did not traverse the vault symlink.** `build_vault_file_list` ran `find "$scan_base" -name "*.md" -type f` against a symlink path. macOS BSD find (and GNU find on Linux) does not descend into symlinked directories without `-L`, so discovery returned 0 files and sync exited cleanly with `Added: 0`. Fixed by adding `-L`.
+  - **Bug 2 — `notebooklm source list ... --json 2>&1` corrupted the JSON piped to `jq`.** notebooklm-py v0.3.3 logs a runtime warning to stderr on empty notebooks (`Sources data for <id> is not a list (type=NoneType)`). With `2>&1`, that timestamped warning landed at the start of the captured buffer and `jq` failed parsing at the timestamp's `:`. Fixed at both occurrences (`fetch_notebook_sources` and the `dedupe_and_heal_notebook` refresh) by capturing stderr to a tempfile and only surfacing it on non-zero exit. Other source-list call sites in the same script already used the safer `2>/dev/null` pattern.
+  - **Bug 3 — `resolve_scan_base` mis-routed standalone vaults that hit the `vault_root: "vault"` config branch.** A centralized + standalone project's project-level config carries `vault_root: "vault"` (it has to — the config lives in the project repo, the vault sits across a symlink). The script took the string at face value and walked for a wrapping project subdirectory. Standalone vaults have no such subdirectory, so the script landed on the first non-excluded subdirectory — `Session-Logs/` on a fresh Ark vault, which is empty. Sync ran to completion with a misleading `WARN: No files discovered in <vault>/Session-Logs`. Fixed with a new `is_standalone_vault()` helper that detects standalone layouts structurally (marker dirs `_meta/`, `_Templates/`, or `TaskNotes/` directly at vault root), independent of the config string. The script now treats config-string and structural detection as either-or signals.
+
+### Changed
+
+- **`/notebooklm-vault` setup step 4 now branches on layout.** Previously wrote a project-level `.notebooklm/config.json` with `vault_root: "vault"` unconditionally — fine for monorepo layouts but redundant (and historically the source of the Bug 3 misconfig) for standalone vaults. Setup now detects layout via the same marker-dir signal: for standalone, it fills in the existing vault-side config (already written by `/ark-onboard` Step 15) and skips creating a project-level config; for monorepo, it writes the project-level config as before. Narrative across `Project Discovery`, `Architecture`, `Centralized Vault Awareness`, and `Important Notes` sections updated to qualify "tracked, authoritative" by layout.
+- **`/ark-onboard` layout diagram annotated.** The project-repo `.notebooklm/config.json` row in the centralized-vault layout diagram now marks itself as monorepo-only and notes that standalone vaults rely solely on the vault-side config.
+
+### Notes
+
+- This is the third round of "symlinks + standalone layout" fixes in `notebooklm-vault-sync.sh` (after `a30dbbb` and `172fc39`). Recurring bugs in the same file family are an architectural smell — the layout matrix (standalone-direct / standalone-centralized / wrapped) is being handled with ad-hoc branches scattered across multiple call sites that keep drifting from what `/ark-onboard` and `/notebooklm-vault setup` write. A follow-up worth tracking: consolidate into a single `vault_layout_type()` enum-returning pass at script start, then route off the enum everywhere. Compiled insight at `vault/Compiled-Insights/Vault-Layout-Detection-Structural-vs-Config.md` captures the pattern.
+- Verification gap: end-to-end success against a live `/ark-onboard` + `/notebooklm-vault setup` against a fresh standalone project requires interactive NotebookLM auth and was not exercised in this release. Mechanical repros (find symlink: 0 → 11 files; marker detection on the live ark-trade-agent vault returns true; `resolve_scan_base` with synthetic broken state lands on vault root and EXCLUDES filter leaves exactly `00-Home.md` + `index.md`) are the verification evidence.
+
 ## [1.21.4] - 2026-04-23
 
 ### Fixed

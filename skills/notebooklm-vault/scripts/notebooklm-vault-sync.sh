@@ -280,14 +280,26 @@ is_excluded() {
     return 1
 }
 
+# --- Detect a standalone vault by structure ---
+# A standalone vault has its metadata directories (_meta/, _Templates/, TaskNotes/)
+# directly at the vault root, with no wrapping project subdirectory. This makes
+# the layout self-describing: even if the project-level config writes
+# vault_root: "vault" (centralized + standalone, written by /ark-onboard), the
+# script can detect the layout from disk and scan correctly.
+is_standalone_vault() {
+    local root="$1"
+    [[ -d "$root/_meta" ]] || [[ -d "$root/_Templates" ]] || [[ -d "$root/TaskNotes" ]]
+}
+
 # --- Determine scan base directory ---
-# Standalone vault (vault_root: "."): scan VAULT_ROOT directly (root-level .md + all non-excluded subdirs).
+# Standalone vault: scan VAULT_ROOT directly (root-level .md + all non-excluded subdirs).
+#   Detected via vault_root: "." OR by structure (marker directories at root).
 # Wrapped vault: scan the first non-excluded project subdirectory (e.g. vault/ArkNode-Poly/).
 resolve_scan_base() {
     local mode="$1"
     local scan_base
 
-    if [[ "$VAULT_ROOT_REL" == "." ]]; then
+    if [[ "$VAULT_ROOT_REL" == "." ]] || is_standalone_vault "$VAULT_ROOT"; then
         scan_base="$VAULT_ROOT"
     else
         # Wrapped: discover the project subdirectory
@@ -336,7 +348,7 @@ build_vault_file_list() {
         title=$(basename "$relpath")
         nb_key=$(route_to_notebook "$relpath")
         printf '%s\t%s\t%s\n' "$title" "$relpath" "$nb_key" >> "$VAULT_FILES"
-    done < <(find "$scan_base" -name "*.md" -type f | sort)
+    done < <(find -L "$scan_base" -name "*.md" -type f | sort)
 
     [[ -s "$VAULT_FILES" ]] || { echo "WARN: No files discovered in $scan_base"; return 0; }
 
@@ -405,11 +417,20 @@ fetch_notebook_sources() {
         [[ "$seen_keys" == *" $key "* ]] && continue
         seen_keys+="$key "
 
-        local nb_id raw
+        local nb_id raw err_log
         nb_id=$(get_notebook_id "$key")
-        if ! raw=$(notebooklm source list --notebook "$nb_id" --json 2>&1); then
-            die "Failed to list sources for notebook '$key' ($nb_id): $raw"
+        # Capture stderr separately. Folding it into stdout (2>&1) breaks jq when
+        # notebooklm-py prints runtime warnings (e.g. on empty notebooks it logs
+        # "Sources data ... is not a list"), since the warning ends up at the
+        # start of $raw and jq fails parsing.
+        err_log=$(mktemp)
+        if ! raw=$(notebooklm source list --notebook "$nb_id" --json 2>"$err_log"); then
+            local err_msg
+            err_msg=$(cat "$err_log")
+            rm -f "$err_log"
+            die "Failed to list sources for notebook '$key' ($nb_id): $err_msg"
         fi
+        rm -f "$err_log"
         echo "$raw" | jq -r '.sources[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
             > "$NOTEBOOK_SOURCES_DIR/$key"
     done
@@ -514,15 +535,22 @@ dedupe_and_heal_notebook() {
 
     # --- Refresh local cache from NotebookLM if anything was mutated ---
     if [[ "$deleted_count" -gt 0 ]]; then
-        local fresh
-        if fresh=$(notebooklm source list --notebook "$nb_id" --json 2>&1); then
+        local fresh err_log
+        # Same stderr-vs-stdout discipline as fetch_notebook_sources: never fold
+        # stderr into the JSON we hand to jq.
+        err_log=$(mktemp)
+        if fresh=$(notebooklm source list --notebook "$nb_id" --json 2>"$err_log"); then
+            rm -f "$err_log"
             echo "$fresh" | jq -r '.sources[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
                 > "$sources_file"
             local final_count
             final_count=$(wc -l < "$sources_file" | tr -d ' ')
             echo "  Heal complete: $initial_count -> $final_count sources ($deleted_count deleted)"
         else
-            echo "  WARN: Could not refresh source list after heal: $fresh"
+            local err_msg
+            err_msg=$(cat "$err_log")
+            rm -f "$err_log"
+            echo "  WARN: Could not refresh source list after heal: $err_msg"
         fi
     else
         echo "  Heal complete: no changes needed"
