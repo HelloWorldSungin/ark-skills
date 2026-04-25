@@ -1,0 +1,173 @@
+# skills/ark-workflow/references/external-skills.yaml
+#
+# Registry of slash-commands referenced from skills/ark-workflow/chains/*.md
+# that are NOT internal ark-skills SKILL.md files. Used by /wiki-lint chain
+# reachability rule (Arkskill-012-S3) to distinguish external skills from typos.
+#
+# Consumes: skills/wiki-lint/SKILL.md (chain reachability rule)
+#
+# Maintenance: when adding or removing slash-commands in chains/*.md, update
+# this registry. The lint extracts the LEADING command token from each backtick
+# span (so `/ark-code-review --quick` resolves to `/ark-code-review`); register
+# bare commands only.
+#
+# Schema (fixed by Arkskill-012 epic — do not extend without amending the epic):
+#   slash:           bare slash-command literal (no args)
+#   family:          gstack | OMC | superpowers | vendor-cli
+#   condition_gate:  HAS_GSTACK_PLANNING | HAS_OMC | HAS_CODEX | null
+#                    null = no chain-level gate; lint never gate-skips, always checks
+#
+# Filesystem ground truth for internal skills (excluded from this registry):
+#   find skills -maxdepth 2 -name SKILL.md  (excludes shared/)
+#
+# Counts (verified 2026-04-24): 46 unique bare slash-commands across 8 chain
+# files; 13 internal; 33 external (this file).
+
+skills:
+  # ── gstack family (17) ──────────────────────────────────────────────────
+  - slash: /autoplan
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /benchmark
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /canary
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /context-save
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /cso
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /design-review
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /document-release
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /investigate
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /land-and-deploy
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /office-hours
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /plan-ceo-review
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /plan-design-review
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /plan-devex-review
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /plan-eng-review
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /qa
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /review
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  - slash: /ship
+    family: gstack
+    condition_gate: HAS_GSTACK_PLANNING
+
+  # ── OMC family (10) ─────────────────────────────────────────────────────
+  # Codex-specific advisor invocations (e.g. `/ask codex`) are additionally
+  # probe-gated inside chains via [probe-gated §7] — see omc-integration.md
+  # § Section 7 (External Advisor Probe Gates). The registry's HAS_OMC gate
+  # captures the broader OMC plugin presence; chain-level §7 markers handle
+  # the per-vendor probe.
+  - slash: /ask
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /autopilot
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /ccg
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /deep-interview
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /external-context
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /omc-plan
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /omc-teams
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /ralplan
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /team
+    family: OMC
+    condition_gate: HAS_OMC
+
+  - slash: /visual-verdict
+    family: OMC
+    condition_gate: HAS_OMC
+
+  # ── superpowers family (5) ──────────────────────────────────────────────
+  # No chain-level HAS_SUPERPOWERS gate exists today; lint treats null as
+  # "always expected available." If false-positive warnings accumulate when
+  # superpowers isn't installed, propose adding HAS_SUPERPOWERS to
+  # ark-workflow/SKILL.md Step 1 in a follow-up.
+  - slash: /brainstorming
+    family: superpowers
+    condition_gate: null
+
+  - slash: /executing-plans
+    family: superpowers
+    condition_gate: null
+
+  - slash: /subagent-driven-development
+    family: superpowers
+    condition_gate: null
+
+  - slash: /test-driven-development
+    family: superpowers
+    condition_gate: null
+
+  - slash: /writing-plans
+    family: superpowers
+    condition_gate: null
+
+  # ── vendor-cli family (1) ───────────────────────────────────────────────
+  # /simplify is not in the gstack catalog and not OMC-namespaced. Classified
+  # as vendor-cli per Codex consult (Arkskill-012-S2 review). Treat the
+  # `family` field here as reporting metadata, not execution semantics.
+  - slash: /simplify
+    family: vendor-cli
+    condition_gate: null

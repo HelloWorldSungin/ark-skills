@@ -8,7 +8,7 @@ tags:
   - composition
 summary: "Hardening pass for the ark-skills plugin: catalog drift lint, external skill registry, anchor-ref lint, exception-aware composition guardrails. Replaces the rejected wikilink-graph and tier-only-frontmatter proposals."
 task-id: Arkskill-012
-status: open
+status: done
 priority: medium
 component: skills, wiki-lint
 session: ""
@@ -41,13 +41,17 @@ Replace the rejected wikilink/tier-only proposal with a **composition-contract +
 
 Three catalogs (`README.md`, `skills/AGENTS.md`, `CLAUDE.md`) disagreed on skill counts and were missing entries for `/ark-update` and `/wiki-handoff`. `/ark-health` check count was misreported in two places (19 in AGENTS.md, 20 in CLAUDE.md; correct is 22 per `ark-health/SKILL.md`). All three catalogs and the four version files (VERSION, plugin.json, marketplace.json, CHANGELOG) updated.
 
-### Arkskill-012-S2 — External skills registry
+### Arkskill-012-S2 — External skills registry (LANDED in v1.22.0)
 
-Add `skills/ark-workflow/references/external-skills.yaml`. Fields per entry: `slash` (e.g., `/ship`), `family` (gstack | OMC | superpowers | vendor-cli), `condition_gate` (e.g., `HAS_GSTACK_PLANNING`, `HAS_OMC`, `HAS_CODEX`, none). Reachability lint reads this file as canonical truth.
+**Status:** done.
+
+Added `skills/ark-workflow/references/external-skills.yaml` with 33 entries covering every external slash-command referenced in `chains/*.md`. Schema `{slash, family, condition_gate}` per epic. Codex consult caught two arg-bearing backtick spans (`/ask codex`, `/omc-plan --consensus`) that the initial single-token grep missed; registry stores bare commands only.
 
 Mandatory before S3 — chain reachability lint cannot run without it.
 
-### Arkskill-012-S3 — `/wiki-lint` extension: skill-graph audit mode
+### Arkskill-012-S3 — `/wiki-lint` extension: skill-graph audit mode (LANDED in v1.22.0)
+
+**Status:** done — `skills/wiki-lint/scripts/skill_graph_audit.py` implements all six rules below; `skills/wiki-lint/SKILL.md` documents the mode.
 
 Subcommand or default-on rules. Each is a soft warn unless noted:
 
@@ -58,7 +62,9 @@ Subcommand or default-on rules. Each is a soft warn unless noted:
 5. **Chain reachability with internal/external classification.** Parse `skills/ark-workflow/chains/*.md` for backtick slash-commands; cross-check against `find skills -maxdepth 2 -name SKILL.md` (internal) and `external-skills.yaml` (external + condition gate). Warn on unclassified slash-commands. Note any chain step gated on a missing condition gate as informational.
 6. **Compound-to-compound calls — soft warn, not block.** Flag instances; don't refuse them. The repo currently has live examples (`/ark-code-review`, `/codebase-maintenance`, conditional `/wiki-handoff`) and they're correct.
 
-### Arkskill-012-S4 — Composition guardrails text in `skills/AGENTS.md`
+### Arkskill-012-S4 — Composition guardrails text in `skills/AGENTS.md` (LANDED in v1.22.0)
+
+**Status:** done — added as `### Composition Guardrails` subsection under `## For AI Agents`. The "rejected v2 wording" was never actually in `skills/AGENTS.md` (it lived only in the epic + design doc as a proposal), so S4 was an addition rather than a replacement.
 
 Replace the (rejected) "Compounds do not invoke other compounds" wording with the exception-aware version:
 
@@ -66,9 +72,9 @@ Replace the (rejected) "Compounds do not invoke other compounds" wording with th
 
 Drop the "molecules sequence atoms" tier sentence — `/ark-context-warmup` is a molecule-shaped prelude that runs as step 0 of every chain, so the sentence is technically false.
 
-### Arkskill-012-S5 — Section-anchor refactor (depends on S3)
+### Arkskill-012-S5 — Section-anchor refactor (NO WORK, v1.22.0)
 
-If S3 rule 2 finds broken anchor refs, replace prose `§ Section X.Y` cites with stable named-IDs or wikilinks-to-headings. One-time cleanup; do not generalize unless a new scheme is needed.
+**Status:** done (no-op). The S3 lint resolver (with dual-scheme heading match: `## Section N` and `### N.M`) found zero broken anchor refs across the repo. The design doc's flagged candidate (`omc-integration.md § Section 4.1`) resolves cleanly to the `### 4.1 ...` sub-heading at line 186. Codex's earlier "may already be silently broken" was based on a literal-string grep for "Section 4.1" that didn't account for the sub-numbering convention. No surgical cleanup needed.
 
 ### Arkskill-012-S6 — Out-of-scope (DO NOT DO)
 

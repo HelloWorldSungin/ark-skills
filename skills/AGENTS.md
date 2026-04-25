@@ -117,6 +117,12 @@ Python `__pycache__/` is gitignored and must never be committed.
 - **Four-tier retrieval with logged fallbacks.** Never silently drop to a lower tier — tell the user which tier failed and why.
 - **Context-discovery over hardcoded paths.** If you find yourself typing a specific vault path or task prefix inside a skill file, stop and route it through `CLAUDE.md` instead.
 
+### Composition Guardrails
+
+Top-level orchestrators may sequence other orchestrating skills only through explicit chain steps, with conditions resolved before presentation. Do not rely on implicit nested routing. Avoid compound-to-compound calls unless the target has a bounded mode/argument and a documented handback point.
+
+Live examples that satisfy this rule today: `/ark-workflow` chains call `/ark-code-review --{weight}` (bounded mode), `/codebase-maintenance` (multi-step but explicit), and conditionally `/wiki-handoff` (Step 6.5). Each has a documented handback step. The `/wiki-lint` skill-graph audit (Check 13) emits soft warnings on every compound-to-compound call so they can be reviewed periodically; it does not block them.
+
 ## Dependencies
 
 ### Internal
