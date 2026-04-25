@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.22.0] - 2026-04-24
+
+### Added
+
+- **`Arkskill-012-S2`: external skills registry.** New `skills/ark-workflow/references/external-skills.yaml` enumerates the 33 external slash-commands referenced from `skills/ark-workflow/chains/*.md` (gstack, OMC, superpowers, vendor-cli) with their condition gates. Mandatory dependency for the chain-reachability lint added in S3.
+- **`Arkskill-012-S3`: skill-graph audit mode for `/wiki-lint`.** New `skills/wiki-lint/scripts/skill_graph_audit.py` runs six checks on the plugin repo:
+  1. **Catalog drift** — HARD error on count mismatch between filesystem ground truth and the parsed catalogs in `skills/AGENTS.md`, `README.md`, and `CLAUDE.md`; WARN on description divergence.
+  2. **Section-anchor refs** — verifies `references/<file>.md § Section X.Y` cites resolve under the dual `## Section N` / `### N.M` heading scheme used in this repo.
+  3. **Description shape** — heuristic warns on length, missing trigger verbs, or high cross-skill description overlap. Not a phrase-match for "Use when / Do NOT use" — three canonical atom skills don't have those phrases and are correct.
+  4. **Active-body length** — informational warn at 500 lines (Anthropic guidance). Does not auto-trigger refactor; load-bearing sections in `/ark-workflow`, `/ark-onboard`, `/ark-health` cannot move into `references/`.
+  5. **Chain reachability** — extracts leading-token slash-commands from chain backtick spans (so `/ark-code-review --quick` resolves to `/ark-code-review`); cross-checks against internal SKILL.md set ∪ external registry. Warns on unclassified.
+  6. **Compound-to-compound calls** — soft warn only. Per the design doc, live examples in this repo are correct; the lint is informational, not a block.
+- **`Arkskill-012-S4`: composition guardrails text in `skills/AGENTS.md`.** New `### Composition Guardrails` subsection adopting the exception-aware wording from the epic. Replaces the rejected v2 wording ("Compounds do not invoke other compounds"); the "molecules sequence atoms" tier sentence was never in the codebase to begin with and stays out — `/ark-context-warmup` is a molecule-shaped prelude that runs as step 0 of every chain, so the sentence would be technically false.
+
+### Notes
+
+- **`Arkskill-012-S5` had no work to do.** Section-anchor lint surfaced zero broken refs after the dual-scheme resolver landed — the design doc's suspicion that `omc-integration.md § Section 4.1` was silently broken was based on a literal-string grep that didn't account for the `### 4.1 ...` sub-numbering. The existing cites are valid.
+- Final audit state: 0 errors, 36 soft warnings (3 description-drift, 1 description-shape, 3 active-body-length, 29 compound-to-compound). All 36 are expected — they document known signal that the epic explicitly classified as soft.
+- Design rationale and `/codex` consult+challenge transcripts: `vault/Compiled-Insights/Skill-Graph-Hardening-Pass.md`. Epic + stories: `vault/TaskNotes/Tasks/Epic/Arkskill-012-skill-graph-hardening-pass.md`.
+
+## [1.21.5] - 2026-04-24
+
+### Fixed
+
+- **Catalog drift surfaced by `/codex` challenge.** Three skill catalogs disagreed on counts and contents:
+  - `README.md` claimed 19 skills (lines 3, 132, 151, 176–177); now 20. Added `/wiki-handoff` row to the Available Skills table.
+  - `skills/AGENTS.md` claimed 18 skills; now 20. Added `ark-update/` and `wiki-handoff/` rows. `/ark-health` description corrected from "19-check" to "22-check" (matches `ark-health/SKILL.md` and `ark-onboard/SKILL.md`).
+  - `CLAUDE.md` Available Skills section was missing `/ark-update` and `/wiki-handoff`; `/ark-health` line claimed "20 checks" instead of 22. Both corrected.
+- Filesystem ground truth: `find skills -maxdepth 2 -name SKILL.md` returns 20.
+
+### Notes
+
+- Documentation-only patch. No skill behavior changes.
+- Catalog-drift lint (and the broader skill-graph hardening pass it belongs to) is tracked under `Arkskill-012`. See `vault/Compiled-Insights/Skill-Graph-Hardening-Pass.md` for the design rationale, including the `/codex` consult+challenge transcript that drove this v3 plan.
+
 ## [1.21.4] - 2026-04-23
 
 ### Fixed

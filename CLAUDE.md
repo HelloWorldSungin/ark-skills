@@ -74,6 +74,7 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 ### Workflow Orchestration
 - `/ark-workflow` — Task triage and skill chain orchestration (entry point for all non-trivial work)
 - `/ark-context-warmup` — Automatic context loader. Runs as step 0 of every /ark-workflow chain; queries NotebookLM + vault + TaskNotes for recent + relevant context. Also invokable standalone.
+- `/wiki-handoff` — Write a session bridge page to `.omc/wiki/` before `/compact` or `/clear`; invoked from `/ark-workflow` Step 6.5 action branch.
 
 ### Core (generalized from existing)
 - `/ark-code-review` — Multi-agent code review with fan-out architecture
@@ -85,7 +86,8 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 
 ### Onboarding
 - `/ark-onboard` — Interactive setup wizard (greenfield, migration, repair). Absorbs `/wiki-setup`.
-- `/ark-health` — Diagnostic check for Ark ecosystem health (20 checks, scored scorecard)
+- `/ark-health` — Diagnostic check for Ark ecosystem health (22 checks, scored scorecard)
+- `/ark-update` — Version-driven migration framework. Converges downstream projects to the current ark-skills target profile by replaying additive conventions and any pending destructive migrations. Distinct from `/ark-onboard` repair (failure-driven).
 
 ### Vault Maintenance (adapted from obsidian-wiki)
 - `/wiki-query` — Query vault knowledge with tiered retrieval
