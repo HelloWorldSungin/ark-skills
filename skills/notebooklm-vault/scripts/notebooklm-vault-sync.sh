@@ -55,34 +55,66 @@ fi
 SYNC_STATE_FILE="$VAULT_NOTEBOOKLM/sync-state.json"
 
 # --- Vault layout classifier ---
-# Computes once at script load. Three layouts are possible across the Ark
-# project matrix; downstream code routes off this enum instead of re-deriving
-# from VAULT_ROOT_REL + structural checks at every call site. v1.21.5 shipped
-# the structural-detection fix; v1.21.6 consolidates the matrix into one place.
+# Computes once at script load. Three layouts span the Ark project matrix;
+# downstream code routes off this enum instead of re-deriving at every call
+# site.
 #
 #   STANDALONE_DIRECT       — vault_root: ".".  Config lives inside the vault;
 #                             VAULT_ROOT is the parent of the config dir.
 #                             Typical for embedded vaults.
-#   STANDALONE_CENTRALIZED  — vault_root != ".", BUT the resolved VAULT_ROOT
-#                             carries marker dirs (_meta/, _Templates/,
-#                             TaskNotes/) directly at root. Typical for the
-#                             centralized-vault default (v1.11.0+) — the
-#                             config sits in the project repo, the vault sits
-#                             across a symlink to ~/.superset/vaults/<proj>/.
-#   WRAPPED                 — vault_root != ".", and the resolved VAULT_ROOT
-#                             contains a project subdirectory (e.g.
-#                             vault/ArkNode-Poly/) which carries the markers.
-#                             Monorepo / wrapped layout.
+#   STANDALONE_CENTRALIZED  — vault_root != ".", and no project hub subdir
+#                             exists at vault root, but root carries the
+#                             marker dirs. Typical for centralized-vault
+#                             default (v1.11.0+) where the config sits in
+#                             the project repo and the vault is a symlink to
+#                             ~/.superset/vaults/<proj>/.
+#   WRAPPED                 — vault_root != ".", and a non-excluded
+#                             subdirectory contains its own Session-Logs/.
+#                             The presence of a project-hub subdir is the
+#                             canonical signal — root-level marker dirs alone
+#                             do NOT distinguish standalone from wrapped,
+#                             because monorepo vaults like ArkNode-Poly have
+#                             root-level _meta/, TaskNotes/, _Templates/ AS
+#                             WELL AS project subdirs. Wrapped wins when both
+#                             signals are present.
 VAULT_LAYOUT=""
 
 classify_vault_layout() {
     if [[ "$VAULT_ROOT_REL" == "." ]]; then
         VAULT_LAYOUT="STANDALONE_DIRECT"
-    elif [[ -d "$VAULT_ROOT/_meta" ]] || [[ -d "$VAULT_ROOT/_Templates" ]] || [[ -d "$VAULT_ROOT/TaskNotes" ]]; then
-        VAULT_LAYOUT="STANDALONE_CENTRALIZED"
-    else
-        VAULT_LAYOUT="WRAPPED"
+        return
     fi
+
+    # Wrapped detection: any non-excluded subdir at vault root that itself
+    # contains a Session-Logs/ subdirectory? That is the canonical "project
+    # hub" shape — vault/<ProjectName>/Session-Logs/.
+    local candidate name skip excl
+    for candidate in "$VAULT_ROOT"/*/; do
+        [[ -d "$candidate" ]] || continue
+        name=$(basename "$candidate")
+        skip=false
+        for excl in "${EXCLUDES[@]}"; do
+            if [[ "$name" == "$excl" ]]; then
+                skip=true
+                break
+            fi
+        done
+        [[ "$skip" == "true" ]] && continue
+        if [[ -d "$candidate/Session-Logs" ]]; then
+            VAULT_LAYOUT="WRAPPED"
+            return
+        fi
+    done
+
+    # No project-hub subdir found. If root has marker dirs, standalone-centralized.
+    if [[ -d "$VAULT_ROOT/_meta" ]] || [[ -d "$VAULT_ROOT/_Templates" ]] || [[ -d "$VAULT_ROOT/TaskNotes" ]]; then
+        VAULT_LAYOUT="STANDALONE_CENTRALIZED"
+        return
+    fi
+
+    # Fall back to wrapped — resolve_scan_base will produce a clear error if
+    # the vault is empty or genuinely misconfigured.
+    VAULT_LAYOUT="WRAPPED"
 }
 
 classify_vault_layout
@@ -370,6 +402,22 @@ build_vault_file_list() {
 
     VAULT_FILES=$(mktemp)
 
+    # Run find through a tempfile so we can check its exit code. Process
+    # substitution (done < <(find ...)) swallows exit codes — a partial scan
+    # from a symlink loop or permission error would silently shrink the
+    # expected source set, and orphan-pruning in dedupe_and_heal_notebook
+    # would then delete legitimate sources whose vault file the partial scan
+    # missed. Use -H (not -L) so the command-line vault root symlink is
+    # followed but interior symlinks are not — that bounds traversal to the
+    # actual vault and avoids syncing files that happen to live behind a
+    # user-placed symlink (e.g. vault/Notes -> ~/Documents).
+    local find_out
+    find_out=$(mktemp)
+    if ! find -H "$scan_base" -name "*.md" -type f 2>/dev/null | sort > "$find_out"; then
+        rm -f "$find_out"
+        die "find failed scanning $scan_base — refusing to proceed with partial inventory (orphan-pruning would delete legitimate sources)."
+    fi
+
     while IFS= read -r filepath; do
         local relpath title nb_key
         relpath="${filepath#"$VAULT_ROOT"/}"
@@ -377,7 +425,8 @@ build_vault_file_list() {
         title=$(basename "$relpath")
         nb_key=$(route_to_notebook "$relpath")
         printf '%s\t%s\t%s\n' "$title" "$relpath" "$nb_key" >> "$VAULT_FILES"
-    done < <(find -L "$scan_base" -name "*.md" -type f | sort)
+    done < "$find_out"
+    rm -f "$find_out"
 
     [[ -s "$VAULT_FILES" ]] || { echo "WARN: No files discovered in $scan_base"; return 0; }
 
@@ -422,7 +471,7 @@ nuke_notebook_sources() {
     local source_ids count
 
     echo "  Deleting all sources from $nb_label notebook ($nb_id)..."
-    source_ids=$(notebooklm source list --notebook "$nb_id" --json 2>/dev/null | jq -r '.sources[].id') || {
+    source_ids=$(notebooklm source list --notebook "$nb_id" --json 2>/dev/null | jq -r '(.sources // [])[].id') || {
         echo "  WARN: Could not list sources for $nb_label"
         return 1
     }
@@ -460,7 +509,7 @@ fetch_notebook_sources() {
             die "Failed to list sources for notebook '$key' ($nb_id): $err_msg"
         fi
         rm -f "$err_log"
-        echo "$raw" | jq -r '.sources[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
+        echo "$raw" | jq -r '(.sources // [])[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
             > "$NOTEBOOK_SOURCES_DIR/$key"
     done
 }
@@ -570,7 +619,7 @@ dedupe_and_heal_notebook() {
         err_log=$(mktemp)
         if fresh=$(notebooklm source list --notebook "$nb_id" --json 2>"$err_log"); then
             rm -f "$err_log"
-            echo "$fresh" | jq -r '.sources[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
+            echo "$fresh" | jq -r '(.sources // [])[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
                 > "$sources_file"
             local final_count
             final_count=$(wc -l < "$sources_file" | tr -d ' ')
@@ -614,7 +663,7 @@ add_with_recovery() {
     # continue with an empty snapshot — the recovery count will simply detect
     # "new IDs" that include pre-existing ones, which is handled below.
     notebooklm source list --notebook "$nb_id" --json 2>/dev/null \
-        | jq -r --arg t "$title" '.sources[] | select(.title == $t) | .id' 2>/dev/null \
+        | jq -r --arg t "$title" '(.sources // [])[] | select(.title == $t) | .id' 2>/dev/null \
         | LC_ALL=C sort > "$pre_tmp" || : > "$pre_tmp"
 
     # Attempt the add. Capture both stdout+stderr and rc without tripping -e.
@@ -636,7 +685,7 @@ add_with_recovery() {
     # Recovery path
     echo "    recovery: rc=$add_rc, re-listing to detect ghost registration" >&2
     notebooklm source list --notebook "$nb_id" --json 2>/dev/null \
-        | jq -r --arg t "$title" '.sources[] | select(.title == $t) | .id' 2>/dev/null \
+        | jq -r --arg t "$title" '(.sources // [])[] | select(.title == $t) | .id' 2>/dev/null \
         | LC_ALL=C sort > "$post_tmp" || : > "$post_tmp"
 
     comm -23 "$post_tmp" "$pre_tmp" > "$new_ids_file" || true
@@ -759,7 +808,7 @@ state_deletion_pass() {
         # clearing state, otherwise we leak orphans permanently.
         local verify
         verify=$(notebooklm source list --notebook "$nb_id" --json 2>/dev/null \
-                 | jq -r --arg id "$source_id" '.sources[] | select(.id == $id) | .id' 2>/dev/null || true)
+                 | jq -r --arg id "$source_id" '(.sources // [])[] | select(.id == $id) | .id' 2>/dev/null || true)
         if [[ -z "$verify" ]]; then
             remove_from_sync_state "$relpath"
             DELETED=$((DELETED + 1))
@@ -816,7 +865,7 @@ main() {
         nb_id=$(get_notebook_id "$nb_key")
         NOTEBOOK_SOURCES_DIR=$(mktemp -d)
         notebooklm source list --notebook "$nb_id" --json 2>/dev/null \
-            | jq -r '.sources[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
+            | jq -r '(.sources // [])[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
             > "$NOTEBOOK_SOURCES_DIR/$nb_key"
         echo "Syncing single file: $single_file"
         sync_file "$single_file" || ERRORS=$((ERRORS + 1))
