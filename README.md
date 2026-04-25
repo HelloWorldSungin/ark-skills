@@ -1,6 +1,6 @@
 # Ark Skills Plugin
 
-Claude Code plugin providing 19 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
+Claude Code plugin providing 20 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
 
 ## Installation
 
@@ -50,6 +50,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 |-------|----------|-------------|--------|
 | `/ark-workflow` | Workflow Orchestration | Task triage and skill chain orchestration | New |
 | `/ark-context-warmup` | Workflow Orchestration | Automatic context loader; runs as step 0 of every chain | New |
+| `/wiki-handoff` | Workflow Orchestration | Write a session bridge to `.omc/wiki/` before `/compact` or `/clear`; invoked from `/ark-workflow` Step 6.5 | New |
 | `/ark-code-review` | Core | Multi-agent code review with fan-out architecture | Generalized |
 | `/codebase-maintenance` | Core | Repo cleanup, vault sync, skill health | Generalized |
 | `/notebooklm-vault` | Core | NotebookLM vault context and sync | Generalized |
@@ -129,7 +130,7 @@ ark-skills (Claude Code plugin)
 ├── .claude-plugin/
 │   ├── plugin.json           # Plugin metadata (ark-skills v1.13.0)
 │   └── marketplace.json      # Repo-level plugin registry
-└── skills/                   # 19 shared skills
+└── skills/                   # 20 shared skills
       ↓ context-discovery
 Project CLAUDE.md → vault path, task prefix, deployment targets
       ↓
@@ -148,7 +149,7 @@ For manual setup, see [docs/onboarding-guide.md](docs/onboarding-guide.md).
 | Directory | Purpose |
 |-----------|---------|
 | `.claude-plugin/` | Plugin manifest (plugin.json, marketplace.json) |
-| `skills/` | 19 shared skill definitions (SKILL.md files) |
+| `skills/` | 20 shared skill definitions (SKILL.md files) |
 | `docs/` | Design specs, plans, onboarding guide |
 | `ArkNode-AI/` | Submodule: AI trading project (skill source for generalization) |
 | `ArkNode-Poly/` | Submodule: Polymarket project (skill source for generalization) |
@@ -173,8 +174,8 @@ For manual setup, see [docs/onboarding-guide.md](docs/onboarding-guide.md).
 ### Verification Checks
 
 ```bash
-# All 19 skills exist
-find skills -name SKILL.md | wc -l  # → 19
+# All 20 skills exist
+find skills -name SKILL.md | wc -l  # → 20
 
 # Zero hardcoded project references
 grep -rn "ArkPoly\|ArkSignal\|trading-signal-ai\|arknode-poly" skills/

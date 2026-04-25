@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.5] - 2026-04-24
+
+### Fixed
+
+- **Catalog drift surfaced by `/codex` challenge.** Three skill catalogs disagreed on counts and contents:
+  - `README.md` claimed 19 skills (lines 3, 132, 151, 176–177); now 20. Added `/wiki-handoff` row to the Available Skills table.
+  - `skills/AGENTS.md` claimed 18 skills; now 20. Added `ark-update/` and `wiki-handoff/` rows. `/ark-health` description corrected from "19-check" to "22-check" (matches `ark-health/SKILL.md` and `ark-onboard/SKILL.md`).
+  - `CLAUDE.md` Available Skills section was missing `/ark-update` and `/wiki-handoff`; `/ark-health` line claimed "20 checks" instead of 22. Both corrected.
+- Filesystem ground truth: `find skills -maxdepth 2 -name SKILL.md` returns 20.
+
+### Notes
+
+- Documentation-only patch. No skill behavior changes.
+- Catalog-drift lint (and the broader skill-graph hardening pass it belongs to) is tracked under `Arkskill-012`. See `vault/Compiled-Insights/Skill-Graph-Hardening-Pass.md` for the design rationale, including the `/codex` consult+challenge transcript that drove this v3 plan.
+
 ## [1.21.4] - 2026-04-23
 
 ### Fixed
