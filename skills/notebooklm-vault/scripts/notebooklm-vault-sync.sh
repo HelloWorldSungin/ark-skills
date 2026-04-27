@@ -54,6 +54,71 @@ else
 fi
 SYNC_STATE_FILE="$VAULT_NOTEBOOKLM/sync-state.json"
 
+# --- Vault layout classifier ---
+# Computes once at script load. Three layouts span the Ark project matrix;
+# downstream code routes off this enum instead of re-deriving at every call
+# site.
+#
+#   STANDALONE_DIRECT       — vault_root: ".".  Config lives inside the vault;
+#                             VAULT_ROOT is the parent of the config dir.
+#                             Typical for embedded vaults.
+#   STANDALONE_CENTRALIZED  — vault_root != ".", and no project hub subdir
+#                             exists at vault root, but root carries the
+#                             marker dirs. Typical for centralized-vault
+#                             default (v1.11.0+) where the config sits in
+#                             the project repo and the vault is a symlink to
+#                             ~/.superset/vaults/<proj>/.
+#   WRAPPED                 — vault_root != ".", and a non-excluded
+#                             subdirectory contains its own Session-Logs/.
+#                             The presence of a project-hub subdir is the
+#                             canonical signal — root-level marker dirs alone
+#                             do NOT distinguish standalone from wrapped,
+#                             because monorepo vaults like ArkNode-Poly have
+#                             root-level _meta/, TaskNotes/, _Templates/ AS
+#                             WELL AS project subdirs. Wrapped wins when both
+#                             signals are present.
+VAULT_LAYOUT=""
+
+classify_vault_layout() {
+    if [[ "$VAULT_ROOT_REL" == "." ]]; then
+        VAULT_LAYOUT="STANDALONE_DIRECT"
+        return
+    fi
+
+    # Wrapped detection: any non-excluded subdir at vault root that itself
+    # contains a Session-Logs/ subdirectory? That is the canonical "project
+    # hub" shape — vault/<ProjectName>/Session-Logs/.
+    local candidate name skip excl
+    for candidate in "$VAULT_ROOT"/*/; do
+        [[ -d "$candidate" ]] || continue
+        name=$(basename "$candidate")
+        skip=false
+        for excl in "${EXCLUDES[@]}"; do
+            if [[ "$name" == "$excl" ]]; then
+                skip=true
+                break
+            fi
+        done
+        [[ "$skip" == "true" ]] && continue
+        if [[ -d "$candidate/Session-Logs" ]]; then
+            VAULT_LAYOUT="WRAPPED"
+            return
+        fi
+    done
+
+    # No project-hub subdir found. If root has marker dirs, standalone-centralized.
+    if [[ -d "$VAULT_ROOT/_meta" ]] || [[ -d "$VAULT_ROOT/_Templates" ]] || [[ -d "$VAULT_ROOT/TaskNotes" ]]; then
+        VAULT_LAYOUT="STANDALONE_CENTRALIZED"
+        return
+    fi
+
+    # Fall back to wrapped — resolve_scan_base will produce a clear error if
+    # the vault is empty or genuinely misconfigured.
+    VAULT_LAYOUT="WRAPPED"
+}
+
+classify_vault_layout
+
 # Excluded path segments (applied as "path contains /<excl>/ or ends with /<excl>")
 EXCLUDES=(".obsidian" ".git" ".notebooklm" ".claude-plugin" "_Templates" "_Attachments" "TaskNotes" "_meta")
 
@@ -281,35 +346,43 @@ is_excluded() {
 }
 
 # --- Determine scan base directory ---
-# Standalone vault (vault_root: "."): scan VAULT_ROOT directly (root-level .md + all non-excluded subdirs).
-# Wrapped vault: scan the first non-excluded project subdirectory (e.g. vault/ArkNode-Poly/).
+# Routes off the VAULT_LAYOUT enum classified at script load.
+#   STANDALONE_DIRECT, STANDALONE_CENTRALIZED  -> scan VAULT_ROOT directly.
+#   WRAPPED                                     -> scan the first non-excluded
+#                                                  project subdirectory (e.g.
+#                                                  vault/ArkNode-Poly/).
 resolve_scan_base() {
     local mode="$1"
     local scan_base
 
-    if [[ "$VAULT_ROOT_REL" == "." ]]; then
-        scan_base="$VAULT_ROOT"
-    else
-        # Wrapped: discover the project subdirectory
-        local candidate name
-        scan_base=""
-        for candidate in "$VAULT_ROOT"/*/; do
-            [[ -d "$candidate" ]] || continue
-            name=$(basename "$candidate")
-            local skip=false
-            for excl in "${EXCLUDES[@]}"; do
-                if [[ "$name" == "$excl" ]]; then
-                    skip=true
+    case "$VAULT_LAYOUT" in
+        STANDALONE_DIRECT|STANDALONE_CENTRALIZED)
+            scan_base="$VAULT_ROOT"
+            ;;
+        WRAPPED)
+            local candidate name
+            scan_base=""
+            for candidate in "$VAULT_ROOT"/*/; do
+                [[ -d "$candidate" ]] || continue
+                name=$(basename "$candidate")
+                local skip=false
+                for excl in "${EXCLUDES[@]}"; do
+                    if [[ "$name" == "$excl" ]]; then
+                        skip=true
+                        break
+                    fi
+                done
+                if [[ "$skip" == "false" ]]; then
+                    scan_base="$VAULT_ROOT/$name"
                     break
                 fi
             done
-            if [[ "$skip" == "false" ]]; then
-                scan_base="$VAULT_ROOT/$name"
-                break
-            fi
-        done
-        [[ -n "$scan_base" ]] || die "Wrapped vault at $VAULT_ROOT has no project subdirectory (all subdirs excluded)."
-    fi
+            [[ -n "$scan_base" ]] || die "Wrapped vault at $VAULT_ROOT has no project subdirectory (all subdirs excluded)."
+            ;;
+        *)
+            die "Unknown VAULT_LAYOUT: '$VAULT_LAYOUT' (classify_vault_layout did not run?)"
+            ;;
+    esac
 
     if [[ "$mode" == "sessions-only" ]]; then
         scan_base="$scan_base/Session-Logs"
@@ -329,6 +402,22 @@ build_vault_file_list() {
 
     VAULT_FILES=$(mktemp)
 
+    # Run find through a tempfile so we can check its exit code. Process
+    # substitution (done < <(find ...)) swallows exit codes — a partial scan
+    # from a symlink loop or permission error would silently shrink the
+    # expected source set, and orphan-pruning in dedupe_and_heal_notebook
+    # would then delete legitimate sources whose vault file the partial scan
+    # missed. Use -H (not -L) so the command-line vault root symlink is
+    # followed but interior symlinks are not — that bounds traversal to the
+    # actual vault and avoids syncing files that happen to live behind a
+    # user-placed symlink (e.g. vault/Notes -> ~/Documents).
+    local find_out
+    find_out=$(mktemp)
+    if ! find -H "$scan_base" -name "*.md" -type f 2>/dev/null | sort > "$find_out"; then
+        rm -f "$find_out"
+        die "find failed scanning $scan_base — refusing to proceed with partial inventory (orphan-pruning would delete legitimate sources)."
+    fi
+
     while IFS= read -r filepath; do
         local relpath title nb_key
         relpath="${filepath#"$VAULT_ROOT"/}"
@@ -336,7 +425,8 @@ build_vault_file_list() {
         title=$(basename "$relpath")
         nb_key=$(route_to_notebook "$relpath")
         printf '%s\t%s\t%s\n' "$title" "$relpath" "$nb_key" >> "$VAULT_FILES"
-    done < <(find "$scan_base" -name "*.md" -type f | sort)
+    done < "$find_out"
+    rm -f "$find_out"
 
     [[ -s "$VAULT_FILES" ]] || { echo "WARN: No files discovered in $scan_base"; return 0; }
 
@@ -381,7 +471,7 @@ nuke_notebook_sources() {
     local source_ids count
 
     echo "  Deleting all sources from $nb_label notebook ($nb_id)..."
-    source_ids=$(notebooklm source list --notebook "$nb_id" --json 2>/dev/null | jq -r '.sources[].id') || {
+    source_ids=$(notebooklm source list --notebook "$nb_id" --json 2>/dev/null | jq -r '(.sources // [])[].id') || {
         echo "  WARN: Could not list sources for $nb_label"
         return 1
     }
@@ -405,12 +495,21 @@ fetch_notebook_sources() {
         [[ "$seen_keys" == *" $key "* ]] && continue
         seen_keys+="$key "
 
-        local nb_id raw
+        local nb_id raw err_log
         nb_id=$(get_notebook_id "$key")
-        if ! raw=$(notebooklm source list --notebook "$nb_id" --json 2>&1); then
-            die "Failed to list sources for notebook '$key' ($nb_id): $raw"
+        # Capture stderr separately. Folding it into stdout (2>&1) breaks jq when
+        # notebooklm-py prints runtime warnings (e.g. on empty notebooks it logs
+        # "Sources data ... is not a list"), since the warning ends up at the
+        # start of $raw and jq fails parsing.
+        err_log=$(mktemp)
+        if ! raw=$(notebooklm source list --notebook "$nb_id" --json 2>"$err_log"); then
+            local err_msg
+            err_msg=$(cat "$err_log")
+            rm -f "$err_log"
+            die "Failed to list sources for notebook '$key' ($nb_id): $err_msg"
         fi
-        echo "$raw" | jq -r '.sources[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
+        rm -f "$err_log"
+        echo "$raw" | jq -r '(.sources // [])[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
             > "$NOTEBOOK_SOURCES_DIR/$key"
     done
 }
@@ -514,15 +613,22 @@ dedupe_and_heal_notebook() {
 
     # --- Refresh local cache from NotebookLM if anything was mutated ---
     if [[ "$deleted_count" -gt 0 ]]; then
-        local fresh
-        if fresh=$(notebooklm source list --notebook "$nb_id" --json 2>&1); then
-            echo "$fresh" | jq -r '.sources[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
+        local fresh err_log
+        # Same stderr-vs-stdout discipline as fetch_notebook_sources: never fold
+        # stderr into the JSON we hand to jq.
+        err_log=$(mktemp)
+        if fresh=$(notebooklm source list --notebook "$nb_id" --json 2>"$err_log"); then
+            rm -f "$err_log"
+            echo "$fresh" | jq -r '(.sources // [])[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
                 > "$sources_file"
             local final_count
             final_count=$(wc -l < "$sources_file" | tr -d ' ')
             echo "  Heal complete: $initial_count -> $final_count sources ($deleted_count deleted)"
         else
-            echo "  WARN: Could not refresh source list after heal: $fresh"
+            local err_msg
+            err_msg=$(cat "$err_log")
+            rm -f "$err_log"
+            echo "  WARN: Could not refresh source list after heal: $err_msg"
         fi
     else
         echo "  Heal complete: no changes needed"
@@ -557,7 +663,7 @@ add_with_recovery() {
     # continue with an empty snapshot — the recovery count will simply detect
     # "new IDs" that include pre-existing ones, which is handled below.
     notebooklm source list --notebook "$nb_id" --json 2>/dev/null \
-        | jq -r --arg t "$title" '.sources[] | select(.title == $t) | .id' 2>/dev/null \
+        | jq -r --arg t "$title" '(.sources // [])[] | select(.title == $t) | .id' 2>/dev/null \
         | LC_ALL=C sort > "$pre_tmp" || : > "$pre_tmp"
 
     # Attempt the add. Capture both stdout+stderr and rc without tripping -e.
@@ -579,7 +685,7 @@ add_with_recovery() {
     # Recovery path
     echo "    recovery: rc=$add_rc, re-listing to detect ghost registration" >&2
     notebooklm source list --notebook "$nb_id" --json 2>/dev/null \
-        | jq -r --arg t "$title" '.sources[] | select(.title == $t) | .id' 2>/dev/null \
+        | jq -r --arg t "$title" '(.sources // [])[] | select(.title == $t) | .id' 2>/dev/null \
         | LC_ALL=C sort > "$post_tmp" || : > "$post_tmp"
 
     comm -23 "$post_tmp" "$pre_tmp" > "$new_ids_file" || true
@@ -702,7 +808,7 @@ state_deletion_pass() {
         # clearing state, otherwise we leak orphans permanently.
         local verify
         verify=$(notebooklm source list --notebook "$nb_id" --json 2>/dev/null \
-                 | jq -r --arg id "$source_id" '.sources[] | select(.id == $id) | .id' 2>/dev/null || true)
+                 | jq -r --arg id "$source_id" '(.sources // [])[] | select(.id == $id) | .id' 2>/dev/null || true)
         if [[ -z "$verify" ]]; then
             remove_from_sync_state "$relpath"
             DELETED=$((DELETED + 1))
@@ -743,6 +849,7 @@ main() {
     echo "NotebookLM Vault Sync"
     echo "  Config: $CONFIG_FILE"
     echo "  Vault root: $VAULT_ROOT"
+    echo "  Layout: $VAULT_LAYOUT"
     echo "  Mode: $mode"
     echo "  Notebooks: ${NOTEBOOK_KEYS[*]}"
     for key in "${NOTEBOOK_KEYS[@]}"; do
@@ -758,7 +865,7 @@ main() {
         nb_id=$(get_notebook_id "$nb_key")
         NOTEBOOK_SOURCES_DIR=$(mktemp -d)
         notebooklm source list --notebook "$nb_id" --json 2>/dev/null \
-            | jq -r '.sources[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
+            | jq -r '(.sources // [])[] | [.title, .id, (.status // "UNKNOWN"), (.created_at // "")] | @tsv' \
             > "$NOTEBOOK_SOURCES_DIR/$nb_key"
         echo "Syncing single file: $single_file"
         sync_file "$single_file" || ERRORS=$((ERRORS + 1))

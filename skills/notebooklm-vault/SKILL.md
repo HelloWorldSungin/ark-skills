@@ -11,7 +11,7 @@ This skill bridges the Obsidian vault with Google NotebookLM to give Claude Code
 
 Before running this skill, discover project context per the plugin CLAUDE.md:
 1. Read the project's CLAUDE.md to find: project name, vault root, project docs path
-2. Read the **project repo's** `.notebooklm/config.json` for notebook configuration (this is the tracked, authoritative source). The vault repo holds `.notebooklm/sync-state.json` (runtime state, not config).
+2. Read the notebook configuration from `.notebooklm/config.json`. Lookup order: project root first, then vault root (`vault/.notebooklm/config.json`). Monorepo layouts use the project-root config as the authoritative tracked source; standalone layouts use the vault-root config exclusively. Sync-state (`.notebooklm/sync-state.json`) lives inside the vault repo regardless of layout.
 3. Determine notebook structure: single notebook (one key) or multi-notebook (trading + infra)
 4. For tiered retrieval: read vault's `index.md` and use `summary:` fields to scan before reading full pages
 
@@ -25,12 +25,17 @@ A single NotebookLM notebook holds the vault content:
 
 **Note:** TaskNotes (`{tasknotes_path}/`) are NOT synced to NotebookLM. They are managed locally in Obsidian only.
 
-Config lives in `.notebooklm/config.json` (project repo, tracked). Sync state lives in `vault/.notebooklm/sync-state.json` (vault repo, tracked, shared across environments). The vault also has its own `.notebooklm/config.json` with `vault_root: "."`.
+Config layout depends on whether the vault is monorepo or standalone:
+
+- **Monorepo / wrapped:** `.notebooklm/config.json` lives in the project repo (tracked, authoritative) with `vault_root: "vault"`. The vault repo also carries its own `.notebooklm/config.json` with `vault_root: "."` for direct-mode sync from inside the vault.
+- **Standalone:** only the vault-side `.notebooklm/config.json` (with `vault_root: "."`) exists. The project repo does NOT carry a `.notebooklm/config.json` — it would be redundant and historically caused the centralized-standalone scan-base bug.
+
+Sync state always lives in `vault/.notebooklm/sync-state.json` (vault repo, tracked, shared across environments).
 
 ### Centralized Vault Awareness
 
 When the project's `vault` is a symlink (centralized-vault pattern), this skill:
-- Reads `.notebooklm/config.json` from the project root first (expected `vault_root: "vault"`), falls back to `<vault>/.notebooklm/config.json` (expected `vault_root: "."`). Both resolve to the same directory.
+- Reads `.notebooklm/config.json` from the project root first (monorepo layouts: expected `vault_root: "vault"`), falls back to `<vault>/.notebooklm/config.json` (standalone layouts: expected `vault_root: "."`, AND the only config that exists). Both forms resolve to the same vault directory; the script's standalone-marker detection (`_meta/`, `_Templates/`, `TaskNotes/` at vault root) keeps scan-base resolution correct even if a stray `vault_root: "vault"` project config is left behind on a standalone vault.
 - Locates `sync-state.json` exclusively inside the vault repo: `<vault>/.notebooklm/sync-state.json`. Never writes sync-state to the project repo.
 - Bootstraps missing `sync-state.json` with empty state `{"last_sync": null, "files": {}}` on first sync.
 
@@ -98,7 +103,22 @@ Creates the notebook, configures persona, bulk imports all vault .md files, and 
    PERSONA='You are a senior engineer reviewing the {project_name} project. Answer questions with specific session numbers, dates, experiment results, and code references. When tracing decisions, cite the session logs where they were made. Be thorough and precise.'
    notebooklm configure --notebook <notebook_id> --mode detailed --persona "$PERSONA" --response-length longer
    ```
-4. Write `.notebooklm/config.json`:
+4. Persist the notebook config. Detect layout first:
+   - **Standalone vault** — vault root contains `_meta/`, `_Templates/`, or `TaskNotes/` directly (no wrapping project subdir).
+   - **Monorepo / wrapped vault** — vault root contains a project subdirectory which contains those marker dirs.
+
+   ```bash
+   if [ -d vault/_meta ] || [ -d vault/_Templates ] || [ -d vault/TaskNotes ]; then
+     LAYOUT=standalone
+   else
+     LAYOUT=monorepo
+   fi
+   ```
+
+   **Standalone:** the vault-side config (`vault/.notebooklm/config.json`) is the only config. `/ark-onboard` Step 15 already wrote a stub there with `vault_root: "."`; fill in `notebooks.main.id` and persist the persona. Do NOT write a project-level config — for standalone it would be redundant at best and induce the centralized-standalone scan-base bug at worst (script lands on the first non-excluded subdirectory instead of the vault root). The sync script's marker-based standalone detection makes a stray project-level config harmless, but skipping it keeps the source of truth singular.
+
+   **Monorepo:** write `.notebooklm/config.json` at the **project root** (tracked) — this is the authoritative config for monorepo layouts because it carries the wrapping `vault_root: "vault"` plus any project-docs-subdir routing.
+
    ```json
    {
      "notebooks": {
@@ -401,7 +421,7 @@ warmup_contract:
 
 - **Always use `--notebook <id>` explicitly** — never rely on `notebooklm use` context, which can be overwritten by parallel agent sessions.
 - **NotebookLM is the source of truth for existence, sync-state is a hash cache** (since plugin v1.9.0). Every incremental sync lists remote sources, dedupes by title, prunes orphans, and only then uploads new/changed files. Running the sync script locally is now safe — it self-heals any drift rather than creating duplicates.
-- **Config is tracked, sync-state is in vault repo** — config stays in the project repo's `.notebooklm/config.json`. Sync state lives in the vault repo at `vault/.notebooklm/sync-state.json` and is shared across environments.
+- **Config is tracked, sync-state is in vault repo** — for monorepo layouts, config lives in the project repo's `.notebooklm/config.json`. For standalone layouts, config lives only in the vault repo's `.notebooklm/config.json`. Sync state always lives in the vault repo at `vault/.notebooklm/sync-state.json` and is shared across environments.
 - **This skill complements the global `notebooklm` skill** — use this one for vault-specific operations, use the global one for general NotebookLM tasks.
 - **Concurrent runs fail loudly.** A mkdir-based per-vault lock at `/tmp/notebooklm-vault-sync.<vault>.lock` serializes syncs. If two runs race, the second exits with `Another sync is already running`.
 
