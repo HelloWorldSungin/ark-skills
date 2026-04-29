@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.22.2] - 2026-04-28
+
+### Changed
+
+- **`ark-history-hook` auto-compile now delegates to a subagent.** When the Stop hook's drawer-count threshold (default: 50 new drawers) is met, the block decision's `reason` field previously instructed the main agent to run `/claude-history-ingest compile` inline — which pulled mempalace search results, every existing `Compiled-Insights/*.md` page, and the new-page writes into the main context window (~10K+ tokens of churn per checkpoint). The new reason instructs the main agent to delegate the entire compile to a Task-tool subagent (`subagent_type: general-purpose`) and relay only a 2-line summary back. The subagent inherits cwd, runs Steps 1-7 of the skill end-to-end (including the Step 7 threshold-state update that prevents re-triggering), and absorbs all the search/read/write traffic in its own context. Threshold gating, Layer 1 background mine, circuit breaker, and cross-wing mutex are unchanged.
+
+### Notes
+
+- Behavior change is in `skills/claude-history-ingest/hooks/ark-history-hook.sh` block-reason text only — no logic, lock, or state-file changes. The installed copy at `~/.claude/hooks/ark-history-hook.sh` will not auto-update; users must re-run `bash skills/claude-history-ingest/hooks/install-hook.sh` to pick up the new behavior. `/ark-health` Check 16b will detect the drift and surface the re-run action.
+- Subagent prompt is self-contained (wing key, cwd, full Step 1-7 outline) so it works without the main agent re-injecting context. Step 7 is called out as CRITICAL inline because skipping it re-fires the hook every session.
+
 ## [1.22.1] - 2026-04-25
 
 ### Fixed

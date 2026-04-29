@@ -218,7 +218,9 @@ First run all `index` steps above, then run all `compile` steps above. Always co
 The Stop hook at `~/.claude/hooks/ark-history-hook.sh` handles auto-indexing. It:
 - Mines the project directory into ChromaDB after the session ends (zero LLM tokens)
 - Checks if enough new drawers have accumulated since the last compile
-- If threshold met (default: 50 drawers), blocks session exit and asks Claude to run compile
+- If threshold met (default: 50 drawers), blocks session exit and instructs Claude to **delegate** the compile to a subagent via the Task tool — keeps the main context clean (the subagent absorbs the mempalace searches, vault diffs, and write churn; only a 2-line summary returns)
+
+The subagent prompt in the hook's block reason includes Step 7 (update `compile_threshold.json`) as a hard requirement — skipping it makes the hook re-trigger every session.
 
 The hook source lives in this skill at `skills/claude-history-ingest/hooks/ark-history-hook.sh`.
 To reinstall after updates: `bash skills/claude-history-ingest/hooks/install-hook.sh`
