@@ -118,7 +118,11 @@ if acquire_lock "$LOCK" 300; then
     #   - #784 per-source-file locks in the miner (prevents duplicate drawer inserts, not HNSW segment contention)
     # Neither protects against two `mempalace mine` processes for DIFFERENT wings writing
     # the same HNSW segment at the same time — still the root cause of upstream #1092.
-    # Until #976/#991/#1062 land, we serialize cross-wing at the ark-skills layer.
+    # Status as of 2026-04-30: upstream #976 (HNSW thread-safety, root-cause fix) MERGED
+    # to `develop` 2026-04-25 but NOT yet in a release tag — v3.3.3 was cut 2026-04-24,
+    # one day before the merge. #991 (`hnsw:num_threads=1`) closed without merge,
+    # superseded by #976. #1062 (`quarantine_stale_hnsw()` on MCP startup) still open.
+    # Retire this mutex once a tagged release includes #976.
     GLOBAL_LOCK="$HOME/.mempalace/palace/.ark-global-mine-mutex"
     mkdir -p "$HOME/.mempalace/palace" 2>/dev/null
     if ! acquire_lock "$GLOBAL_LOCK" 600; then

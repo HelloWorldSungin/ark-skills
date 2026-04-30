@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.22.3] - 2026-04-30
+
+### Notes
+
+- **`ark-history-hook` cross-wing mutex comment refreshed.** Upstream MemPalace status check on 2026-04-30: PR #976 (HNSW thread-safety, the root-cause fix for the cross-wing HNSW corruption we mitigate at the ark-skills layer) merged to `develop` 2026-04-25 — but `v3.3.3` was cut 2026-04-24, one day before the merge, so no tagged release contains the fix yet. PR #991 (`hnsw:num_threads=1`) was closed without merge, superseded by #976; the comment previously listed both as outstanding. PR #1062 (`quarantine_stale_hnsw()` on MCP startup) still open. Mutex stays in place; comment now records the trigger condition for retirement (a tagged release that includes #976) and drops the dead #991 reference.
+
 ## [1.22.2] - 2026-04-28
 
 ### Changed
