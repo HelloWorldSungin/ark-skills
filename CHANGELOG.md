@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.22.4] - 2026-04-30
+
+### Fixed
+
+- **`mine-vault.sh` mined zero files because mempalace ignores symlinks.** Step 4 staged `.md` files into a temp dir via `ln -s`, then ran `mempalace mine --mode projects` against the staging dir. mempalace's project-mode walker does not follow symlinks (only the `entities.json` produced by `mempalace init` got ingested) — `Files: 1` despite an 87-file vault. Reproduced 2026-04-30 on a fresh `/ark-onboard` Full-tier project: with `ln -s`, dry-run reports `Files: 0`; switching the same staging code to `cp` files yields `Files: N, Drawers filed: ~17 per file`. Fixed by using `cp` instead of `ln -s` in the staging loop. The temp dir is short-lived (cleaned by the EXIT trap), so the disk cost is bounded by `du -sh vault/*.md` for one mining run.
+- **`/ark-update` `ARK_SKILLS_ROOT` resolver matched the cache shell, not a real install.** The third fallback branch ran `find ~/.claude/plugins -maxdepth 6 -type d -name ark-skills | head -1`, which matches both the outer plugin shell (`~/.claude/plugins/cache/ark-skills/`) and the intermediate clone dir (`~/.claude/plugins/cache/ark-skills/ark-skills/`). Neither has `skills/ark-update/SKILL.md` — the actual install lives one level deeper at `ark-skills/ark-skills/<version>/`. `head -1` returned the shell, the existence check on `$ARK_SKILLS_ROOT/skills/ark-update/SKILL.md` failed, and the script aborted with `ark-skills plugin not found`. Fixed by anchoring the search on `VERSION` files whose dirname has `skills/ark-update/SKILL.md`, then `sort -V`-picking the newest cached version. Verified against a 6-version cache (1.20.0 / 1.21.0 / 1.21.4 / 1.22.1 / 1.22.2 / 1.22.3) — resolver picks 1.22.3.
+
+### Changed
+
+- **`mine-vault.sh` accepts `MINE_VAULT_WING` env var to override the auto-derived wing key.** For centralized (symlinked) vaults, the auto-derivation uses the canonical symlink target (`-superset-vaults-<project>`). The `claude-history-ingest` Stop hook always uses `$PWD` (`-superset-projects-<project>`), so the two writers split into separate wings — `wiki-query` from the project root only sees the hook's wing, missing the vault content. Setting `MINE_VAULT_WING="$(echo "$PWD" | sed 's|[/.]|-|g')"` co-locates vault content with the hook's wing. Default behavior is unchanged (auto-derivation from symlink target preserves cross-worktree wing sharing).
+
+### Notes
+
+- All three fixes are POSIX-only and require no migration. Re-run `bash skills/shared/mine-vault.sh` to refile vault content; the previous run's `entities.json`-only drawer in the symlink-target wing is harmless and can be left in place.
+
 ## [1.22.3] - 2026-04-30
 
 ### Notes

@@ -59,17 +59,24 @@ if ! command -v mempalace &>/dev/null; then
 fi
 
 # === STEP 3: Detect vault type and derive wing ===
+# MINE_VAULT_WING env var overrides auto-derivation. Useful for centralized vaults
+# where the user wants vault content + history-hook drawers to land in the same
+# wing (the hook always uses $PWD-based key, so passing
+# MINE_VAULT_WING=$(echo "$PWD" | sed 's|[/.]|-|g') co-locates them).
 if [ -L "$VAULT_PATH" ]; then
-    # Shared external vault — derive wing from canonical symlink target
     CANONICAL=$(readlink -f "$VAULT_PATH")
-    WING=$(echo "$CANONICAL" | sed 's|[/.]|-|g')
     echo "Detected: shared vault (symlink → $CANONICAL)"
+    DEFAULT_WING=$(echo "$CANONICAL" | sed 's|[/.]|-|g')
 else
-    # In-repo vault — derive wing from PWD
-    WING=$(echo "$PWD" | sed 's|[/.]|-|g')
     echo "Detected: in-repo vault"
+    DEFAULT_WING=$(echo "$PWD" | sed 's|[/.]|-|g')
 fi
-echo "Wing: $WING"
+WING="${MINE_VAULT_WING:-$DEFAULT_WING}"
+if [ -n "${MINE_VAULT_WING:-}" ]; then
+    echo "Wing: $WING (from MINE_VAULT_WING)"
+else
+    echo "Wing: $WING"
+fi
 
 # === STEP 4: Create temp dir with .md files only ===
 MINE_TMPDIR=$(mktemp -d)/vault-md-only
@@ -85,7 +92,9 @@ find -L "$VAULT_PATH" -name "*.md" \
         REL="${f#$VAULT_PATH/}"
         DIR="$MINE_TMPDIR/$(dirname "$REL")"
         mkdir -p "$DIR"
-        ln -s "$f" "$DIR/$(basename "$f")"
+        # cp (not ln -s): mempalace mine ignores symlinks, leading to "Files: 0"
+        # despite a populated staging dir. Verified via dry-run on 2026-04-30.
+        cp "$f" "$DIR/$(basename "$f")"
     done
 
 FILE_COUNT=$(find -L "$MINE_TMPDIR" -name "*.md" | wc -l | tr -d ' ')

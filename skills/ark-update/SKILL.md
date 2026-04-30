@@ -81,7 +81,14 @@ elif [ -f "$(pwd)/.claude-plugin/marketplace.json" ]; then
     ARK_SKILLS_ROOT="$(pwd)"
 else
     # Consumer project: search installed plugins.
-    ARK_SKILLS_ROOT=$(find ~/.claude/plugins -maxdepth 6 -type d -name ark-skills 2>/dev/null | head -1)
+    # Anchor on VERSION + skills/ark-update/SKILL.md so we land on a real install,
+    # not the outer cache shell or intermediate `ark-skills/ark-skills/` dir.
+    # When multiple versions are cached, pick the newest by sort -V.
+    ARK_SKILLS_ROOT=$(find ~/.claude/plugins/cache -maxdepth 8 -type f -name VERSION 2>/dev/null \
+        | while IFS= read -r v; do
+            d="$(dirname "$v")"
+            [ -f "$d/skills/ark-update/SKILL.md" ] && printf '%s\t%s\n' "$(cat "$v")" "$d"
+        done | sort -V | tail -1 | cut -f2)
 fi
 
 if [ -z "$ARK_SKILLS_ROOT" ] || [ ! -f "$ARK_SKILLS_ROOT/skills/ark-update/SKILL.md" ]; then
