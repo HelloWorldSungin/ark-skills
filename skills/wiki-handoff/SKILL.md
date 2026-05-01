@@ -5,7 +5,7 @@ description: Write a session bridge page to .omc/wiki/ capturing in-session stat
 
 # Wiki Handoff
 
-Writes one page to `.omc/wiki/session-bridge-{YYYY-MM-DD}-{HHMMSS}-{sid8}.md` with a validated snapshot of current session state. Designed to run before `/compact` or `/clear` so the next session can recover context.
+Writes one page to `.omc/wiki/session-bridge-{YYYY-MM-DD}-{HHMMSS}-{sid8}.md` with a validated snapshot of current session state, then **recommends `/compact` vs `/clear`** based on chain progress and emits the exact slash command + follow-up prompt to paste. Designed to run before `/compact` or `/clear` so the next session can recover context.
 
 ## When this runs
 
@@ -37,6 +37,18 @@ The script rejects calls where `--open-threads` or `--next-steps` match any of:
 
 On rejection exits non-zero; the LLM MUST re-invoke with specifics.
 
+## Recommendation rule
+
+After a successful write the script appends a recommendation block to stdout. The decision uses chain progress already captured in `--step-index` / `--step-count`:
+
+| Condition | Recommendation | Reason printed |
+|---|---|---|
+| `step_index < step_count` (chain mid-flight) | `/compact` | "chain in progress, step {i}/{n} — keep summary continuity" |
+| `step_index >= step_count` (chain complete) | `/clear` | "chain complete ({n}/{n}) — next task likely unrelated" |
+| Non-numeric or `step_count == 0` | `/compact` | "indeterminate chain state — defaulting to compact (safer)" |
+
+The block contains the slash command to run (with a pre-filled `focus on …` argument for `/compact`) and the prompt to paste after the destructive action settles. The follow-up prompt always points back at the bridge file so the resumed session can recover context with one read.
+
 ## Degradation
 
 - `.omc/wiki/` missing → exit 0 silent.
@@ -56,4 +68,30 @@ python3 "$ARK_SKILLS_ROOT/skills/wiki-handoff/scripts/write_bridge.py" \
     --git-diff-stat "$(git diff --stat HEAD~3..HEAD)"
 ```
 
-Output on success: path of the created bridge page (stdout).
+## Output
+
+On success the script prints to stdout:
+
+1. Line 1: absolute path of the created bridge page (preserved for backward compat — callers that capture the first line still work).
+2. Blank line.
+3. `═══ HANDOFF RECOMMENDATION: /compact ═══` or `═══ HANDOFF RECOMMENDATION: /clear ═══`.
+4. `Reason: …` — one-line rationale per the recommendation rule above.
+5. `→ Run this slash command:` followed by the command on the next line (indented 3 spaces). For `/compact`, includes a pre-filled `focus on …` argument; for `/clear`, the bare `/clear`.
+6. `→ After /compact settles, paste this prompt:` (or `After /clear completes, …`) followed by the resume prompt on the next line.
+
+Example (`/compact` case):
+
+```
+.omc/wiki/session-bridge-2026-05-01-143005-abcdef01.md
+
+═══ HANDOFF RECOMMENDATION: /compact ═══
+Reason: chain in progress, step 2/5 — keep summary continuity.
+
+→ Run this slash command:
+   /compact focus on continuing the greenfield chain (step 2/5); see .omc/wiki/session-bridge-2026-05-01-143005-abcdef01.md for specifics
+
+→ After /compact settles, paste this prompt:
+   Read .omc/wiki/session-bridge-2026-05-01-143005-abcdef01.md and continue from its "Next steps" section. Resume at step 3/5 of scenario "greenfield".
+```
+
+On non-zero exit (schema rejection, collision limit, I/O), nothing is printed to stdout — the caller must NOT proceed to `/compact` or `/clear`.

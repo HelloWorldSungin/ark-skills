@@ -466,6 +466,8 @@ If `$ENTRY` is non-empty, display it verbatim and pause for user decision before
 
 **§ Wiki-handoff invariant:** Options `(a)` and `(b)` invoke `/wiki-handoff` BEFORE the destructive action and BEFORE `record-reset`. Any non-zero exit code (2 schema, 3 collision, or other I/O) blocks the action — the LLM must resolve the failure and re-invoke. Options `(c)` and `(d)` do NOT invoke `/wiki-handoff`: `(c)` dispatches a subagent so parent context is preserved, and `(d)` is by design a lighter exit that skips vault schema validation.
 
+**§ Wiki-handoff recommendation block (v1.23.0+):** After exit 0, `/wiki-handoff` prints a recommendation block (`/compact` vs `/clear`) plus the slash command and follow-up prompt. The mitigation-menu pre-selection still wins — the user already picked `(a)` or `(b)` from the menu — but if the recommendation disagrees with the user's pick, surface the mismatch in one short sentence so they can reconsider before executing. The decision rule is `step_index < step_count → /compact`, `>= → /clear`, indeterminate → `/compact`.
+
 **§ Continuous Checkpoint Integration (gstack v1.5.1.0+):** Strict opt-in. Activates only when `gstack-config get checkpoint_mode` returns the literal string `continuous`. Default for users who have never set the mode is `explicit` — the block is a silent no-op for that majority path.
 
 When active, each completed step drops one WIP commit with a pinned `[gstack-context]` body. `git log --grep "WIP:"` then rebuilds the chain reasoning across worktrees and clones, which `.ark-workflow/current-chain.md` (gitignored) cannot.

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.23.0] - 2026-05-01
+
+### Added
+
+- **`/wiki-handoff` now recommends `/compact` vs `/clear` after writing the bridge.** The previous output was a single line — the bridge file path. Users were left at the `/ark-workflow` step-boundary mitigation menu without guidance on which destructive action to take, and had to hand-author the follow-up prompt that the next session would read. The skill now emits a recommendation block to stdout: a `═══ HANDOFF RECOMMENDATION: /compact ═══` (or `/clear`) banner, a one-line rationale, the exact slash command to run (with a pre-filled `focus on …` argument for `/compact`), and the prompt to paste after the destructive action settles. Decision rule: `step_index < step_count` → `/compact` (chain mid-flight, summary keeps continuity); `step_index >= step_count` → `/clear` (chain complete, next task likely unrelated); non-numeric or `step_count == 0` → `/compact` (safer default). All inputs come from existing CLI args — no new flags. Backward compatible: line 1 of stdout is still the bridge path, so any caller that captured `$(write_bridge.py … | head -1)` keeps working.
+- **Example output (`/compact` case)**:
+  ```
+  .omc/wiki/session-bridge-2026-05-01-143005-abcdef01.md
+
+  ═══ HANDOFF RECOMMENDATION: /compact ═══
+  Reason: chain in progress, step 2/5 — keep summary continuity.
+
+  → Run this slash command:
+     /compact focus on continuing the greenfield chain (step 2/5); see .omc/wiki/session-bridge-2026-05-01-143005-abcdef01.md for specifics
+
+  → After /compact settles, paste this prompt:
+     Read .omc/wiki/session-bridge-2026-05-01-143005-abcdef01.md and continue from its "Next steps" section. Resume at step 3/5 of scenario "greenfield".
+  ```
+
+### Changed
+
+- **`/ark-workflow` Step 6.5 documents the new recommendation block.** A new § Wiki-handoff recommendation block paragraph notes that the mitigation-menu pre-selection still wins, but the LLM should surface a one-sentence mismatch warning if `/wiki-handoff`'s recommendation disagrees with the user's `(a)`/`(b)` pick — the bridge writer has chain progress the menu pre-selection does not.
+
+### Notes
+
+- 4 new pytest cases in `skills/wiki-handoff/scripts/test_write_bridge.py` cover the compact/clear branches, the indeterminate fallback, and the backward-compat guarantee that `stdout.splitlines()[0]` resolves to a real file. Full suite: 47 tests, all green.
+
 ## [1.22.5] - 2026-05-01
 
 ### Fixed

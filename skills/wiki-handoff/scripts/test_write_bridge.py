@@ -171,3 +171,46 @@ def test_H5_scenario_accepts_valid_slugs(tmp_path, ok):
     (tmp_path / ".omc" / "wiki").mkdir(parents=True)
     r = run_cli(_args(**{"--scenario": ok}), cwd=tmp_path)
     assert r.returncode == 0, r.stderr
+
+
+# --- Recommendation block (compact vs clear) ---
+
+
+def test_recommendation_compact_when_chain_in_progress(tmp_path):
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--step-index": "2", "--step-count": "5"}), cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert "RECOMMENDATION: /compact" in r.stdout
+    assert "step 2/5" in r.stdout
+    assert "Resume at step 3/5" in r.stdout
+    bridge_path = r.stdout.splitlines()[0]
+    # Bridge path appears in both the run line and the follow-up line.
+    assert r.stdout.count(bridge_path) >= 3  # first line + run line + follow-up line
+
+
+def test_recommendation_clear_when_chain_complete(tmp_path):
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--step-index": "5", "--step-count": "5"}), cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert "RECOMMENDATION: /clear" in r.stdout
+    assert "chain complete (5/5)" in r.stdout
+    # The run line must be a bare /clear (no focus argument).
+    run_lines = [l for l in r.stdout.splitlines() if l.strip().startswith("/clear")]
+    assert run_lines == ["   /clear"], run_lines
+
+
+def test_recommendation_falls_back_to_compact_when_step_count_zero(tmp_path):
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(**{"--step-index": "0", "--step-count": "0"}), cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert "RECOMMENDATION: /compact" in r.stdout
+    assert "indeterminate" in r.stdout
+
+
+def test_first_line_of_stdout_is_still_the_bridge_path(tmp_path):
+    """Backward-compat: first stdout line resolves to the written bridge file."""
+    (tmp_path / ".omc" / "wiki").mkdir(parents=True)
+    r = run_cli(_args(), cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+    first_line = r.stdout.splitlines()[0]
+    assert Path(first_line).is_file(), f"first line {first_line!r} is not a real file"

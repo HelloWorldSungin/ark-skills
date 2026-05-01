@@ -100,6 +100,73 @@ def _build_filename(session_id: str, ts: str) -> str:
     return f"session-bridge-{ts}-{sid8}.md"
 
 
+def _recommend_path(
+    step_index_str: str, step_count_str: str, scenario: str, bridge_path: str
+) -> dict:
+    """Decide /compact vs /clear from chain progress; build the prompts.
+
+    Rule: chain-mid-flight (i<n) → /compact (keep summary continuity).
+    Chain complete (i>=n) → /clear (next task likely unrelated).
+    Indeterminate (non-numeric or n==0) → /compact (safer default).
+    """
+    try:
+        i = int(step_index_str)
+        n = int(step_count_str)
+    except (TypeError, ValueError):
+        i, n = 0, 0
+    if n <= 0:
+        return {
+            "path": "/compact",
+            "reason": "indeterminate chain state — defaulting to compact (safer)",
+            "compact_prompt": (
+                f"/compact focus on continuing the {scenario} chain; "
+                f"see {bridge_path} for specifics"
+            ),
+            "followup_prompt": (
+                f"Read {bridge_path} and continue from its \"Next steps\" section."
+            ),
+        }
+    if i < n:
+        return {
+            "path": "/compact",
+            "reason": (
+                f"chain in progress, step {i}/{n} — keep summary continuity"
+            ),
+            "compact_prompt": (
+                f"/compact focus on continuing the {scenario} chain (step {i}/{n}); "
+                f"see {bridge_path} for specifics"
+            ),
+            "followup_prompt": (
+                f"Read {bridge_path} and continue from its \"Next steps\" section. "
+                f"Resume at step {i + 1}/{n} of scenario \"{scenario}\"."
+            ),
+        }
+    return {
+        "path": "/clear",
+        "reason": f"chain complete ({n}/{n}) — next task likely unrelated",
+        "compact_prompt": None,
+        "followup_prompt": (
+            f"Read {bridge_path} to recover context. "
+            f"Chain \"{scenario}\" finished step {n}/{n}. "
+            f"Proceed with the next task per the bridge's \"Next steps\" section."
+        ),
+    }
+
+
+def _render_recommendation(rec: dict) -> str:
+    lines = [
+        f"═══ HANDOFF RECOMMENDATION: {rec['path']} ═══",
+        f"Reason: {rec['reason']}.",
+        "",
+        "→ Run this slash command:",
+        f"   {rec['compact_prompt'] if rec['path'] == '/compact' else '/clear'}",
+        "",
+        f"→ After {rec['path']} {'settles' if rec['path'] == '/compact' else 'completes'}, paste this prompt:",
+        f"   {rec['followup_prompt']}",
+    ]
+    return "\n".join(lines)
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--chain-id", required=True)
@@ -192,6 +259,11 @@ def main() -> int:
         try:
             write_page(try_path, page, exclusive=True)
             print(str(try_path))
+            rec = _recommend_path(
+                args.step_index, args.step_count, args.scenario, str(try_path)
+            )
+            print()
+            print(_render_recommendation(rec))
             return 0
         except FileExistsError:
             attempt += 1
