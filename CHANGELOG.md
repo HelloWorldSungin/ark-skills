@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.22.5] - 2026-05-01
+
+### Fixed
+
+- **`ark-history-hook` was firing every 2-4 prompts instead of once per "interesting amount of new context".** Mine-log evidence: a wing reset to baseline 170 drawers at 15:19:28, then re-tripped at 15:21:40 with 256 drawers — only 2 minutes elapsed, +86 new drawers. Active conversation accumulates MemPalace drawers at ~40/min, so the original `COMPILE_THRESHOLD=50` was crossing roughly every 1-3 turns. Step 7 of the `claude-history-ingest` skill (which writes `drawers_at_last_compile`) was working correctly — the threshold value itself was the root cause. Two-part fix:
+  1. Raised `COMPILE_THRESHOLD` from 50 to 500 (~12 min of dense chat at the observed accrual rate).
+  2. Added a 4-hour per-wing cooldown (`COMPILE_COOLDOWN_SECS=14400`) using a new `last_compile_at` epoch field in `compile_threshold.json`. The trip condition is now `NEW_DRAWERS ≥ 500 AND CURRENT_DRAWERS > 0 AND seconds_since_last_compile ≥ 14400`. Existing entries without `last_compile_at` read as 0 → "long ago" → behave identically to today on the cooldown gate.
+- **Failed/cancelled compile no longer causes the gate to refire on the very next turn.** The hook now eagerly stamps `last_compile_at = now` before emitting the block-decision JSON. The drawer baseline (`drawers_at_last_compile`) is still updated only by Step 7 on a successful compile, so failed compiles eventually re-fire after the 4h cooldown — but they don't pin the user's session in a tight refire loop.
+
+### Changed
+
+- **`SKILL.md` Step 7 now merge-writes the wing entry instead of replacing it.** Previously `data['$WING'] = {'drawers_at_last_compile': $CURRENT}` would clobber the hook's `last_compile_at` field. The skill now reads the existing entry, sets both fields (`drawers_at_last_compile` to the current count, `last_compile_at` to compile-completion time so the cooldown timer starts from the cleanest baseline), then writes back. The hook's eager stamp and the skill's Step 7 stamp are both compatible with this shape.
+
+### Notes
+
+- `~/.claude/hooks/ark-history-hook.sh` is a single-instance global file shared by every project that registered it. Plugin upgrades do not auto-overwrite it; re-run `bash skills/claude-history-ingest/hooks/install-hook.sh` once to pick up the new threshold + cooldown across all projects. `/ark-health`'s existing hook-drift check (lines 390-444 of its SKILL.md) flags the divergence and prints the same install command — no `/ark-update` or `/ark-health` code change needed.
+
 ## [1.22.4] - 2026-04-30
 
 ### Fixed

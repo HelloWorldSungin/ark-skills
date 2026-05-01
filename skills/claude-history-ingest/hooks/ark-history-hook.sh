@@ -12,9 +12,12 @@
 set -euo pipefail
 
 # === CONFIGURATION ===
-COMPILE_THRESHOLD=50  # New drawers before triggering compile
+# At observed ~40 drawers/min during active chat, 50 was tripping every 1-3 turns.
+# 500 ≈ ~12min of dense conversation before a compile checkpoint is offered.
+COMPILE_THRESHOLD=500     # New drawers before triggering compile
+COMPILE_COOLDOWN_SECS=14400  # 4h — additional gate so failed/cancelled compiles don't retrigger every turn
 STATE_DIR="$HOME/.mempalace/hook_state"
-FAIL_COUNT_MAX=3      # Circuit breaker: disable after N consecutive failures
+FAIL_COUNT_MAX=3          # Circuit breaker: disable after N consecutive failures
 
 mkdir -p "$STATE_DIR"
 
@@ -176,24 +179,53 @@ if [ -f "$DRAWER_COUNT_FILE" ]; then
 fi
 
 LAST_COMPILE_DRAWERS=0
+LAST_COMPILE_AT=0
 if [ -f "$THRESHOLD_FILE" ]; then
-    LAST_COMPILE_DRAWERS=$(python3 -c "
-import sys,json
+    # Read both fields in one python invocation. Missing last_compile_at on
+    # legacy entries reads as 0 → "long ago" → behaves identically to today.
+    read -r LAST_COMPILE_DRAWERS LAST_COMPILE_AT < <(python3 -c "
+import json
 try:
-    data = json.load(open('$THRESHOLD_FILE'))
-    print(data.get('$WING', {}).get('drawers_at_last_compile', 0))
-except:
-    print(0)
+    entry = json.load(open('$THRESHOLD_FILE')).get('$WING', {}) or {}
+    print(int(entry.get('drawers_at_last_compile', 0) or 0), int(entry.get('last_compile_at', 0) or 0))
+except Exception:
+    print(0, 0)
 " 2>/dev/null)
+    LAST_COMPILE_DRAWERS=${LAST_COMPILE_DRAWERS:-0}
+    LAST_COMPILE_AT=${LAST_COMPILE_AT:-0}
 fi
 
 NEW_DRAWERS=$((CURRENT_DRAWERS - LAST_COMPILE_DRAWERS))
+NOW_TS=$(date +%s)
+SECS_SINCE_COMPILE=$((NOW_TS - LAST_COMPILE_AT))
 
-echo "[$(date '+%H:%M:%S')] Session $SESSION_ID: $CURRENT_DRAWERS total drawers, $NEW_DRAWERS new since last compile" >> "$STATE_DIR/mine.log"
+echo "[$(date '+%H:%M:%S')] Session $SESSION_ID: $CURRENT_DRAWERS total drawers, $NEW_DRAWERS new since last compile, ${SECS_SINCE_COMPILE}s since last compile" >> "$STATE_DIR/mine.log"
 
-if [ "$NEW_DRAWERS" -ge "$COMPILE_THRESHOLD" ] && [ "$CURRENT_DRAWERS" -gt 0 ]; then
+if [ "$NEW_DRAWERS" -ge "$COMPILE_THRESHOLD" ] && [ "$CURRENT_DRAWERS" -gt 0 ] && [ "$SECS_SINCE_COMPILE" -ge "$COMPILE_COOLDOWN_SECS" ]; then
     # Claimed marker already removed from original location by mv above
     rm -f "$CLAIMED_MARKER"
+
+    # Eagerly stamp last_compile_at so a failed/cancelled subagent doesn't
+    # cause the gate to refire on the very next turn. Drawer baseline is
+    # still updated only by the skill's Step 7 on successful compile.
+    # Non-fatal: never block the user's turn on a JSON write failure.
+    python3 -c "
+import json, os
+path = '$THRESHOLD_FILE'
+data = {}
+if os.path.exists(path):
+    try:
+        data = json.load(open(path))
+    except Exception:
+        data = {}
+entry = data.get('$WING', {}) or {}
+entry['last_compile_at'] = $NOW_TS
+data['$WING'] = entry
+tmp = path + '.tmp'
+with open(tmp, 'w') as f:
+    json.dump(data, f, indent=2)
+os.replace(tmp, path)
+" 2>>"$STATE_DIR/mine.log" || true
 
     cat << HOOKJSON
 {
