@@ -6,7 +6,7 @@ tags:
   - mempalace
 task-id: "Arkskill-010"
 task-type: "task"
-status: in-progress
+status: done
 priority: "low"
 project: "ark-skills"
 work-type: "infrastructure"
@@ -37,7 +37,7 @@ Two follow-on actions become possible:
 ## Acceptance criteria
 
 - [x] #976 confirmed merged + shipped in a tagged MemPalace release (v3.3.4, released 2026-05-01)
-- [ ] Smoke-test the new release with multiple concurrent Claude Code sessions hitting Stop simultaneously (the exact race that caused the 38k corruption)
+- [x] Smoke-test the new release with multiple concurrent Claude Code sessions hitting Stop simultaneously (the exact race that caused the 38k corruption) — 2026-05-05 ran 4 concurrent `mempalace mine` against 4 different wings; all exited 0, +317 drawers SQLite, HNSW segments unchanged at 172-200K (no bloat). Smoke test script preserved at `/tmp/mempalace-smoke-test.sh`.
 - [x] Decision documented: keep custom hook — we mine full transcript JSONL into `claude-history-{project}` wing; the plugin's native auto-ingest captures only `mempalace_add_drawer` calls + PreCompact extraction. Dropping the custom hook loses full transcript coverage.
 - [x] If retiring mutex: PR removes the mkdir block from `skills/claude-history-ingest/hooks/ark-history-hook.sh` (done in this session — v3.3.4 upgrade + mutex removal)
 

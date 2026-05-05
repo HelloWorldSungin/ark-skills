@@ -100,6 +100,12 @@ MemPalace v3.3.4 (released 2026-05-01) ships #976. The palace-global mutex (`~/.
 
 The `_upsert` crash that triggered the original `FAIL_COUNT` accumulation came from HNSW segment corruption left over from pre-mutex concurrent writes — not a new race. Cleared 5 tripped circuit breakers post-upgrade. Watch for v3.3.5 to retire the `_query`/search segfault workaround (#1132).
 
+### Smoke-test verification (2026-05-05)
+
+After repairing the bloated HNSW (see [[MemPalace-HNSW-Bloat-Repair]]), executed Arkskill-010's final acceptance criterion: 4 concurrent `mempalace mine` processes against 4 different wings, all started simultaneously. This is the exact race that produced the original 294GB bloat pre-v3.3.4.
+
+Result: all 4 mines exited 0, +317 drawers SQLite (monotonic, no data loss), HNSW segments unchanged at 172-200K (zero bloat from concurrent writes), repair-status reports normal flush-lag (not DIVERGED). PR #976's `mine_palace_lock()` verified working in production. Smoke-test script preserved at `/tmp/mempalace-smoke-test.sh` for future regression testing if a downstream MemPalace release ever regresses the lock.
+
 ## Evidence
 
 - `CHANGELOG.md` v1.21.4: "the v1.21.1 mutex … used a 10-minute mtime check to recover stale locks — but a legitimate `mempalace mine` running past 10 minutes could have its live lock wiped by a later session, reopening the exact HNSW write race the release closes."
