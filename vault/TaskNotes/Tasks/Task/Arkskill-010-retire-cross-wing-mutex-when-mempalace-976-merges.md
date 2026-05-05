@@ -6,7 +6,7 @@ tags:
   - mempalace
 task-id: "Arkskill-010"
 task-type: "task"
-status: backlog
+status: in-progress
 priority: "low"
 project: "ark-skills"
 work-type: "infrastructure"
@@ -34,10 +34,10 @@ Two follow-on actions become possible:
 
 ## Acceptance criteria
 
-- [ ] #976 confirmed merged + shipped in a tagged MemPalace release
+- [x] #976 confirmed merged + shipped in a tagged MemPalace release (v3.3.4, released 2026-05-01)
 - [ ] Smoke-test the new release with multiple concurrent Claude Code sessions hitting Stop simultaneously (the exact race that caused the 38k corruption)
-- [ ] Decision documented: keep custom hook, drop custom hook, or hybrid
-- [ ] If retiring mutex: PR removes the mkdir block from `skills/claude-history-ingest/hooks/ark-history-hook.sh` lines 77-100ish, bumps version, updates CHANGELOG, updates `/ark-health` Check 14c retirement note
+- [x] Decision documented: keep custom hook — we mine full transcript JSONL into `claude-history-{project}` wing; the plugin's native auto-ingest captures only `mempalace_add_drawer` calls + PreCompact extraction. Dropping the custom hook loses full transcript coverage.
+- [x] If retiring mutex: PR removes the mkdir block from `skills/claude-history-ingest/hooks/ark-history-hook.sh` (done in this session — v3.3.4 upgrade + mutex removal)
 
 ## Background
 

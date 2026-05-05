@@ -115,26 +115,6 @@ if acquire_lock "$LOCK" 300; then
         exit 0
     fi
 
-    # Palace-global mutex: prevents cross-wing mine races on the shared HNSW segment.
-    # mempalace 3.3.2 ships:
-    #   - #1023 PID-file guard for `mempalace hook run` auto-ingest (doesn't apply here — we call `mempalace mine` directly)
-    #   - #784 per-source-file locks in the miner (prevents duplicate drawer inserts, not HNSW segment contention)
-    # Neither protects against two `mempalace mine` processes for DIFFERENT wings writing
-    # the same HNSW segment at the same time — still the root cause of upstream #1092.
-    # Status as of 2026-04-30: upstream #976 (HNSW thread-safety, root-cause fix) MERGED
-    # to `develop` 2026-04-25 but NOT yet in a release tag — v3.3.3 was cut 2026-04-24,
-    # one day before the merge. #991 (`hnsw:num_threads=1`) closed without merge,
-    # superseded by #976. #1062 (`quarantine_stale_hnsw()` on MCP startup) still open.
-    # Retire this mutex once a tagged release includes #976.
-    GLOBAL_LOCK="$HOME/.mempalace/palace/.ark-global-mine-mutex"
-    mkdir -p "$HOME/.mempalace/palace" 2>/dev/null
-    if ! acquire_lock "$GLOBAL_LOCK" 600; then
-        echo "[$(date '+%H:%M:%S')] ark-history-hook: another wing's mine is active on this palace (pid $(cat "$GLOBAL_LOCK/pid" 2>/dev/null || echo '?')) — skipping this session's mine" >> "$STATE_DIR/mine.log"
-        release_lock "$LOCK"
-        echo "{}"
-        exit 0
-    fi
-
     nohup bash -c "
         if mempalace mine \"$MINE_TARGET\" --mode convos --wing=\"$WING\" 2>>\"$STATE_DIR/mine.log\"; then
             echo 0 > \"$FAIL_FILE\"
@@ -154,7 +134,6 @@ if acquire_lock "$LOCK" 300; then
             echo \$((PREV + 1)) > \"$FAIL_FILE\"
         fi
         rm -rf \"$LOCK\" 2>/dev/null
-        rm -rf \"$GLOBAL_LOCK\" 2>/dev/null
     " &>/dev/null &
 fi
 

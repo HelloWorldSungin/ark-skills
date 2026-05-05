@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.23.1] - 2026-05-05
+
+### Fixed
+
+- **`ark-history-hook`: retired palace-global mine mutex (Arkskill-010).** Upstream MemPalace #976 (HNSW thread-safety, root-cause fix for the 38k-drawer palace corruption race) shipped in v3.3.4 (2026-05-01). The `~/.mempalace/palace/.ark-global-mine-mutex` mkdir lock added in v1.20.3 is no longer needed — `mempalace mine` now serializes concurrent writers internally. Removed the 19-line mutex block from `skills/claude-history-ingest/hooks/ark-history-hook.sh`. Requires **mempalace ≥ v3.3.4** (`pipx upgrade mempalace`).
+- **`CLAUDE.md` T2 availability note corrected.** The note previously documented `mempalace search` crashing in `_query` but omitted that `mempalace mine` was also crashing in `_upsert` from corrupted HNSW segments (same root cause, different entry point). Updated to document both crash paths, clarify that `_upsert`/mine is fixed in v3.3.4 while `_query`/search fix is pending in v3.3.5 (#1132), and note the v3.3.4+ requirement for reliable mine operations.
+
 ## [1.23.0] - 2026-05-01
 
 ### Added
