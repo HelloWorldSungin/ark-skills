@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.24.0] - 2026-05-05
+
+### Added
+
+- **`/ark-health` Check 23: plugin cache integrity.** Detects partial-cache failures where Claude Code's plugin loader populated `~/.claude/plugins/cache/ark-skills/ark-skills/$VERSION/skills/` with fewer skill directories than the marketplace clone at `~/.claude/plugins/marketplaces/ark-skills/skills/`. Symptom: other projects on the same machine silently lose access to skills (e.g., `/ark-workflow`, `/ark-context-warmup`, `/ark-code-review`) despite `/plugin` reporting "already at the latest version." Observed when v1.23.1 was published — only 6 of 22 skill directories made it into the cache. The new check warns with the missing directory list and a `cp -R` fix command. Skips cleanly when running from a non-marketplace install (dev mode) or when the marketplace clone is absent. Tier: Standard, Warn-only (never blocks). Bash implementation in `references/check-implementations.md` § Check 23.
+
 ## [1.23.1] - 2026-05-05
 
 ### Fixed

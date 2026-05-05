@@ -268,3 +268,58 @@ if git check-ignore -q .ark/ 2>/dev/null; then
   echo "WARN: .ark/ is gitignored — remove the pattern and commit before running /ark-update"
 fi
 ```
+
+---
+
+## Check 23 — ark-skills plugin cache integrity
+
+Compare the runtime plugin cache (`~/.claude/plugins/cache/ark-skills/ark-skills/$VERSION/skills/`) against the marketplace clone (`~/.claude/plugins/marketplaces/ark-skills/skills/`). Detects partial-cache failures where Claude Code's plugin loader populated the cache directory with fewer skill subdirectories than upstream — symptom: other projects on this machine cannot see skills that the source repo declares.
+
+This bug was observed when v1.23.1 was published: the cache received only 6 of 22 skill directories despite the loader reporting "already at the latest version." Other projects opening new sessions silently lacked `/ark-workflow`, `/ark-context-warmup`, `/ark-code-review`, etc. until the cache was rebuilt from the marketplace clone.
+
+```bash
+PLUGIN_CACHE_BASE="$HOME/.claude/plugins/cache/ark-skills/ark-skills"
+PLUGIN_MARKETPLACE_SKILLS="$HOME/.claude/plugins/marketplaces/ark-skills/skills"
+
+# Resolve current version from the source-of-truth VERSION file
+if [ -z "$ARK_SKILLS_ROOT" ] || [ ! -f "$ARK_SKILLS_ROOT/VERSION" ]; then
+  echo "SKIP: plugin cache integrity — ARK_SKILLS_ROOT/VERSION not resolvable"
+  return 0 2>/dev/null || exit 0
+fi
+CURRENT_VER=$(cat "$ARK_SKILLS_ROOT/VERSION")
+CACHE_DIR="$PLUGIN_CACHE_BASE/$CURRENT_VER/skills"
+
+# Skip when not running from a marketplace install
+if [ ! -d "$CACHE_DIR" ]; then
+  echo "SKIP: plugin cache integrity — no cache at $CACHE_DIR (likely dev mode running from repo)"
+  return 0 2>/dev/null || exit 0
+fi
+if [ ! -d "$PLUGIN_MARKETPLACE_SKILLS" ]; then
+  echo "SKIP: plugin cache integrity — marketplace clone missing at $PLUGIN_MARKETPLACE_SKILLS"
+  return 0 2>/dev/null || exit 0
+fi
+
+# Compare skill-directory counts (top-level directories only — ignore AGENTS.md, .gitkeep, etc.)
+CACHE_DIRS_SORTED=$(find "$CACHE_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+SOURCE_DIRS_SORTED=$(find "$PLUGIN_MARKETPLACE_SKILLS" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+CACHE_COUNT=$(echo "$CACHE_DIRS_SORTED" | grep -c .)
+SOURCE_COUNT=$(echo "$SOURCE_DIRS_SORTED" | grep -c .)
+
+if [ "$CACHE_COUNT" -lt "$SOURCE_COUNT" ]; then
+  MISSING=$(comm -23 <(echo "$SOURCE_DIRS_SORTED") <(echo "$CACHE_DIRS_SORTED") | tr '\n' ',' | sed 's/,$//')
+  echo "WARN: plugin cache partial ($CACHE_COUNT/$SOURCE_COUNT skill dirs) — missing: $MISSING"
+  echo "  Other projects miss these skills. Fix:"
+  echo "    for d in $MISSING; do cp -R \"$PLUGIN_MARKETPLACE_SKILLS/\$d\" \"$CACHE_DIR/\"; done"
+elif [ "$CACHE_COUNT" -gt "$SOURCE_COUNT" ]; then
+  EXTRA=$(comm -13 <(echo "$SOURCE_DIRS_SORTED") <(echo "$CACHE_DIRS_SORTED") | tr '\n' ',' | sed 's/,$//')
+  echo "WARN: plugin cache has extra dirs ($CACHE_COUNT/$SOURCE_COUNT) — stale entries: $EXTRA"
+  echo "  Fix: rm -rf $CACHE_DIR && /plugin update ark-skills"
+else
+  echo "PASS: plugin cache integrity ($CACHE_COUNT skill dirs match marketplace clone)"
+fi
+```
+
+Notes:
+- The check **does not** byte-compare file contents — only counts top-level skill directories. Per-file content drift would be far more expensive to verify and is rarely the failure mode (the loader either copies the directory or skips it entirely).
+- Bytecode files (`__pycache__/*.pyc`) and `.gitkeep` markers are ignored implicitly because they are not directories.
+- This check is system-wide (cross-project) but recorded per-project — if you're switching between projects and one shows `WARN: plugin cache partial`, the fix applies to every project on this machine, and one fix resolves all of them.

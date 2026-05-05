@@ -5,7 +5,7 @@ description: Diagnostic check for Ark ecosystem health — plugins, CLAUDE.md, v
 
 # Ark Health Check
 
-Run 22 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions. Bash implementations for the longer checks live in `references/check-implementations.md` (load-on-demand).
+Run 23 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions. Bash implementations for the longer checks live in `references/check-implementations.md` (load-on-demand).
 
 ## Context-Discovery Exemption
 
@@ -13,9 +13,9 @@ This skill is exempt from normal context-discovery. It must work when CLAUDE.md 
 
 - Checks 1–3 (Plugins) run normally
 - Checks 4–6 (Project Configuration) report **fail** with explanation
-- Checks 7–20 report "cannot check — CLAUDE.md missing" instead of failing silently (Checks 21 and 22 are exempt — run unconditionally)
+- Checks 7–20 report "cannot check — CLAUDE.md missing" instead of failing silently (Checks 21, 22, and 23 are exempt — run unconditionally)
 
-Never abort early. Run all 22 checks regardless of earlier failures.
+Never abort early. Run all 23 checks regardless of earlier failures.
 
 ## Required CLAUDE.md fields
 
@@ -61,7 +61,7 @@ Detection is session-capability: read the `system-reminder` skill list in the cu
 
 ### Project Configuration (Checks 4–6)
 
-Read CLAUDE.md first. If CLAUDE.md does not exist, checks 4–6 all fail and checks 7–20 report "cannot check — CLAUDE.md missing". Checks 21 and 22 are exempt.
+Read CLAUDE.md first. If CLAUDE.md does not exist, checks 4–6 all fail and checks 7–20 report "cannot check — CLAUDE.md missing". Checks 21, 22, and 23 are exempt.
 
 ```bash
 ls CLAUDE.md 2>/dev/null && echo "found" || echo "missing"
@@ -480,7 +480,7 @@ Detection inputs: `vault` artifact (symlink / real dir / missing), `scripts/setu
 
 ---
 
-### Plugin Versioning (Checks 21–22)
+### Plugin Versioning (Checks 21–23)
 
 **Check 21 — OMC plugin** | Tier: Standard | Upgrade-style (never fails)
 
@@ -518,12 +518,23 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 - Warn (gitignored): `.ark/` is gitignored → `remove pattern and commit before running /ark-update`
 - Bash: `references/check-implementations.md` § Check 22
 
+**Check 23 — ark-skills plugin cache integrity** | Tier: Standard | Warn-only (never fails)
+
+Exempt from CLAUDE.md-missing skip rule. Detects partial-cache failures where Claude Code's plugin loader populated the v$VERSION cache directory with fewer skill directories than the marketplace clone — symptom is "other projects can't see `/ark-workflow` etc." even though the plugin reports as "latest version". Compares skill-directory counts between `~/.claude/plugins/cache/ark-skills/ark-skills/$VERSION/skills/` (the runtime cache that drives session skill loading) and `~/.claude/plugins/marketplaces/ark-skills/skills/` (the upstream clone, source of truth).
+
+- Pass: cache skill-directory count matches marketplace clone
+- Warn (partial cache): cache has fewer skill dirs than marketplace — list missing dirs and emit `cp -R` fix command for the user to run
+- Warn (extra dirs): cache has more dirs than marketplace — likely a stale leftover; suggest `rm -rf` + `/plugin update`
+- Skip (no cache dir): plugin is loaded from a non-marketplace source (e.g., dev mode running from repo) — nothing to verify
+- Skip (no marketplace clone): no upstream to diff against
+- Bash: `references/check-implementations.md` § Check 23
+
 ---
 
 ## Workflow
 
-1. **Run all 22 checks in sequence.** Do not abort on failure.
-   - Checks 7–20: if Check 4 failed (CLAUDE.md missing), record `skip` with message "cannot check — CLAUDE.md missing". Checks 21, 22 are exempt.
+1. **Run all 23 checks in sequence.** Do not abort on failure.
+   - Checks 7–20: if Check 4 failed (CLAUDE.md missing), record `skip` with message "cannot check — CLAUDE.md missing". Checks 21, 22, 23 are exempt.
    - Checks 14b, 14c, 14d: if Check 14a failed, record `skip` with message "requires MemPalace plugin (check 14a)".
    - Check 16b: if Check 16 failed (hook not installed), record `skip` with message "requires check 16".
    - Checks 15, 16, 18, 19: if the prerequisite failed, record `skip` with message "requires check N".
@@ -534,7 +545,7 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking (Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22) |
+| `~~` | Warning | Non-blocking (Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22, Check 23) |
 | `--` | Available upgrade | Feature not installed, above current tier |
 | `>>` | Informational | State display only (Check 14c MemPalace hook state — always passes) |
 
@@ -545,7 +556,7 @@ Exempt from CLAUDE.md-missing skip rule. Compares `.ark/plugin-version` against 
 - **Standard:** no fail in checks 1–13 (TaskNotes MCP configured)
 - **Full:** no fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
 
-Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 16b history hook content drift, 20 vault externalized, 22 plugin version) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
+Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 16b history hook content drift, 20 vault externalized, 22 plugin version, 23 plugin cache integrity) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
 
 4. **Emit scorecard** per the Output Format below. Always end with `Run /ark-onboard to fix or upgrade`.
 
@@ -621,7 +632,7 @@ Run /ark-onboard to fix or upgrade
 ## Design Decisions
 
 - **No auto-fix.** `/ark-health` diagnoses and recommends only. All fixes go through `/ark-onboard`.
-- **Authoritative check definitions.** This skill is the source of truth for all 22 check definitions. If `/ark-onboard`'s copy drifts from here, this file wins.
+- **Authoritative check definitions.** This skill is the source of truth for all 23 check definitions. If `/ark-onboard`'s copy drifts from here, this file wins.
 - **Session-based plugin detection.** Plugins are detected by whether their skills appear in the current session — never by inspecting `~/.claude/plugins/`.
 - **Graceful degradation.** Never abort on CLAUDE.md absence. Report clearly and continue.
 - **Index staleness is a warning, not a failure.** A stale index does not block any workflow.
