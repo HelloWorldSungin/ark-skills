@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.24.1] - 2026-05-05
+
+### Fixed
+
+- **`/ark-context-warmup` NotebookLM lane silently dead since v1.12.0.** The warmup_contract templates in `skills/notebooklm-vault/SKILL.md` invoked `notebooklm ask … --timeout 60`, but `notebooklm ask` has never accepted `--timeout` (verified against installed `notebooklm-py 0.3.3` and PyPI release `0.3.4` — only `notebooklm artifact wait` carries that flag). Argparse failed on every invocation; the executor (`scripts/executor.py:235`) treats non-zero exit as a clean skip, so the lane appeared "unavailable" rather than broken — masking the regression for ~3 weeks. Removed the flag from both `session-continue` and `bootstrap` command shells. The 60s timeout intent is preserved by `executor.run_shell`'s 90s Python-level enforcement, so behavior is strictly improved.
+
 ## [1.24.0] - 2026-05-05
 
 ### Added
