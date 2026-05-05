@@ -6,10 +6,12 @@ tags:
   - plugin
   - infrastructure
 summary: "claude-history-ingest wraps mempalace with custom hooks and three modes (index/compile/full) — NOT using mempalace's built-in hooks, which are too intrusive."
-source-sessions: []
-source-tasks: []
+source-sessions:
+  - "[[S014-MemPalace-v3-3-4-Upgrade-Mutex-Retirement]]"
+source-tasks:
+  - "[[Arkskill-010]]"
 created: 2026-04-08
-last-updated: 2026-04-08
+last-updated: 2026-05-05
 ---
 
 # MemPalace Integration Architecture
@@ -36,7 +38,7 @@ The skill installs `~/.claude/hooks/ark-history-hook.sh` — a purpose-built Sto
 | `compile` | ~10K | Queries MemPalace, diffs against existing insights, writes new pages |
 | `full` | ~10K | Index + compile in sequence |
 
-The Stop hook only runs `index` automatically. `compile` is triggered either manually or when the hook detects enough new drawers have accumulated since last compile (default threshold: 50 drawers).
+The Stop hook only runs `index` automatically. `compile` is triggered either manually or when the hook detects enough new drawers have accumulated since last compile (threshold: 500 drawers + 4h cooldown as of v1.22.5; original 50-drawer threshold was firing every 1-3 turns at ~40 drawers/min).
 
 ### Cross-Project Scoping Failure
 

@@ -13,6 +13,8 @@ work-type: "infrastructure"
 component: "claude-history-ingest"
 urgency: "normal"
 created: "2026-04-23"
+last-updated: "2026-05-05"
+session: "S014"
 summary: "Watch MemPalace #976 (HNSW thread-safety). When merged, retire palace-global mutex and revisit dropping our custom Stop-hook in favor of the plugin's native auto-ingest."
 ---
 

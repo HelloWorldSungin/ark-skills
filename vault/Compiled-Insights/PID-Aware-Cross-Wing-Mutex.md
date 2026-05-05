@@ -7,11 +7,12 @@ tags:
   - infrastructure
   - concurrency
 summary: "Shell mutex that embeds the holder PID so contenders can distinguish a live long-running lock from a stale one. Fixes the 'live mine wiped by age-only stale recovery' regression in age-only timestamp mutexes. Distinct from in-process fcntl.flock — this is for cross-process shell hook serialization with planned retirement when upstream concurrency lands."
-source-sessions: []
+source-sessions:
+  - "[[S014-MemPalace-v3-3-4-Upgrade-Mutex-Retirement]]"
 source-tasks:
   - "[[Arkskill-010]]"
 created: 2026-04-24
-last-updated: 2026-04-24
+last-updated: 2026-05-05
 ---
 
 # PID-Aware Cross-Wing Mutex
@@ -92,6 +93,12 @@ BSD form first because that's the dev-machine path; GNU form for downstream Linu
 The mutex is explicitly tagged as defense-in-depth, not the long-term answer. Once upstream MemPalace [#976](https://github.com/MemPalace/mempalace/pull/976) (HNSW thread-safety) lands, the cross-wing race closes at the chromadb layer and the ark-skills mutex becomes vestigial. Tracked as `Arkskill-010` — when #976 merges, the mutex retires.
 
 This pattern itself — temporary serialization mechanism with a named retirement trigger — is worth pinning. It's how to ship a workaround without it ossifying. The CHANGELOG entry for v1.21.1 names the retire watchpoint inline ("Retire when upstream #976 lands"), which makes the cleanup discoverable from a `grep` rather than relying on memory.
+
+## Retired (2026-05-05 — v1.23.1)
+
+MemPalace v3.3.4 (released 2026-05-01) ships #976. The palace-global mutex (`~/.mempalace/palace/.ark-global-mine-mutex`) was removed from `ark-history-hook.sh` in commit `72d64de`. The per-wing lock (`$STATE_DIR/$WING.lock`) remains — it prevents the same wing's hook from double-firing within a session, which is still useful regardless of upstream thread-safety.
+
+The `_upsert` crash that triggered the original `FAIL_COUNT` accumulation came from HNSW segment corruption left over from pre-mutex concurrent writes — not a new race. Cleared 5 tripped circuit breakers post-upgrade. Watch for v3.3.5 to retire the `_query`/search segfault workaround (#1132).
 
 ## Evidence
 
