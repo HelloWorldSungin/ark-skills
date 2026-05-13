@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.25.0] - 2026-05-12
+
+### Changed
+
+- **MemPalace dependency floor bumped to v3.3.5.** Upstream v3.3.5 (2026-05-10) closes the HNSW-corruption crash class that motivated the v3.3.4 cycle: [#1322](https://github.com/MemPalace/mempalace/pull/1322) wires `quarantine_stale_hnsw` into the chromadb client open path (closes #1121/#1132/#1263), [#1162](https://github.com/MemPalace/mempalace/pull/1162) serializes ChromaCollection writes through the palace lock, and [#1310](https://github.com/MemPalace/mempalace/pull/1310) adds `mempalace repair --mode from-sqlite` for recovering already-corrupt palaces without opening chromadb against them.
+- **`/ark-onboard` pin updated:** `mempalace>=3.3.2,<4.0.0` → `mempalace>=3.3.5,<4.0.0`. Greenfield installs land on v3.3.5; existing installs need `pipx upgrade mempalace`.
+- **`CLAUDE.md` T2 availability note updated** to reflect #1132/#976 closed in v3.3.5, point at the new `from-sqlite` repair mode, and flag the open [#1457](https://github.com/MemPalace/mempalace/issues/1457) (P1, filed 2026-05-12) where the quarantine gate misses zero-byte `link_lists.bin`. The manual segment `mv` workaround remains documented in memory as the fallback when `from-sqlite` is unavailable or fails.
+- **`/ark-health` Check 14c narrative updated** to credit the full v3.3.5 fix stack (#976 + #1162 + #1322) instead of the old v3.3.2 baseline; check is now a candidate for retirement once #1457 closes. Check 14b (state B description) reflects the v1.23.1 palace-global mutex retirement.
+
+### Verified
+
+- Single `pipx` mempalace install on the MacBook, already at v3.3.5; no `pip`/`uv`/`brew` copies. All projects share this binary via `~/.local/bin/mempalace`.
+- chromadb pin still at 1.5.7 (unchanged — v3.3.5's quarantine handles 1.5.8 corruption but 1.5.7 remains the safer floor; revisit when upstream marks 1.5.8 safe).
+
 ## [1.24.1] - 2026-05-05
 
 ### Fixed

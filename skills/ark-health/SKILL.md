@@ -256,7 +256,7 @@ fi
 
 **Check 14c — MemPalace hook state (informational)** | Tier: Full | Returns: `pass` (both states)
 
-> mempalace 3.3.2 ships [#1023](https://github.com/MemPalace/mempalace/pull/1023) (PID-file guard on the plugin's auto-ingest hook) and [#784](https://github.com/MemPalace/mempalace/pull/784) (per-source-file `mine_lock`), so the plugin's own Stop/PreCompact hooks are meaningfully safer than they were initially. Neutralizing them is a defense-in-depth choice, not a corruption-prevention requirement. Revisit retiring this check entirely once upstream [#976](https://github.com/MemPalace/mempalace/pull/976) / [#991](https://github.com/MemPalace/mempalace/pull/991) / [#1062](https://github.com/MemPalace/mempalace/pull/1062) land.
+> mempalace v3.3.5 ships [#1023](https://github.com/MemPalace/mempalace/pull/1023) (PID-file guard), [#784](https://github.com/MemPalace/mempalace/pull/784) (per-source-file `mine_lock`), [#976](https://github.com/MemPalace/mempalace/pull/976) (HNSW thread-safety, v3.3.4), [#1322](https://github.com/MemPalace/mempalace/pull/1322) (wires `quarantine_stale_hnsw` for #1121/#1132/#1263), and [#1162](https://github.com/MemPalace/mempalace/pull/1162) (serialize ChromaCollection writes through palace lock). With this stack landed, the plugin's own Stop/PreCompact hooks are substantially safer than at v3.3.2. Neutralizing them is now a defense-in-depth choice for very large palaces, not a corruption-prevention requirement. Watch [#1457](https://github.com/MemPalace/mempalace/issues/1457) (open, P1 — quarantine gate misses zero-byte `link_lists.bin`); this check can probably retire once #1457 closes.
 
 ```bash
 # JSON-aware: check `.hooks.Stop` and `.hooks.PreCompact` specifically.
@@ -288,7 +288,7 @@ fi
 ```
 
 - **Pass — state A (hooks neutralized):** No cached `hooks.json` has `.hooks.Stop` or `.hooks.PreCompact`. Auto-save via plugin is off; the LLM must explicitly call `mempalace_add_drawer` / `diary_write` to save memories.
-- **Pass — state B (hooks active):** Plugin auto-save is enabled, relying on mempalace 3.3.2's #1023 PID guard + #784 per-file locks. Cross-wing mine races are addressed at the ark-skills layer by the palace-global mutex in `skills/claude-history-ingest/hooks/ark-history-hook.sh`, not by this plugin.
+- **Pass — state B (hooks active):** Plugin auto-save is enabled, relying on mempalace v3.3.5's #1023 PID guard + #784 per-file locks + #976 HNSW thread-safety + #1162 collection-write serialization. The ark-skills palace-global mutex retired in v1.23.1 (Arkskill-010) — mempalace now serializes concurrent writers internally.
 - **When to prefer state A:** palace past ~30k drawers, frequent multi-session workflows, or recent corruption recovery.
 - **When to prefer state B:** smaller palace, fewer parallel sessions, you want auto-save convenience.
 - **Neutralize command** (B → A):
@@ -601,7 +601,7 @@ Integrations
   >>  MemPalace hooks -- active (plugin auto-save on, relying on #1023 + #784)
       Optional: neutralize for defense-in-depth on large palaces — see check 14c
   >>  MemPalace hooks -- neutralized (defense-in-depth, auto-save off)
-      Revisit: consider re-enabling after 2-week soak on 3.3.2 — see check 14c
+      Revisit: consider re-enabling on v3.3.5+ (#976 + #1162 + #1322 landed) — see check 14c
   ~~  MemPalace palace read -- crashed + HNSW drift detected
       Fix: run quarantine_stale_hnsw() one-liner in check 14d; then restart Claude Code
       Upstream: MemPalace #1062 (self-heal on MCP startup; retire check 14d when merged)

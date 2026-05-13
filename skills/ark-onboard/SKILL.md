@@ -586,7 +586,7 @@ fi
 # Fresh install on Python 3.13
 if [ -z "$MEMPALACE_OK" ]; then
   echo "Installing mempalace on Python 3.13 via pipx..."
-  if pipx install --python "$PY313" "mempalace>=3.3.2,<4.0.0"; then
+  if pipx install --python "$PY313" "mempalace>=3.3.5,<4.0.0"; then
     MEMPALACE_OK=true
   else
     MEMPALACE_OK=false
