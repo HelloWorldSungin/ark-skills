@@ -23,6 +23,7 @@ Detect format from file extension and content:
 - Plain text — logs, transcripts
 - CSV/TSV — tabular data
 - HTML — web clippings
+- Office docs (`.docx`, `.pptx`, `.xlsx`, `.rtf`, `.epub`, `.pdf`) — Claude can't read binary office formats natively; convert to markdown first with `markitdown <file>` before extracting. Install on demand if missing: `pipx install 'markitdown[docx,pptx,xlsx,pdf]'`
 - Images — use Read tool with vision
 - Chat exports — ChatGPT, Slack, Discord
 

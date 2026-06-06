@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.26.0] - 2026-06-05
+
+### Added
+
+- **Office-document ingest via MarkItDown** in `/data-ingest` and `/wiki-ingest`. Both skills now accept binary office formats (`.docx`, `.pptx`, `.xlsx`, `.rtf`, `.epub`, plus `.pdf` for data-ingest) — Claude can't read these natively, so the skills convert them to markdown first with `markitdown <file>` (install on demand: `pipx install 'markitdown[docx,pptx,xlsx,pdf]'`) before distilling into vault pages. Chosen over mempalace's `--mode extract` (3.3.6-only, unpublished; mines into a palace rather than vault pages).
+
+### Changed
+
+- **`CLAUDE.md` T2 `#1457` note corrected.** v1.25.0 documented `#1457` as open; it is now CLOSED upstream via PR [#1461](https://github.com/MemPalace/mempalace/pull/1461) (merged 2026-05-14) — but the fix is **NOT yet in a PyPI release** (latest is 3.3.5, uploaded 2026-05-10, which predates the fix; 3.3.6 is unpublished). The mempalace floor stays **v3.3.5+** (bumping to v3.3.6 would document an uninstallable requirement), and the manual segment `mv` workaround remains until 3.3.6 ships. The "3.3.6" seen earlier came from the milla-jovovich plugin-fork CHANGELOG, not a PyPI release — a closed issue is not a shipped release.
+- **`/ark-health` Check 14c narrative corrected** to the same `#1457` status (closed-as-issue, fix unshipped); the check stays until 3.3.6 publishes.
+
 ## [1.25.0] - 2026-05-12
 
 ### Changed

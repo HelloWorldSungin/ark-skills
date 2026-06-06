@@ -20,6 +20,7 @@ Ingest documents (markdown, text, PDF, images) into the project's Obsidian vault
 Accept source material in any format:
 - Markdown (`.md`), plain text (`.txt`)
 - PDF (`.pdf`) — use Read tool with pages parameter
+- Office docs (`.docx`, `.pptx`, `.xlsx`, `.rtf`, `.epub`) — Claude can't read these binary formats natively; convert to markdown first with `markitdown <file>`, then distill the output. Install on demand if missing: `pipx install 'markitdown[docx,pptx,xlsx,pdf]'`
 - Images (`.png`, `.jpg`, `.webp`) — use Read tool for visual content
 - Web pages — use WebFetch
 
