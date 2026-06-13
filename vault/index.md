@@ -4,7 +4,7 @@ type: meta
 tags:
   - meta
 summary: "Machine-generated flat catalog of all vault pages."
-last-updated: 2026-06-05
+last-updated: 2026-06-12
 ---
 
 # Index
@@ -60,6 +60,7 @@ last-updated: 2026-06-05
 | [[Session-Logs/S013-Gstack-v1-5-1-0-Integration-Wave1.md|Session 13: gstack v1.5.1.0 integration Wave 1 (v1.20.0)]] | session-log | Shipped v1.20.0 — Wave 1 of gstack v1.5.1.0 integration: 8 /checkpoint refs renamed to /context-save, continuous-checkpoint wired into Step 6.5 (opt-in), /context-save added as compaction-recovery option (d). 4 atomic commits on master; review and security passes both green. |
 | [[Session-Logs/S014-MemPalace-v3-3-4-Upgrade-Mutex-Retirement.md|Session 14: MemPalace v3.3.4 upgrade + palace-global mutex retirement (v1.23.1)]] | session-log | Shipped v1.23.1 — upgraded mempalace 3.3.2 → 3.3.4, retired palace-global mine mutex (Arkskill-010), repaired 294GB HNSW bloat, smoke-tested #976, synced live hook. Arkskill-010 closed. |
 | [[Session-Logs/S015-Ark-Skill-Healer-Run-Mempalace-Fork-vs-PyPI.md|Session 15: /ark-skill-healer first real run — gstack upgrade, mempalace fork-vs-PyPI correction, MarkItDown ingest]] | session-log | First real /ark-skill-healer advisory run. Upgraded gstack 1.42.1.0→1.56.0.0. Caught a fork-vs-PyPI error: mempalace #1457 closed via #1461 but NOT on PyPI (latest 3.3.5) — reverted a wrong floor-bump + workaround-retire. Wired MarkItDown office-doc front-end into ingest skills. |
+| [[Session-Logs/S016-Ark-Skill-Healer-Tracked-Rebuild.md|Session 16: ark-skill-healer tracked rebuild — deep-interview→consensus→ralph, + S015 fix fold-in]] | session-log | Rebuilt the (lost, untracked) ark-skill-healer via deep-interview→omc-plan consensus→ralph. Consensus caught a false .claude/skills discovery path + the mempalace dual-upstream bug pre-execution. Discovered S015 had already run an untracked copy; folded its two methodology fixes (binary install-lag, fork-vs-PyPI authority) back in before committing/tracking. 28-test bats suite green. |
 | [[TaskNotes/00-Project-Management-Guide.md|Project Management Guide]] | moc | How task IDs, statuses, and task notes work in the ark-skills project. |
 | [[TaskNotes/Tasks/Epic/Arkskill-001-vault-retrieval-tiers.md|Multi-Backend Vault Retrieval Tiers]] |  |  |
 | [[TaskNotes/Tasks/Epic/Arkskill-002-ark-context-warmup.md|/ark-context-warmup — Automatic Context Loader]] |  |  |
