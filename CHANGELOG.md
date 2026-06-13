@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.27.0] - 2026-06-05
+
+### Added
+
+- **`ark-skill-healer` — new project-level skill (now tracked).** A `.claude/skills/ark-skill-healer/` skill (invoked via `.claude/commands/ark-skill-healer.md`; **not** part of the plugin distribution under `skills/`, so no downstream-user behavior change). It is the upstream-facing mirror of `/ark-update`: it inventories the external deps ark-skills actually references (positive allowlist — CC plugins, the mempalace CLI, the gstack binary), diffs each upstream against a per-tier last-seen snapshot via a `changelog → GitHub releases → commit-range` cascade (upstream-tip aware: a guarded `git fetch` lets a finding fire when upstream moves ahead of the install, not only on a local pull), and emits a ranked (impact×confidence, nothing-dropped) **advisory** report plus staged patches for must-change items, new-feature opportunities, and retire-able workarounds. Advisory-only is a **structural invariant** — the entire run-write surface is the gitignored `.omc/skill-healer/`, so a run never edits ark-skills source. Architecture is Option C (hybrid): deterministic bash collectors (`collect_inventory`, `collect_upstream`, `lib_state`, `seed_workarounds`) emit JSON-Lines per a versioned contract; the SKILL.md LLM layer does the impact/opportunity/workaround judgment. 28-test bats suite. The skill previously lived untracked and was lost between sessions; committing it is the fix. Built via deep-interview → omc-plan consensus (which caught a false `.claude/skills/` discovery path and the mempalace dual-upstream bug pre-execution) → ralph.
+- **Binary-dep install-lag check** (S015 lesson): clone-less deps with a known installed version (e.g. `mempalace-cli`) now compare installed-vs-authoritative-upstream-latest (PyPI for python deps, gated on `dep_type` to avoid a `gstack`→PyPI package collision; `gh release` fallback), so an install many releases behind upstream is no longer reported `quiet`. Network-guarded with hermetic test hooks. Live-validates `mempalace-cli` 3.3.5 < PyPI 3.4.0.
+
+### Changed
+
+- **Fork-vs-PyPI authority guardrails** baked into `ark-skill-healer` (S015 lesson): `references/source-map.md` and `SKILL.md` (Steps 3 & 5) now state that the `mempalace-plugin` changelog (the milla-jovovich fork) runs **ahead of PyPI** and is **not version-authoritative** — a fork-changelog version/fix claim must cross-check the `mempalace-cli` PyPI release tier before any pin-bump, and a *closed* GitHub issue is not a *shipped* fix (retire a workaround only when published to PyPI **and** installed). This encodes structurally the correction S015 had to make by hand.
+
 ## [1.26.0] - 2026-06-05
 
 ### Added
