@@ -1,0 +1,59 @@
+# Seed registry. ark-skill-healer reads this READ-ONLY and never writes it.
+# New refs are surfaced as proposals in .omc/skill-healer/proposals.yaml for a human to add here.
+
+entries:
+  - description: >
+      HNSW-corruption crash class closed in v3.3.5. PR #1322 wires
+      quarantine_stale_hnsw into the chromadb client open path, closing
+      #1121/#1132/#1263. The _query and _upsert crash paths are both resolved.
+    upstream_issue_ref: mempalace#1322
+    carrier_file: CLAUDE.md
+    retire_when: "already closed in v3.3.5; this entry can be dropped once all
+      projects floor-pin mempalace>=3.3.5 and no pre-3.3.5 install notes remain
+      in carrier files"
+
+  - description: >
+      Filed 2026-05-12: the v3.3.5 quarantine gate treats a 0-byte
+      link_lists.bin as benign and can still SIGSEGV. Fix PR #1461 (merged
+      2026-05-14) rejects partially-written segments, but is NOT in a PyPI
+      release — slated for v3.3.6, which is unpublished (PyPI latest 3.3.5,
+      uploaded 2026-05-10, predates the fix). The installed CLI (3.3.5) and
+      plugin clone (3.3.2) both lack the fix. Manual segment mv workaround
+      documented in CLAUDE.md remains the fallback until 3.3.6 ships.
+    upstream_issue_ref: mempalace#1457
+    carrier_file: CLAUDE.md
+    retire_when: "mempalace 3.3.6 (or any release carrying PR #1461) is
+      published to PyPI AND the installed CLI is upgraded to it — issue
+      #1457 is already CLOSED upstream, but the fix is not yet shipped"
+
+  - description: >
+      HNSW thread-safety root-cause fix (concurrent _upsert writers). Shipped
+      in v3.3.4 (2026-05-01). Motivated the palace-global mine mutex added in
+      v1.20.3; that mutex was retired in ark-skills v1.23.1 (Arkskill-010)
+      once this upstream fix landed.
+    upstream_issue_ref: mempalace#976
+    carrier_file: CHANGELOG.md
+    retire_when: "already closed in v3.3.4; entry can be dropped once
+      claude-history-ingest hook install notes no longer reference the retired
+      mutex or the >=3.3.4 floor requirement"
+
+  - description: >
+      mempalace repair --mode from-sqlite added in v3.3.5. Recovers
+      already-corrupt palaces by reading (id, document, metadata) directly
+      from chroma.sqlite3 without opening chromadb against the corrupt palace.
+      Documented in CLAUDE.md as primary repair path before manual segment mv.
+    upstream_issue_ref: mempalace#1310
+    carrier_file: CLAUDE.md
+    retire_when: "from-sqlite repair mode is stable and mempalace#1457 closes;
+      CLAUDE.md repair guidance can then be simplified to a single path"
+
+  - description: >
+      chromadb pinned to 1.5.7 (NOT 1.5.8). 1.5.8 introduced a vector-query
+      regression and concurrent-writer corruption risk. Pin enforced in
+      ark-onboard Step 13 via `pipx runpip mempalace install chromadb==1.5.7`.
+      v3.3.5 quarantine handles 1.5.8 corruption but 1.5.7 remains the safer
+      floor until upstream marks 1.5.8 safe.
+    upstream_issue_ref: chromadb#1092
+    carrier_file: skills/ark-onboard/SKILL.md
+    retire_when: "chromadb upstream marks 1.5.8 (or a later version) safe and
+      mempalace drops its own 1.5.7 floor recommendation"
