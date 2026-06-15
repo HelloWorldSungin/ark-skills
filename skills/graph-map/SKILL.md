@@ -11,7 +11,8 @@ inside the project's vault, and wires the graph into retrieval routing. It does
 NOT reimplement graphify — see `references/graphify-commands.md`.
 
 Helper scripts live in `scripts/` (`relink.py`, `secret_scan.py`,
-`graph_status.py`). Default ignore patterns: `references/graphifyignore.defaults`.
+`graph_status.py`, `wire_source.py` — wires concept notes to origin source).
+Default ignore patterns: `references/graphifyignore.defaults`.
 
 ## Project Discovery
 

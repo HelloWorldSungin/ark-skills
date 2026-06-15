@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 
 FM_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
-SRC_RE = re.compile(r'^source_file:\s*"?(.*?)"?\s*$', re.MULTILINE)
-LOC_RE = re.compile(r'^location:\s*"?(.*?)"?\s*$', re.MULTILINE)
+SRC_RE = re.compile(r'^source_file:\s*[\'"]?(.*?)[\'"]?\s*$', re.MULTILINE)
+LOC_RE = re.compile(r'^location:\s*[\'"]?(.*?)[\'"]?\s*$', re.MULTILINE)
 H1_RE = re.compile(r"^# .*$", re.MULTILINE)
 
 

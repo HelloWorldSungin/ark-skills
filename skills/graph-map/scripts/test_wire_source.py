@@ -67,6 +67,30 @@ class TestWireNote:
         assert "[[bar.py]]" in text
 
 
+    def test_single_quoted_source_file_no_literal_quotes(self, tmp_path):
+        """A single-quoted source_file value must be parsed without literal quotes."""
+        (tmp_path / "skills" / "foo").mkdir(parents=True)
+        (tmp_path / "skills" / "foo" / "bar.py").write_text("x = 1\n")
+        notes = tmp_path / "vault" / "generated" / "graphify"
+        notes.mkdir(parents=True)
+        note = notes / "Single Quote.md"
+        note.write_text(
+            "---\nsource_file: 'skills/foo/bar.py'\ntype: rationale\n---\n\n# Single Quote\n"
+        )
+        assert ws.wire_note(note, tmp_path) is True
+        text = note.read_text()
+        assert "## Source" in text
+        # Must not retain literal quotes in the link target
+        import re as _re
+        m = _re.search(r"## Source\n\n\[.*?\]\((.*?)\)", text)
+        assert m, "no source link found"
+        rel_path = m.group(1)
+        assert "'" not in rel_path, f"Literal single-quote in link path: {rel_path!r}"
+        target = (note.parent / rel_path).resolve()
+        assert target == (tmp_path / "skills" / "foo" / "bar.py").resolve()
+        assert target.exists()
+
+
 class TestMain:
     def test_main_wires_all(self, tmp_path, capsys):
         notes, _ = _make(tmp_path)

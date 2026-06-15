@@ -113,22 +113,6 @@ class EnsurePythonSetEntry(TargetProfileOp):
             return brace_contents.rstrip() + ", " + token
         return token
 
-    def _locate_set(
-        self, content: str, set_name: str
-    ) -> tuple[re.Match[str] | None, bool]:
-        """Return (match, entry_present) for the set assignment in content.
-
-        Returns (None, False) when the assignment is not found.
-        """
-        pattern = self._make_pattern(set_name)
-        m = pattern.search(content)
-        if m is None:
-            return None, False
-        # NOTE: _locate_set is a convenience helper; callers pass entry separately.
-        # The second return value is left False here — callers check entry presence
-        # inline after obtaining the match object.
-        return m, False
-
     # ------------------------------------------------------------------
     # Abstract implementation hooks
     # ------------------------------------------------------------------
