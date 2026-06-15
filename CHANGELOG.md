@@ -2,11 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.28.0] - 2026-06-15
+## [1.29.0] - 2026-06-15
 
 ### Added
 
 - **`/graph-map` — new skill: graphify knowledge-graph integration.** A thin orchestrator around the `graphifyy` CLI (repo `safishamsi/graphify`, min 0.8.39) that maps the repo into a queryable knowledge graph, quarantines the generated Obsidian export in `vault/generated/graphify/`, and registers a **Code-Structural Retrieval** backend in CLAUDE.md routing. Modes: setup / update / status / query. Tested helpers: `wire_source.py` (wires each concept note to its in-repo origin source via a `## Source` link — link-not-copy), `secret_scan.py` (pre-commit secret/oversized scan), `graph_status.py` (graph↔vault drift meta), `relink.py` (relative-link fixer for `--wiki`-style exports). Auto-installs graphify's deterministic post-commit/post-checkout AST hooks with guardrails (clean-worktree check, install after the graph commit, `GRAPHIFY_SKIP_HOOK=1` documented). Hardened via CCG review (Codex gpt-5.5/xhigh + Gemini): pre-map `.graphifyignore` ordering, single quarantine contract across all vault scanners, version pinning + fail-closed validation, external/symlinked-vault handling, merge-driver completeness. Tracked as an upstream dep in `ark-skill-healer`; added a Code Mapping scenario to `/ark-workflow`. **Downstream propagation:** `/graph-map setup` ensures the `generated/` exclusion in the (symlink-aware) vault `generate-index.py` via the AST-based `ensure_index_exclusion.py` helper; `/ark-onboard` ships the exclusion in new-vault templates plus an opt-in `/graph-map setup` step; `/ark-health` adds Check 24 (graphify code-graph present) and Check 25 (vault index excludes `generated/` — convergence drift), count 23→25. **Dogfood (validated on ark-skills, graphifyy 0.8.39):** semantic extraction needs an LLM key + a **non-reasoning** chat model (reasoning models truncate; Gemma 4 31B Turbo via Chutes used); the `--obsidian` export is `graphify export obsidian` after a semantic run; `wire_source.py` does the Video-2 node→source wiring; graphifyy 0.8.39 `hook install` ships hooks only (no `.gitattributes` merge driver — changelog claim not yet in release). **Note:** `graphify install --project` also commits repo-wide `PreToolUse` hooks to `.claude/settings.json` (inject "run graphify before grep/read" once `graph.json` exists) plus a `## graphify` CLAUDE.md section — kept intentionally; they affect every contributor/subagent and are documented in the `/graph-map` SKILL.md.
+## [1.28.0] - 2026-06-15
+
+### Added
+
+- **`/ark-onboard` now installs gstack scoped to claude + codex only.** New "gstack Setup (claude + codex only)" subsection, wired into Entry-Flow Step 2, that actively (confirm-then-run) installs/repairs gstack via `setup --host claude` and `--host codex` — never `--host auto`, gemini, or cursor (those flood that agent's context window, ~48% on a fresh session). The block is idempotent and self-repairing: it only runs `setup` for a host whose install is missing or partial, so it doubles as the repair for a deleted/partial runtime root. Includes a guardrail documenting that `~/.claude/skills/gstack` is gstack's shared runtime root (referenced by 50+ skills), NOT a deletable duplicate-platform copy.
+- **`/ark-health` Check 2a — gstack install integrity** (warn-only sub-check; headline "23 checks" count unchanged). Detects two failure modes: (1) a missing/partial Claude runtime root (`~/.claude/skills/gstack`), and (2) an over-broad install — gstack present under `~/.cursor`/`~/.gemini` skills — with a concrete `rm -rf` remediation. Added to the scorecard Plugins block, the classification warn-list, and the advisory (non-tier-blocking) list. Check 2's fail-action now points at `/ark-onboard` instead of a generic marketplace lookup.
+
+### Changed
+
+- **`/ark-onboard` Shared Diagnostic Checklist** gains a `2a` summary row to stay in sync with `/ark-health` (which is authoritative).
+
+### Notes
+
+- Design reviewed via `/ccg` (Codex + Gemini). Codex hardened the host-repo locator (`cd … && pwd -P` instead of `readlink`, robust to relative/non-symlink/stale cases), strengthened the Claude sentinel (also checks `_gstack-command`), and the Codex presence gate (`command -v codex || [ -d ~/.codex ]`). Two further bugs were caught in live verification: `find -type d` missed the symlinked Codex skill dirs (fixed with `find -L`, preventing a redundant re-install every onboard), and a zsh word-splitting issue in the over-broad `rm` list (rebuilt without inline re-splitting). Both bash blocks verified under bash and zsh. Scope boundary respected: `/ark-update` left untouched (gstack install is user-machine state, not project convention).
 
 ## [1.27.0] - 2026-06-05
 

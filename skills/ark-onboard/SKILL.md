@@ -140,6 +140,7 @@ Summary of the 22 checks (pass conditions; full semantics + bash in `/ark-health
 |---|-------|------|------|
 | 1 | superpowers plugin | Critical | Any `superpowers:*` skill in session |
 | 2 | gstack plugin | Standard | Any gstack skill (`browse`, `qa`, `ship`, `review`) in session |
+| 2a | gstack install integrity | Standard (warn-only) | `~/.claude/skills/gstack` runtime root + `_gstack-command` present; no gstack under `~/.cursor`/`~/.gemini` skills |
 | 3 | obsidian plugin | Standard | `obsidian:obsidian-cli` in session |
 | 4 | CLAUDE.md exists | Critical | File exists in project root |
 | 5 | CLAUDE.md required fields | Critical | All 4 fields present/non-empty |
@@ -231,6 +232,7 @@ User runs /ark-onboard
     v
 [2] Missing critical plugin? --> Show install commands, PAUSE for user to install
     Missing standard plugin?  --> Note for later, continue
+    gstack repo on disk?      --> gstack Setup (claude + codex) — see subsection below
     |
     v
 [3] Run state detection (references/state-detection.md)
@@ -251,6 +253,42 @@ User runs /ark-onboard
     v
 [7] List follow-up reminders
 ```
+
+---
+
+## gstack Setup (claude + codex only)
+
+Run during Entry-Flow Step 2 when a gstack repo is present on disk. gstack installs **per-host** (`setup --host <name>`, one host per skill dir). This project's policy is **claude + codex only** — installing for gemini or cursor floods that agent's context window (~48% on a fresh session). The host list is deliberate policy, not a default to "improve" toward `--host auto`.
+
+**Guardrail (read before touching `~/.claude/skills/gstack`):** that directory is gstack's shared **runtime root** (`bin/`, `browse/dist`, `gstack-upgrade`, `ETHOS.md`, `review/`), referenced by 50+ skills. It is NOT a duplicate-platform copy — deleting it breaks every gstack skill (this is the exact incident this subsection guards against). Never delete it; never run `setup --host auto` (that also targets kiro/droid/opencode).
+
+This block is **idempotent and self-repairing**: it only runs `setup` for a host whose install is missing or partial, so it doubles as the repair for a deleted/partial runtime root. **Confirm first** — ask `Run gstack setup now? Targets: claude, codex [Y/n]` — then execute:
+
+```bash
+CLAUDE_ROOT="$HOME/.claude/skills/gstack"
+CODEX_ROOT="$HOME/.codex/skills/gstack"
+GSTACK_REPO=""
+[ -d "$CLAUDE_ROOT" ] && GSTACK_REPO="$(cd "$CLAUDE_ROOT" 2>/dev/null && pwd -P || true)"
+[ -x "$GSTACK_REPO/setup" ] || GSTACK_REPO="$HOME/.gstack/repos/gstack"
+
+if [ ! -x "$GSTACK_REPO/setup" ]; then
+  echo "gstack repo not found — install gstack first, then re-run /ark-onboard."
+else
+  # Claude: (re)install if the runtime root or _gstack-command alias is missing/partial
+  if [ ! -x "$CLAUDE_ROOT/bin/gstack-config" ] || [ ! -f "$HOME/.claude/skills/_gstack-command/SKILL.md" ]; then
+    ( cd "$GSTACK_REPO" && ./setup --host claude )
+  fi
+  # Codex: install when Codex is present (PATH or ~/.codex) and its gstack skills are missing
+  if { command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]; } && \
+     { [ ! -x "$CODEX_ROOT/bin/gstack-config" ] || \
+       [ -z "$(find -L "$HOME/.codex/skills" -maxdepth 1 -name 'gstack-*' -type d -print -quit 2>/dev/null)" ]; }; then
+    ( cd "$GSTACK_REPO" && ./setup --host codex )
+  fi
+fi
+# NEVER --host auto / gemini / cursor.
+```
+
+To remove an over-broad install picked up elsewhere: `rm -rf ~/.cursor/skills/gstack ~/.gemini/skills/gstack`. `/ark-health` Check 2a flags both failure modes (missing runtime root, over-broad hosts).
 
 ---
 

@@ -47,8 +47,29 @@ Detection is session-capability: read the `system-reminder` skill list in the cu
 
 - Detect: session-list contains any of `browse`, `qa`, `ship`, `review`, `design-review`
 - Pass: ≥1 match
-- Fail action: check `/plugin marketplace list` for gstack source and install
+- Fail action: run `/ark-onboard` (installs gstack for claude + codex), or `cd "$(cd ~/.claude/skills/gstack 2>/dev/null && pwd -P || echo ~/.gstack/repos/gstack)" && ./setup --host claude`
 - Unlocks: `/browse`, `/qa`, `/ship`, `/review`, `/design-review`, and more
+
+**Check 2a — gstack install integrity** | Tier: Standard | Warn-only (never fails)
+
+Exempt from the CLAUDE.md-missing skip rule (Plugins-section check — runs unconditionally). Detects two failure modes specific to a `setup`-based gstack install: (1) a missing/partial Claude **runtime root** — deleting `~/.claude/skills/gstack` breaks the 50+ skills that reference `~/.claude/skills/gstack/bin/*`; (2) an **over-broad install** — gstack installed for hosts beyond claude+codex (cursor, gemini), which floods that agent's context window (~48% on a fresh session). Only meaningful when a gstack install is present.
+
+- Pass: `~/.claude/skills/gstack/bin/gstack-config` is executable AND `~/.claude/skills/_gstack-command/SKILL.md` exists AND no `gstack` dir under `~/.cursor/skills` or `~/.gemini/skills`
+- Warn (broken root): the Claude runtime root or `_gstack-command` alias is missing — fix: `cd "$GSTACK_REPO" && ./setup --host claude` (resolve `$GSTACK_REPO` as in the bash below)
+- Warn (over-broad): gstack is installed for cursor/gemini — these flood that agent's context (~48%); fix: `rm -rf ~/.cursor/skills/gstack ~/.gemini/skills/gstack`, keep only claude+codex
+- Skip: no Claude runtime root AND no gstack repo found (nothing installed via setup)
+- Bash:
+
+```bash
+CLAUDE_ROOT="$HOME/.claude/skills/gstack"
+GSTACK_REPO=""; [ -d "$CLAUDE_ROOT" ] && GSTACK_REPO="$(cd "$CLAUDE_ROOT" 2>/dev/null && pwd -P || true)"
+[ -x "$GSTACK_REPO/setup" ] || GSTACK_REPO="$HOME/.gstack/repos/gstack"
+EXTRA=""; RM=""; for h in cursor gemini; do [ -e "$HOME/.$h/skills/gstack" ] && { EXTRA="$EXTRA $h"; RM="$RM ~/.$h/skills/gstack"; }; done
+if [ ! -d "$CLAUDE_ROOT" ] && [ ! -x "$GSTACK_REPO/setup" ]; then echo "SKIP — no gstack install"
+elif [ ! -x "$CLAUDE_ROOT/bin/gstack-config" ] || [ ! -f "$HOME/.claude/skills/_gstack-command/SKILL.md" ]; then echo "WARN broken-root — run: cd $GSTACK_REPO && ./setup --host claude"
+elif [ -n "$EXTRA" ]; then echo "WARN over-broad:$EXTRA — run: rm -rf$RM"
+else echo "PASS"; fi
+```
 
 **Check 3 — obsidian plugin** | Tier: Standard
 
@@ -563,7 +584,7 @@ Detects whether the project has converged to the v1.28.0 quarantine exclusion: `
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking (Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22, Check 23, Check 24, Check 25) |
+| `~~` | Warning | Non-blocking (Check 2a gstack install integrity, Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22, Check 23, Check 24, Check 25) |
 | `--` | Available upgrade | Feature not installed, above current tier |
 | `>>` | Informational | State display only (Check 14c MemPalace hook state — always passes) |
 
@@ -574,7 +595,7 @@ Detects whether the project has converged to the v1.28.0 quarantine exclusion: `
 - **Standard:** no fail in checks 1–13 (TaskNotes MCP configured)
 - **Full:** no fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
 
-Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 16b history hook content drift, 20 vault externalized, 22 plugin version, 23 plugin cache integrity, 24 graphify code graph, 25 vault index excludes generated/) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
+Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (2a gstack install integrity, 10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 16b history hook content drift, 20 vault externalized, 22 plugin version, 23 plugin cache integrity, 24 graphify code graph, 25 vault index excludes generated/) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
 
 4. **Emit scorecard** per the Output Format below. Always end with `Run /ark-onboard to fix or upgrade`.
 
@@ -590,7 +611,9 @@ Plugins
   OK  obsidian v{version}
   !!  gstack -- not detected
       Unlock: /browse, /qa, /ship, /review, /design-review + more
-      Check: /plugin marketplace list for gstack source
+      Fix: run /ark-onboard (installs gstack for claude + codex)
+  ~~  gstack install -- runtime root missing (claude gstack skills will fail)
+      Fix: cd <gstack repo> && ./setup --host claude
 
 Project Configuration
   OK  CLAUDE.md exists and has required fields
