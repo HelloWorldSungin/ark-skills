@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.28.0] - 2026-06-15
+
+### Added
+
+- **`/ark-onboard` now installs gstack scoped to claude + codex only.** New "gstack Setup (claude + codex only)" subsection, wired into Entry-Flow Step 2, that actively (confirm-then-run) installs/repairs gstack via `setup --host claude` and `--host codex` — never `--host auto`, gemini, or cursor (those flood that agent's context window, ~48% on a fresh session). The block is idempotent and self-repairing: it only runs `setup` for a host whose install is missing or partial, so it doubles as the repair for a deleted/partial runtime root. Includes a guardrail documenting that `~/.claude/skills/gstack` is gstack's shared runtime root (referenced by 50+ skills), NOT a deletable duplicate-platform copy.
+- **`/ark-health` Check 2a — gstack install integrity** (warn-only sub-check; headline "23 checks" count unchanged). Detects two failure modes: (1) a missing/partial Claude runtime root (`~/.claude/skills/gstack`), and (2) an over-broad install — gstack present under `~/.cursor`/`~/.gemini` skills — with a concrete `rm -rf` remediation. Added to the scorecard Plugins block, the classification warn-list, and the advisory (non-tier-blocking) list. Check 2's fail-action now points at `/ark-onboard` instead of a generic marketplace lookup.
+
+### Changed
+
+- **`/ark-onboard` Shared Diagnostic Checklist** gains a `2a` summary row to stay in sync with `/ark-health` (which is authoritative).
+
+### Notes
+
+- Design reviewed via `/ccg` (Codex + Gemini). Codex hardened the host-repo locator (`cd … && pwd -P` instead of `readlink`, robust to relative/non-symlink/stale cases), strengthened the Claude sentinel (also checks `_gstack-command`), and the Codex presence gate (`command -v codex || [ -d ~/.codex ]`). Two further bugs were caught in live verification: `find -type d` missed the symlinked Codex skill dirs (fixed with `find -L`, preventing a redundant re-install every onboard), and a zsh word-splitting issue in the over-broad `rm` list (rebuilt without inline re-splitting). Both bash blocks verified under bash and zsh. Scope boundary respected: `/ark-update` left untouched (gstack install is user-machine state, not project convention).
+
 ## [1.27.0] - 2026-06-05
 
 ### Added
