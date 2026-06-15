@@ -81,6 +81,9 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 - `/codebase-maintenance` — Repo cleanup, vault sync, skill health
 - `/notebooklm-vault` — NotebookLM vault context and sync (bootstrap, ask, session-continue, conflict-check). End-of-session handoff lives in `/wiki-update`.
 
+### Code-Structural Retrieval
+- `/graph-map` — Install/drive graphify to map the repo into a knowledge graph, quarantine the Obsidian export in `vault/generated/graphify/`, and register a code-structural query backend. Modes: setup / update / status / query.
+
 ### Task Automation
 - `/ark-tasknotes` — Agent-driven task creation and status via tasknotes MCP. Use `status` subcommand for task overview and triage recommendations.
 
@@ -137,3 +140,12 @@ When a preferred tier is unavailable, log before falling back:
 - "What don't we know about X?" → T2 → T1 → T4
 - "Find all mentions of X" → T3 → T4
 - "What pages exist about X?" → T4
+
+### Code-Structural Retrieval
+
+For code-structure questions, use the graphify graph (availability: `graphify-out/graph.json` exists):
+- "What calls X / what does X depend on?" → **Graph** (`graphify query`) → `rg`/LSP/source
+- "Show the structure/flow of X" → **Graph** → source
+- "Why was X built this way?" → **T2** (MemPalace), not the graph
+
+Failure: "Code-structural graph not available — run /graph-map setup. Falling back to rg/LSP/source."
