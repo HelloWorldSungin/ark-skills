@@ -17,7 +17,7 @@ from pathlib import Path
 VAULT_ROOT = Path(__file__).resolve().parent.parent
 INDEX_PATH = VAULT_ROOT / "index.md"
 
-EXCLUDE_DIRS = {"_Templates", "_Attachments", "_meta", ".obsidian"}
+EXCLUDE_DIRS = {"_Templates", "_Attachments", "_meta", ".obsidian", "generated"}
 EXCLUDE_FILES = {"index.md"}
 
 
