@@ -5,7 +5,7 @@ description: Diagnostic check for Ark ecosystem health — plugins, CLAUDE.md, v
 
 # Ark Health Check
 
-Run 23 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions. Bash implementations for the longer checks live in `references/check-implementations.md` (load-on-demand).
+Run 24 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions. Bash implementations for the longer checks live in `references/check-implementations.md` (load-on-demand).
 
 ## Context-Discovery Exemption
 

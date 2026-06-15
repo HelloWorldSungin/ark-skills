@@ -323,3 +323,23 @@ Notes:
 - The check **does not** byte-compare file contents — only counts top-level skill directories. Per-file content drift would be far more expensive to verify and is rarely the failure mode (the loader either copies the directory or skips it entirely).
 - Bytecode files (`__pycache__/*.pyc`) and `.gitkeep` markers are ignored implicitly because they are not directories.
 - This check is system-wide (cross-project) but recorded per-project — if you're switching between projects and one shows `WARN: plugin cache partial`, the fix applies to every project on this machine, and one fix resolves all of them.
+
+## Check 24 — graphify code graph
+
+```bash
+if ! command -v graphify >/dev/null 2>&1; then
+  echo "SKIP: graphify not installed (optional — /graph-map setup enables code-structural retrieval)"
+elif [ ! -f graphify-out/graph.json ]; then
+  echo "WARN: graphify installed but graphify-out/graph.json missing — run /graph-map setup"
+else
+  python3 skills/graph-map/scripts/graph_status.py check \
+    --graph graphify-out/graph.json \
+    --meta "${VAULT_PATH:-vault}/generated/graphify/_graphify-meta.json" >/dev/null \
+    && echo "PASS: code graph present and fresh" \
+    || echo "WARN: code graph stale/missing meta — run /graph-map update"
+fi
+```
+
+- Pass: `graphify-out/graph.json` present and not stale vs the vault quarantine meta
+- Warn: missing graph or stale → `/graph-map setup` | `/graph-map update`
+- Skip: graphify not installed (optional integration)
