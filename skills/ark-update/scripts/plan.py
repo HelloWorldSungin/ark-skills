@@ -39,6 +39,7 @@ import ops.ensure_routing_rules_block  # noqa: F401, E402
 import ops.ensure_gitignore_entry  # noqa: F401, E402
 import ops.create_file_from_template  # noqa: F401, E402
 import ops.ensure_mcp_server  # noqa: F401, E402
+import ops.ensure_python_set_entry  # noqa: F401, E402
 
 
 # ---------------------------------------------------------------------------
@@ -210,19 +211,64 @@ def render_plan_report(plan: PlanReport) -> str:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+def _read_gate_flags() -> tuple:
+    """Read gate flags from environment variables set by the SKILL.md wrapper.
+
+    Returns (has_omc, centralized_vault) where each is:
+      True  — flag is explicitly enabled
+      False — flag is explicitly disabled (skip entries gated on it)
+      None  — flag is unset; default to unconditional (backward-compat with
+              Step 6 fixture tests that call migrate.py without the wrapper)
+
+    Environment variables:
+      ARK_HAS_OMC=1          → has_omc=True
+      ARK_HAS_OMC=0          → has_omc=False
+      ARK_CENTRALIZED_VAULT=1 → centralized_vault=True
+      ARK_CENTRALIZED_VAULT=0 → centralized_vault=False
+    """
+    def _parse(name: str):
+        val = os.environ.get(name)
+        if val is None:
+            return None
+        return val.strip() == "1"
+
+    return _parse("ARK_HAS_OMC"), _parse("ARK_CENTRALIZED_VAULT")
+
+
 def _iter_target_profile_entries(target_profile: dict):
-    """Yield all op-entry dicts from a parsed target profile, in declaration order.
+    """Yield all op-entry dicts from target_profile in declaration order.
 
     Injects ``op`` key for sections whose entries don't carry an explicit ``op``
     field (e.g. ``ensured_gitignore`` uses ``entry`` + implicit op type).
+
+    Gate-flag evaluation (Step 7):
+    - If ``ARK_HAS_OMC=0`` env var is set, entries with ``only_if_has_omc: true``
+      are skipped.
+    - If ``ARK_CENTRALIZED_VAULT=0`` env var is set, entries with
+      ``only_if_centralized_vault: true`` are skipped.
+    - When env vars are unset (e.g. called without the SKILL.md wrapper or from
+      Step 6 fixture tests), entries are yielded unconditionally — backward-compat.
+
+    NOTE: This function is intentionally kept in parity with migrate.py's
+    _iter_target_profile_entries. A shared import is not possible due to the
+    circular dependency (migrate.py imports plan.py). Any changes to either copy
+    MUST be mirrored in the other.
     """
+    has_omc, centralized_vault = _read_gate_flags()
+
     _IMPLICIT_OPS = {
         "ensured_gitignore": "ensure_gitignore_entry",
         "ensured_mcp_servers": "ensure_mcp_server",
     }
-    for section_key in ("managed_regions", "ensured_files", "ensured_gitignore", "ensured_mcp_servers"):
+    for section_key in ("managed_regions", "ensured_files", "ensured_gitignore", "ensured_mcp_servers", "ensured_python_set_entries"):
         implicit_op = _IMPLICIT_OPS.get(section_key)
         for entry in target_profile.get(section_key, []):
+            # Gate: only_if_has_omc — skip when ARK_HAS_OMC=0
+            if entry.get("only_if_has_omc") and has_omc is False:
+                continue
+            # Gate: only_if_centralized_vault — skip when ARK_CENTRALIZED_VAULT=0
+            if entry.get("only_if_centralized_vault") and centralized_vault is False:
+                continue
             if implicit_op and not entry.get("op"):
                 entry = dict(entry)
                 entry["op"] = implicit_op
