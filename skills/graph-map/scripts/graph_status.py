@@ -19,6 +19,9 @@ def sha256_file(path: Path) -> str:
 
 
 def write_meta(graph: Path, out: Path, version: str, timestamp: str) -> None:
+    graph = Path(graph)
+    if not graph.exists():
+        raise FileNotFoundError(f"graph not found: {graph}")
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({
@@ -52,7 +55,11 @@ def main(argv=None) -> int:
     c.add_argument("--meta", required=True)
     args = p.parse_args(argv)
     if args.cmd == "write-meta":
-        write_meta(Path(args.graph), Path(args.out), args.version, args.timestamp)
+        try:
+            write_meta(Path(args.graph), Path(args.out), args.version, args.timestamp)
+        except FileNotFoundError as e:
+            print(f"FAIL: {e}", file=sys.stderr)
+            return 2
         print(f"wrote {args.out}")
         return 0
     rc = check(Path(args.graph), Path(args.meta))

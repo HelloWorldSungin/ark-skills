@@ -30,6 +30,12 @@ class TestWriteMeta:
         assert data["graphify_version"] == "0.8.39"
         assert data["generated_at"] == "2026-06-15T00:00:00Z"
 
+    def test_write_meta_missing_graph_raises(self, tmp_path):
+        import pytest
+        with pytest.raises(FileNotFoundError):
+            gs.write_meta(tmp_path / "nope.json", tmp_path / "_graphify-meta.json",
+                          version="0.8.39", timestamp="t")
+
 
 class TestCheck:
     def _setup(self, tmp_path, same):
