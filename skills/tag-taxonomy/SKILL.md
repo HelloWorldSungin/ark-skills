@@ -29,7 +29,7 @@ import re, os
 from collections import Counter
 tags = Counter()
 for root, dirs, files in os.walk('.'):
-    dirs[:] = [d for d in dirs if d not in {'.obsidian','.git','.claude-plugin','.github','.notebooklm','_Templates'}]
+    dirs[:] = [d for d in dirs if d not in {'.obsidian','.git','.claude-plugin','.github','.notebooklm','_Templates','generated'}]
     for f in files:
         if not f.endswith('.md'): continue
         try: content = open(os.path.join(root, f), encoding='utf-8').read()

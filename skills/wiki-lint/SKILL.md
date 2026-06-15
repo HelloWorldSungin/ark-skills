@@ -35,7 +35,7 @@ Find pages with zero incoming wikilinks (excluding index.md, 00-Home.md, templat
 
 ```bash
 cd {vault_path}
-find . -name "*.md" ! -path './.obsidian/*' ! -path './.git/*' ! -path './_Templates/*' ! -path './_meta/*' | while read f; do
+find . -name "*.md" ! -path './.obsidian/*' ! -path './.git/*' ! -path './_Templates/*' ! -path './generated/*' ! -path './_meta/*' | while read f; do
   basename=$(basename "$f" .md)
   incoming=$(grep -rl "\[\[$basename" --include="*.md" . 2>/dev/null | grep -v "$f" | wc -l | tr -d ' ')
   [ "$incoming" -eq 0 ] && echo "ORPHAN: $f"
@@ -48,7 +48,7 @@ Check all pages have required fields: `title`, `type` (or `task-type`), `tags`
 
 ```bash
 cd {vault_path}
-find . -name "*.md" ! -path './.obsidian/*' ! -path './.git/*' ! -path './_Templates/*' ! -path './_meta/*' | while read f; do
+find . -name "*.md" ! -path './.obsidian/*' ! -path './.git/*' ! -path './_Templates/*' ! -path './generated/*' ! -path './_meta/*' | while read f; do
   head -1 "$f" | grep -q "^---" || echo "NO FRONTMATTER: $f"
 done
 ```
