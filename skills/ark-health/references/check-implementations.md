@@ -332,7 +332,7 @@ if ! command -v graphify >/dev/null 2>&1; then
 elif [ ! -f graphify-out/graph.json ]; then
   echo "WARN: graphify installed but graphify-out/graph.json missing — run /graph-map setup"
 else
-  python3 skills/graph-map/scripts/graph_status.py check \
+  python3 "$ARK_SKILLS_ROOT/skills/graph-map/scripts/graph_status.py" check \
     --graph graphify-out/graph.json \
     --meta "${VAULT_PATH:-vault}/generated/graphify/_graphify-meta.json" >/dev/null \
     && echo "PASS: code graph present and fresh" \
@@ -357,6 +357,6 @@ if [ ! -f "$GI" ]; then
 elif grep -qE 'EXCLUDE_DIRS[^=]*=.*"generated"' "$GI"; then
   echo "PASS: vault index excludes generated/"
 else
-  echo "WARN: generate-index.py missing 'generated' in EXCLUDE_DIRS — run /ark-update"
+  echo "WARN: generate-index.py missing 'generated' in EXCLUDE_DIRS — run /graph-map setup (ensures the exclusion) or add \"generated\" to EXCLUDE_DIRS manually"
 fi
 ```

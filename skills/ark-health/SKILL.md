@@ -543,7 +543,7 @@ Exempt from CLAUDE.md-missing skip rule. Detects whether the optional graphify c
 Detects whether the project has converged to the v1.28.0 quarantine exclusion: `"generated"` present in `EXCLUDE_DIRS` of `vault/_meta/generate-index.py`. Only meaningful when a vault index generator exists.
 
 - Pass: `vault/_meta/generate-index.py` (or `{vault_root}_meta/generate-index.py`) contains `"generated"` in its `EXCLUDE_DIRS` set
-- Warn: `EXCLUDE_DIRS` is missing `"generated"` → run `/ark-update` to converge to v1.28.0 (adds the exclusion automatically), or manually add `"generated"` to `EXCLUDE_DIRS`
+- Warn: `EXCLUDE_DIRS` is missing `"generated"` → run `/graph-map setup` (ensures the exclusion) or add `"generated"` to `EXCLUDE_DIRS` manually
 - Skip: `{vault_root}_meta/generate-index.py` does not exist (no vault index generator to check)
 - Bash: `references/check-implementations.md` § Check 25
 

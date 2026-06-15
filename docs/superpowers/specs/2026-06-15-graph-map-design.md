@@ -273,6 +273,10 @@ Doc/markdown edits get a manual consistency check (no executable test applies).
 - Confirm exact files `graphify install --project` writes (committed vs ignored).
 - Confirm `graphify hook status` output format for the verification step.
 
+## Downstream propagation — correction (post-CCG round 2)
+
+> **SUPERSEDED (CCG round 2):** the `/ark-update` `ensure_python_set_entry` op described in the original "Ecosystem touchpoints" and Phase 7 planning was dropped. The op hard-failed `safe_resolve` on symlinked external vaults and risked corrupting non-canonical `EXCLUDE_DIRS` sets. The `generated/` exclusion is now ensured by `/graph-map setup` (and re-run on `update`) via `ensure_index_exclusion.py` — an AST-based, symlink-aware helper committed under `skills/graph-map/scripts/`. `/ark-onboard` template and `/ark-health` Check 25 are unchanged (Check 25 remediation now points to `/graph-map setup` instead of `/ark-update`).
+
 ## CCG review provenance
 
 Reviewed 2026-06-15 by Codex (gpt-5.5, reasoning effort xhigh) for
