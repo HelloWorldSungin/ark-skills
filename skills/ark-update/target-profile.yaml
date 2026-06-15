@@ -60,19 +60,6 @@ ensured_files:
     only_if_centralized_vault: true
     mode: "0o755"
 
-ensured_python_set_entries:
-  # v1.28.0 — graphify quarantine exclusion: ensure "generated" is in EXCLUDE_DIRS
-  # so that graph-map output dirs are not indexed by generate-index.py.
-  # Gated: only applies when the project uses a centralized vault layout.
-  - id: graphify-exclude-generated
-    op: ensure_python_set_entry
-    file: vault/_meta/generate-index.py
-    set_name: EXCLUDE_DIRS
-    entry: "generated"
-    since: 1.28.0
-    version: 1.28.0
-    only_if_centralized_vault: true
-
 ensured_mcp_servers: []
 # No MCP servers are mandatory across all downstream projects at this time.
 # TaskNotes MCP (v1.4.2) is project-specific — depends on whether the downstream
