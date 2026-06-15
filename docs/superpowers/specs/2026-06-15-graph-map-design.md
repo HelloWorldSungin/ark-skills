@@ -36,8 +36,11 @@ graphify's upgrades rather than reimplementing them.
 
 - Reimplementing graphify's extraction or Obsidian export (Approach B rejected).
 - Stamping Ark frontmatter onto concept notes (Approach C deferred).
-- Copying source files into the vault (runbook step 5 dropped — concept notes
-  reference source paths; we link, not duplicate).
+- **Copying** source files into the vault. We instead **wire** each concept note
+  to its origin source (runbook step 5 / Video 2's central step) by injecting a
+  `Source:` link to the in-repo file by relative path — a signpost Claude
+  follows, not a duplicate. Copying a code repo's source into the vault would
+  bloat it and go stale on every commit.
 
 ## Background / verified facts
 
@@ -80,7 +83,7 @@ upstream README/changelog (2026-06-15):
 | Role | Vault enrichment **and** code-structural retrieval backend |
 | Auto-sync hook | **Always auto-install, WITH guardrails** (clean-worktree check, install after initial graph commit, `GRAPHIFY_SKIP_HOOK=1` documented, uninstall docs, `graphify hook status` verify) |
 | Approach | **A — thin orchestrator** |
-| Runbook step 5 (copy source into vault) | **Dropped** — link to source instead |
+| Runbook step 5 (wire nodes to source) | **In** — inject `Source:` link to in-repo file by relative path (link, not copy) |
 | Skill name | `/graph-map` (avoids collision with graphify's own `/graphify`) |
 | Workflow wiring | **Add `/ark-workflow` trigger** + structural-retrieval routing |
 | Quarantine dir | `{vault_root}/generated/graphify/` (signals tool-managed) |

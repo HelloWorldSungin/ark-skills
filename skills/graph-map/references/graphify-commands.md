@@ -10,13 +10,27 @@ graphify --version                   # must be >= 0.8.39
 graphify install --project           # installs graphify's own skill into .claude/skills/graphify/
 ```
 
-## Map (agent-driven — first run extracts via subagents)
+## Backend (semantic pass needs an LLM key; pick a NON-reasoning chat model)
+Reasoning models (Kimi/GLM/Qwen-Thinking) burn the output budget and truncate;
+use Gemma / DeepSeek-V3 etc. For an OpenAI-compatible provider (e.g. Chutes):
 ```bash
-graphify . --obsidian                # produces graphify-out/{graph.json,graph.html,GRAPH_REPORT.md} + obsidian export dir
-graphify . --update                  # re-extract only changed files
+uv tool install "graphifyy[openai]" --force
+graphify provider add chutes --base-url https://llm.chutes.ai/v1 \
+    --default-model google/gemma-4-31B-turbo-TEE --env-key CHUTES_API_KEY
+# raise output cap to fit context (default 8192 truncates dense docs):
+#   edit ~/.graphify/providers.json -> "max_completion_tokens": 32000   (131K model)
 ```
-Output dir `graphify-out/` (incl. `graph.json`) is meant to be COMMITTED.
-Ignore `graphify-out/cost.json`.
+
+## Map, then export (verified flow)
+```bash
+graphify . --backend chutes          # AST + semantic; on a semantic run it CHECKPOINTS at graph.json
+graphify export obsidian             # -> graphify-out/obsidian/ (note per node + graph.canvas)
+graphify cluster-only . --backend chutes   # optional: name communities + GRAPH_REPORT.md
+graphify . --update --backend chutes # re-extract only changed files (then re-run export obsidian)
+```
+The bare `--obsidian` flag does NOT emit the export on a semantic run — use
+`graphify export obsidian`. Output dir `graphify-out/` (incl. `graph.json`) is
+meant to be COMMITTED. Ignore `graphify-out/cost.json` and `graphify-out/cache/`.
 
 ## Query
 ```bash

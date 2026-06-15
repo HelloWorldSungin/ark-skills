@@ -38,6 +38,18 @@ Run the standard Project Discovery from the repo `CLAUDE.md` to resolve
      repo: run the map but SKIP the hook step and warn.
    - `uv tool install graphifyy` (idempotent). Assert
      `graphify --version` ≥ **0.8.39**; capture the version string.
+   - **Backend/key.** graphify's semantic pass (docs/papers/images) needs an LLM
+     API key; a **code-only** corpus needs none. Choose a **non-reasoning** chat
+     model — reasoning models spend the output budget on chain-of-thought and
+     truncate extraction (Kimi / GLM / Qwen-Thinking fail; Gemma / DeepSeek-V3
+     work clean). For an OpenAI-compatible provider (e.g. Chutes):
+     `uv tool install "graphifyy[openai]" --force`, then
+     `graphify provider add <name> --base-url <url> --default-model <model> --env-key <ENV_VAR>`,
+     and raise its output cap to fit the model's context (set
+     `max_completion_tokens` in `~/.graphify/providers.json`, e.g. 32000 for a
+     131K-context model — the 8192 default truncates dense docs). Built-in
+     backends (`--backend claude|openai|gemini|deepseek|...`) read their own
+     `*_API_KEY`.
 2. **Ignore policy FIRST (before any map).** Merge
    `references/graphifyignore.defaults` into the repo-root `.graphifyignore`
    (create if absent; append missing lines; do not duplicate). This prevents the
@@ -45,18 +57,32 @@ Run the standard Project Discovery from the repo `CLAUDE.md` to resolve
    output.
 3. **Register graphify's native skill:** `graphify install --project`. Print the
    `git add` hint graphify emits.
-4. **Map (agent-driven):** `graphify . --obsidian`. Confirm `graphify-out/graph.json`
-   was produced and note the Obsidian export directory path graphify wrote.
+4. **Map, then export.** Run `graphify . --backend <name>`. graphify does a free
+   tree-sitter AST pass then an LLM semantic pass on docs; on a semantic run it
+   **checkpoints after writing `graphify-out/graph.json`** ("run cluster-only
+   next"). Then emit the Obsidian export explicitly: **`graphify export obsidian`**
+   → `graphify-out/obsidian/` (one concept note per node, `source_file:` in
+   frontmatter, wikilink connections, `graph.canvas`). The bare `--obsidian`
+   flag does NOT emit the export on a semantic run — use `export obsidian`.
+   Optional: `graphify cluster-only . --backend <name>` to name communities +
+   write `GRAPH_REPORT.md`.
 5. **Validate (fail closed):** confirm `graphify-out/graph.json` is valid JSON
    (`python3 -c "import json;json.load(open('graphify-out/graph.json'))"`). If the
    output layout is unexpected, STOP — do not touch the vault or CLAUDE.md.
 6. **Secret/size scan (before any commit):**
    `python3 skills/graph-map/scripts/secret_scan.py graphify-out` (and the export
    dir). If it exits non-zero, STOP and surface the findings; do not commit.
-7. **Relocate + fix links:** move the Obsidian export into
-   `{vault_root}/generated/graphify/`, then
-   `python3 skills/graph-map/scripts/relink.py --old-dir <export-dir> --new-dir {vault_root}/generated/graphify`.
-   Verify a sample rewritten link resolves on disk.
+7. **Relocate + wire to source.** Move the export with a find-based move so
+   dot-prefixed note files come too:
+   `find graphify-out/obsidian -mindepth 1 -maxdepth 1 -exec mv {} {vault_root}/generated/graphify/ \;`.
+   Then wire every concept note to its origin source (Video-2 wiring,
+   **link-not-copy**):
+   `python3 skills/graph-map/scripts/wire_source.py --notes-dir {vault_root}/generated/graphify --repo-root .`
+   — reads each note's `source_file:` frontmatter and injects a `## Source`
+   relative-path link to the in-repo file. Verify one link resolves on disk.
+   **Do NOT run `relink.py` here** — graphify's obsidian notes use wikilinks +
+   frontmatter (no relative links to fix), and relink would corrupt the
+   wire_source links. `relink.py` is only for relative-link exports (`--wiki`).
 8. **Write drift meta:**
    `python3 skills/graph-map/scripts/graph_status.py write-meta --graph graphify-out/graph.json --out {vault_root}/generated/graphify/_graphify-meta.json --version <captured> --timestamp <ISO8601 now>`.
 9. **Patch routing:** add the Code-Structural Retrieval section to the project's
@@ -73,10 +99,11 @@ Run the standard Project Discovery from the repo `CLAUDE.md` to resolve
 
 ### Mode: update
 
-`graphify . --update`, then repeat setup steps 5–8 (validate, scan, relocate +
-relink, rewrite meta). The git hooks keep `graph.json` structurally fresh for
-FREE; `update` is the agent-driven ($-cost) re-analysis for logic/comment changes
-after significant refactors.
+`graphify . --update --backend <name>` then `graphify export obsidian`, then
+repeat setup steps 5–8 (validate, scan, relocate + **wire_source**, rewrite
+meta). The git hooks keep `graph.json` structurally fresh for FREE; `update` is
+the LLM ($-cost) re-analysis for logic/comment changes after significant
+refactors.
 
 ### Mode: status
 
