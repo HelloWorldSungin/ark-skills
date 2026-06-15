@@ -120,7 +120,7 @@ classify_vault_layout() {
 classify_vault_layout
 
 # Excluded path segments (applied as "path contains /<excl>/ or ends with /<excl>")
-EXCLUDES=(".obsidian" ".git" ".notebooklm" ".claude-plugin" "_Templates" "_Attachments" "TaskNotes" "_meta")
+EXCLUDES=(".obsidian" ".git" ".notebooklm" ".claude-plugin" "_Templates" "_Attachments" "TaskNotes" "_meta" "generated")
 
 # Batched state management temp files
 PENDING_UPDATES=""

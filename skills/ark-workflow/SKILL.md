@@ -133,6 +133,7 @@ Identify which scenario applies based on the user's request. Ask if ambiguous.
 | **Migration** | "upgrade", "migrate", "bump major", "framework upgrade", "version bump" | Upgrading dependencies, frameworks, or platform versions |
 | **Performance** | "slow", "optimize", "latency", "benchmark", "profile", "performance" | Improving speed, reducing resource usage |
 | **Brainstorm** | "brainstorm", "I have an idea", "should I build", "should we build", "worth building", "shape this idea", "is this worth" | Pre-triage exploration — turn fuzzy intent into a crisp spec/plan ready to re-triage (creation-intent only; "explore"/"think through" alone are NOT Brainstorm triggers — too generic) |
+| **Code Mapping** | "map this repo", "knowledge graph", "graph-map", "how does X relate structurally", "dependency map", "what calls X" | Build or refresh the graphify code knowledge graph → dispatch directly to `/graph-map` (single-skill chain) |
 
 **Security routing — two distinct paths:**
 

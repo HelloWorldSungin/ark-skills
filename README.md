@@ -68,6 +68,7 @@ git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
 | `/ark-onboard` | Onboarding | Interactive setup wizard — greenfield, migration, repair | New |
 | `/ark-health` | Onboarding | Diagnostic check for Ark ecosystem health | New |
 | `/ark-update` | Onboarding | Version-driven migration framework; converges downstream projects to the current ark-skills target profile; replays pending destructive migrations. Distinct from /ark-onboard repair (failure-driven). | New |
+| `/graph-map` | Code-Structural Retrieval | Map the repo into a graphify knowledge graph; quarantine Obsidian pages in the vault; register a code-structural query backend | New |
 
 ## Skill Documentation
 

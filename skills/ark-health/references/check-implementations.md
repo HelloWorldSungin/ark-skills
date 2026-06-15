@@ -323,3 +323,40 @@ Notes:
 - The check **does not** byte-compare file contents — only counts top-level skill directories. Per-file content drift would be far more expensive to verify and is rarely the failure mode (the loader either copies the directory or skips it entirely).
 - Bytecode files (`__pycache__/*.pyc`) and `.gitkeep` markers are ignored implicitly because they are not directories.
 - This check is system-wide (cross-project) but recorded per-project — if you're switching between projects and one shows `WARN: plugin cache partial`, the fix applies to every project on this machine, and one fix resolves all of them.
+
+## Check 24 — graphify code graph
+
+```bash
+if ! command -v graphify >/dev/null 2>&1; then
+  echo "SKIP: graphify not installed (optional — /graph-map setup enables code-structural retrieval)"
+elif [ ! -f graphify-out/graph.json ]; then
+  echo "WARN: graphify installed but graphify-out/graph.json missing — run /graph-map setup"
+else
+  python3 "$ARK_SKILLS_ROOT/skills/graph-map/scripts/graph_status.py" check \
+    --graph graphify-out/graph.json \
+    --meta "${VAULT_PATH:-vault}/generated/graphify/_graphify-meta.json" >/dev/null \
+    && echo "PASS: code graph present and fresh" \
+    || echo "WARN: code graph stale/missing meta — run /graph-map update"
+fi
+```
+
+- Pass: `graphify-out/graph.json` present and not stale vs the vault quarantine meta
+- Warn: missing graph or stale → `/graph-map setup` | `/graph-map update`
+- Skip: graphify not installed (optional integration)
+
+---
+
+## Check 25 — Vault index excludes graphify output
+
+Detects whether `vault/_meta/generate-index.py` has converged to the v1.28.0 quarantine exclusion (`"generated"` in `EXCLUDE_DIRS`). Skip if no vault index generator exists.
+
+```bash
+GI="${VAULT_ROOT:-vault/}_meta/generate-index.py"
+if [ ! -f "$GI" ]; then
+  echo "SKIP: no vault index generator ($GI)"
+elif grep -qE 'EXCLUDE_DIRS[^=]*=.*"generated"' "$GI"; then
+  echo "PASS: vault index excludes generated/"
+else
+  echo "WARN: generate-index.py missing 'generated' in EXCLUDE_DIRS — run /graph-map setup (ensures the exclusion) or add \"generated\" to EXCLUDE_DIRS manually"
+fi
+```

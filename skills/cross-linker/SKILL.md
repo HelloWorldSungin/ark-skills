@@ -16,7 +16,7 @@ Scan vault pages for unlinked mentions of other pages and add missing wikilinks.
 
 ### Step 1: Build Page Registry
 
-Glob all `.md` files (exclude `.obsidian/`, `.git/`, `_Templates/`, `_meta/`).
+Glob all `.md` files (exclude `.obsidian/`, `.git/`, `_Templates/`, `_meta/`, `generated/`).
 Extract per page: filename, title, aliases (if any), tags, summary.
 
 ### Step 2: Scan for Missing Links

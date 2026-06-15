@@ -5,7 +5,7 @@ memory. Re-probe before trusting.
 
 `collect_inventory.sh` reads installed values (versions, SHAs, paths) live and
 gates emission on the positive allowlist documented in that script's header. This
-table is the authoritative dep set: exactly these 7 rows. `ark-skills` (self) is
+table is the authoritative dep set: exactly these 8 rows. `ark-skills` (self) is
 excluded — it IS the project being healed. `chromadb` is excluded — it is a
 transitive-pin annotation on `mempalace-cli`, not an independent cascade target.
 
@@ -18,6 +18,7 @@ transitive-pin annotation on `mempalace-cli`, not an independent cascade target.
 | oh-my-claudecode | plugin | Yeachan-Heo/oh-my-claudecode | `~/.claude/plugins/marketplaces/omc` | true | changelog, release, commit |
 | karpathy-skills | plugin | forrestchang/andrej-karpathy-skills | `~/.claude/plugins/marketplaces/karpathy-skills` | true | changelog, release, commit |
 | obsidian-skills | plugin | kepano/obsidian-skills | `~/.claude/plugins/marketplaces/obsidian-skills` | true | changelog, release, commit |
+| graphify | python | safishamsi/graphify | _(PyPI — `command -v graphify`)_ | false | changelog, release |
 
 ## Probe notes (2026-06-05)
 

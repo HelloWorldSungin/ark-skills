@@ -5,7 +5,7 @@ description: Diagnostic check for Ark ecosystem health — plugins, CLAUDE.md, v
 
 # Ark Health Check
 
-Run 23 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions. Bash implementations for the longer checks live in `references/check-implementations.md` (load-on-demand).
+Run 25 diagnostic checks across the Ark ecosystem and produce a scored report with actionable fix instructions. Bash implementations for the longer checks live in `references/check-implementations.md` (load-on-demand).
 
 ## Context-Discovery Exemption
 
@@ -15,7 +15,7 @@ This skill is exempt from normal context-discovery. It must work when CLAUDE.md 
 - Checks 4–6 (Project Configuration) report **fail** with explanation
 - Checks 7–20 report "cannot check — CLAUDE.md missing" instead of failing silently (Checks 21, 22, and 23 are exempt — run unconditionally)
 
-Never abort early. Run all 23 checks regardless of earlier failures.
+Never abort early. Run all 25 checks regardless of earlier failures.
 
 ## Required CLAUDE.md fields
 
@@ -550,12 +550,30 @@ Exempt from CLAUDE.md-missing skip rule. Detects partial-cache failures where Cl
 - Skip (no marketplace clone): no upstream to diff against
 - Bash: `references/check-implementations.md` § Check 23
 
+**Check 24 — graphify code graph** | Tier: Standard | Non-blocking (skip if not installed)
+
+Exempt from CLAUDE.md-missing skip rule. Detects whether the optional graphify code-graph is installed and current.
+
+- Pass: `graphify-out/graph.json` present and not stale vs vault quarantine meta
+- Warn: graphify installed but graph missing or stale → run `/graph-map setup` or `/graph-map update`
+- Skip: `graphify` not installed (optional integration — run `/graph-map setup` to enable)
+- Bash: `references/check-implementations.md` § Check 24
+
+**Check 25 — Vault index excludes graphify output** | Tier: Standard | Non-blocking
+
+Detects whether the project has converged to the v1.28.0 quarantine exclusion: `"generated"` present in `EXCLUDE_DIRS` of `vault/_meta/generate-index.py`. Only meaningful when a vault index generator exists.
+
+- Pass: `vault/_meta/generate-index.py` (or `{vault_root}_meta/generate-index.py`) contains `"generated"` in its `EXCLUDE_DIRS` set
+- Warn: `EXCLUDE_DIRS` is missing `"generated"` → run `/graph-map setup` (ensures the exclusion) or add `"generated"` to `EXCLUDE_DIRS` manually
+- Skip: `{vault_root}_meta/generate-index.py` does not exist (no vault index generator to check)
+- Bash: `references/check-implementations.md` § Check 25
+
 ---
 
 ## Workflow
 
-1. **Run all 23 checks in sequence.** Do not abort on failure.
-   - Checks 7–20: if Check 4 failed (CLAUDE.md missing), record `skip` with message "cannot check — CLAUDE.md missing". Checks 21, 22, 23 are exempt.
+1. **Run all 25 checks in sequence.** Do not abort on failure.
+   - Checks 7–20: if Check 4 failed (CLAUDE.md missing), record `skip` with message "cannot check — CLAUDE.md missing". Checks 21, 22, 23, 24, 25 are exempt.
    - Checks 14b, 14c, 14d: if Check 14a failed, record `skip` with message "requires MemPalace plugin (check 14a)".
    - Check 16b: if Check 16 failed (hook not installed), record `skip` with message "requires check 16".
    - Checks 15, 16, 18, 19: if the prerequisite failed, record `skip` with message "requires check N".
@@ -566,7 +584,7 @@ Exempt from CLAUDE.md-missing skip rule. Detects partial-cache failures where Cl
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking (Check 2a gstack install integrity, Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22, Check 23) |
+| `~~` | Warning | Non-blocking (Check 2a gstack install integrity, Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22, Check 23, Check 24, Check 25) |
 | `--` | Available upgrade | Feature not installed, above current tier |
 | `>>` | Informational | State display only (Check 14c MemPalace hook state — always passes) |
 
@@ -577,7 +595,7 @@ Exempt from CLAUDE.md-missing skip rule. Detects partial-cache failures where Cl
 - **Standard:** no fail in checks 1–13 (TaskNotes MCP configured)
 - **Full:** no fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
 
-Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (2a gstack install integrity, 10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 16b history hook content drift, 20 vault externalized, 22 plugin version, 23 plugin cache integrity) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
+Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (2a gstack install integrity, 10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 16b history hook content drift, 20 vault externalized, 22 plugin version, 23 plugin cache integrity, 24 graphify code graph, 25 vault index excludes generated/) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
 
 4. **Emit scorecard** per the Output Format below. Always end with `Run /ark-onboard to fix or upgrade`.
 
@@ -655,7 +673,7 @@ Run /ark-onboard to fix or upgrade
 ## Design Decisions
 
 - **No auto-fix.** `/ark-health` diagnoses and recommends only. All fixes go through `/ark-onboard`.
-- **Authoritative check definitions.** This skill is the source of truth for all 23 check definitions. If `/ark-onboard`'s copy drifts from here, this file wins.
+- **Authoritative check definitions.** This skill is the source of truth for all 25 check definitions. If `/ark-onboard`'s copy drifts from here, this file wins.
 - **Session-based plugin detection.** Plugins are detected by whether their skills appear in the current session — never by inspecting `~/.claude/plugins/`.
 - **Graceful degradation.** Never abort on CLAUDE.md absence. Report clearly and continue.
 - **Index staleness is a warning, not a failure.** A stale index does not block any workflow.

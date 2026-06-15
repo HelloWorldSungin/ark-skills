@@ -46,7 +46,7 @@ By type:
 ```bash
 cd {vault_path}
 # Count .md files on disk (excluding .obsidian, .git, _Templates, _meta)
-find . -name "*.md" ! -path './.obsidian/*' ! -path './.git/*' ! -path './_Templates/*' | wc -l
+find . -name "*.md" ! -path './.obsidian/*' ! -path './.git/*' ! -path './_Templates/*' ! -path './generated/*' | wc -l
 ```
 
 Compare to index page count. If they differ by more than 5, warn: "Index is stale. Run `python3 _meta/generate-index.py` to regenerate."
