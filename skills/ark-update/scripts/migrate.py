@@ -83,6 +83,7 @@ import ops.ensure_routing_rules_block  # noqa: F401, E402
 import ops.ensure_gitignore_entry  # noqa: F401, E402
 import ops.create_file_from_template  # noqa: F401, E402
 import ops.ensure_mcp_server  # noqa: F401, E402
+import ops.ensure_python_set_entry  # noqa: F401, E402
 
 
 # ---------------------------------------------------------------------------
