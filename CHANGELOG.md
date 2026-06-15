@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.28.0] - 2026-06-15
+
+### Added
+
+- **`/graph-map` — new skill: graphify knowledge-graph integration.** A thin orchestrator around the `graphifyy` CLI (repo `safishamsi/graphify`, min 0.8.39) that maps the repo into a queryable knowledge graph, quarantines the generated Obsidian export in `vault/generated/graphify/`, and registers a **Code-Structural Retrieval** backend in CLAUDE.md routing. Modes: setup / update / status / query. Tested helpers: `relink.py` (relative-link fixer after relocation), `secret_scan.py` (pre-commit secret/oversized scan), `graph_status.py` (graph↔vault drift meta). Auto-installs graphify's deterministic post-commit/post-checkout AST hooks with guardrails (clean-worktree check, install after the graph commit, `GRAPHIFY_SKIP_HOOK=1` documented). Hardened via CCG review (Codex gpt-5.5/xhigh + Gemini): pre-map `.graphifyignore` ordering, single quarantine contract across all vault scanners, version pinning + fail-closed validation, external/symlinked-vault handling, merge-driver completeness. Tracked as an upstream dep in `ark-skill-healer`; added an ark-health graph check (count 23→24); added a Code Mapping scenario to `/ark-workflow`.
+
 ## [1.27.0] - 2026-06-05
 
 ### Added
