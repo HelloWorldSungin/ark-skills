@@ -10,9 +10,11 @@ current repo into a knowledge graph, quarantines the browsable Obsidian export
 inside the project's vault, and wires the graph into retrieval routing. It does
 NOT reimplement graphify — see `references/graphify-commands.md`.
 
-Helper scripts live in `scripts/` (`relink.py`, `secret_scan.py`,
-`graph_status.py`, `wire_source.py` — wires concept notes to origin source).
-Default ignore patterns: `references/graphifyignore.defaults`.
+Helper scripts live in `scripts/` (`secret_scan.py`, `wire_source.py` — wires
+concept notes to origin source, `graph_status.py` — drift meta,
+`ensure_index_exclusion.py` — keeps `generated/` out of the vault index,
+`relink.py` — relative-link fixer for `--wiki` exports). Default ignore patterns:
+`references/graphifyignore.defaults`.
 
 ## Project Discovery
 
@@ -26,6 +28,30 @@ Run the standard Project Discovery from the repo `CLAUDE.md` to resolve
   changes and vault-repo changes SEPARATELY and report both. If the vault repo is
   missing or unwritable, warn and skip the vault commit — never silently dirty a
   shared vault.
+
+## Resolve ARK_SKILLS_ROOT
+
+In consumer projects (e.g., ArkNode-AI, ArkNode-Poly), this plugin's scripts live at `~/.claude/plugins/cache/.../ark-skills/` — **not** at `./skills/` of the CWD. All `python3 .../scripts/...` invocations below use `$ARK_SKILLS_ROOT`. Resolve once at the start:
+
+```bash
+# Already set by Claude Code when invoking a plugin skill? Prefer that.
+if [ -n "${CLAUDE_PLUGIN_DIR:-}" ] && [ -d "$CLAUDE_PLUGIN_DIR" ]; then
+    ARK_SKILLS_ROOT="$CLAUDE_PLUGIN_DIR"
+# Otherwise, discover via the plugin marketplace.json anchor.
+elif [ -f "$(pwd)/.claude-plugin/marketplace.json" ]; then
+    # CWD is the ark-skills repo itself (dev/test mode)
+    ARK_SKILLS_ROOT="$(pwd)"
+else
+    # Consumer project: search installed plugins.
+    ARK_SKILLS_ROOT=$(find ~/.claude/plugins -maxdepth 6 -type d -name ark-skills 2>/dev/null | head -1)
+fi
+
+if [ -z "$ARK_SKILLS_ROOT" ] || [ ! -f "$ARK_SKILLS_ROOT/skills/graph-map/SKILL.md" ]; then
+    echo "ark-skills plugin not found — /graph-map cannot run." >&2
+    exit 1
+fi
+export ARK_SKILLS_ROOT
+```
 
 ## Modes
 
@@ -79,21 +105,24 @@ Run the standard Project Discovery from the repo `CLAUDE.md` to resolve
    (`python3 -c "import json;json.load(open('graphify-out/graph.json'))"`). If the
    output layout is unexpected, STOP — do not touch the vault or CLAUDE.md.
 6. **Secret/size scan (before any commit):**
-   `python3 skills/graph-map/scripts/secret_scan.py graphify-out` (and the export
+   `python3 "$ARK_SKILLS_ROOT/skills/graph-map/scripts/secret_scan.py" graphify-out` (and the export
    dir). If it exits non-zero, STOP and surface the findings; do not commit.
 7. **Relocate + wire to source.** Move the export with a find-based move so
    dot-prefixed note files come too:
    `find graphify-out/obsidian -mindepth 1 -maxdepth 1 -exec mv {} {vault_root}/generated/graphify/ \;`.
    Then wire every concept note to its origin source (Video-2 wiring,
    **link-not-copy**):
-   `python3 skills/graph-map/scripts/wire_source.py --notes-dir {vault_root}/generated/graphify --repo-root .`
+   `python3 "$ARK_SKILLS_ROOT/skills/graph-map/scripts/wire_source.py" --notes-dir {vault_root}/generated/graphify --repo-root .`
    — reads each note's `source_file:` frontmatter and injects a `## Source`
    relative-path link to the in-repo file. Verify one link resolves on disk.
    **Do NOT run `relink.py` here** — graphify's obsidian notes use wikilinks +
    frontmatter (no relative links to fix), and relink would corrupt the
    wire_source links. `relink.py` is only for relative-link exports (`--wiki`).
+   Then ensure the vault index generator excludes the quarantine (symlink-aware — operates on the resolved {vault_root}):
+   `python3 "$ARK_SKILLS_ROOT/skills/graph-map/scripts/ensure_index_exclusion.py" --file {vault_root}/_meta/generate-index.py`
+   — adds `"generated"` to `EXCLUDE_DIRS`. Status `manual` (multiline/non-canonical set) → add `"generated"` by hand; `absent` (no index generator) → skip.
 8. **Write drift meta:**
-   `python3 skills/graph-map/scripts/graph_status.py write-meta --graph graphify-out/graph.json --out {vault_root}/generated/graphify/_graphify-meta.json --version <captured> --timestamp <ISO8601 now>`.
+   `python3 "$ARK_SKILLS_ROOT/skills/graph-map/scripts/graph_status.py" write-meta --graph graphify-out/graph.json --out {vault_root}/generated/graphify/_graphify-meta.json --version <captured> --timestamp <ISO8601 now>`.
 9. **Patch routing:** add the Code-Structural Retrieval section to the project's
    `CLAUDE.md` (only after validation passed). See "Routing block" below.
 10. **Commit graph artifacts** (project repo: `graphify-out/` minus `cost.json`;
@@ -110,13 +139,14 @@ Run the standard Project Discovery from the repo `CLAUDE.md` to resolve
 
 `graphify . --update --backend <name>` then `graphify export obsidian`, then
 repeat setup steps 5–8 (validate, scan, relocate + **wire_source**, rewrite
-meta). The git hooks keep `graph.json` structurally fresh for FREE; `update` is
-the LLM ($-cost) re-analysis for logic/comment changes after significant
-refactors.
+meta). Step 7's `ensure_index_exclusion` is also re-run (idempotent — safe to
+repeat; no-ops if `"generated"` is already present). The git hooks keep
+`graph.json` structurally fresh for FREE; `update` is the LLM ($-cost)
+re-analysis for logic/comment changes after significant refactors.
 
 ### Mode: status
 
-`python3 skills/graph-map/scripts/graph_status.py check --graph graphify-out/graph.json --meta {vault_root}/generated/graphify/_graphify-meta.json`.
+`python3 "$ARK_SKILLS_ROOT/skills/graph-map/scripts/graph_status.py" check --graph graphify-out/graph.json --meta {vault_root}/generated/graphify/_graphify-meta.json`.
 Report fresh / stale / missing. If stale: "Graph drifted from the vault copy —
 run `/graph-map update`."
 
