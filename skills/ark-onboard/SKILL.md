@@ -813,6 +813,23 @@ git commit -m "feat: initialize {project_name} vault with Ark structure (embedde
 
 The post-checkout hook is NOT tracked — it's installed per-clone by `/ark-onboard`.
 
+### Step 17b of 18 — Opt-in: graphify code-graph indexing
+
+**Default: No.** This step costs money (LLM API calls for doc-heavy repos) and installs git hooks. Skip unless the user explicitly opts in.
+
+```
+Enable graphify code-graph indexing? Builds a queryable knowledge graph of the repo.
+Requires an LLM API key and installs git hooks. [y/N]
+```
+
+**If yes:** run `/graph-map setup`. Surface these validated prerequisites before proceeding:
+
+- **LLM API key:** code-only repos need none; doc-heavy repos (markdown, docstrings) require a key for embedding generation.
+- **Model selection:** use a NON-reasoning chat model. Reasoning models truncate mid-output and produce corrupt graph JSON. Validated choices: Gemma 4 31B Turbo, DeepSeek-V3. Confirmed failures: Kimi, GLM-series, Qwen-Thinking.
+- **OpenAI-compatible providers:** register via `graphify provider add` before running setup; also raise `max_completion_tokens` to fit the full context window (graphify's default is conservative).
+
+**If no:** skip. Note to user: "Graphify can be enabled later at any time via `/graph-map setup`."
+
 ### Step 18 of 18 — Final diagnostic + reminders
 
 Run the full 22-check diagnostic. Show the scorecard (§ Scorecard Output Format below).
@@ -826,8 +843,9 @@ Setup complete! Follow-up reminders:
    OR: Install TaskNotes + Obsidian Git via Community Plugins (if manual fallback was needed)
 2. Fill in NotebookLM notebook ID in .notebooklm/config.json (if Full tier)
 3. Optional: install OMC for /ark-workflow Path B — https://github.com/anthropics/oh-my-claudecode
-4. Run /ark-health anytime to check ecosystem health
-5. Run /ark-onboard again to upgrade tiers
+4. Optional: enable code-graph indexing via /graph-map setup (if skipped in Step 17b)
+5. Run /ark-health anytime to check ecosystem health
+6. Run /ark-onboard again to upgrade tiers
 ```
 
 - Downloaded from GitHub / reference-vault copy: "plugins are pre-configured, just enable them in Settings > Community Plugins"
