@@ -57,7 +57,15 @@ Run the standard Project Discovery from the repo `CLAUDE.md` to resolve
    first map from ingesting `vault/`, `generated/`, secrets, or graphify's own
    output.
 3. **Register graphify's native skill:** `graphify install --project`. Print the
-   `git add` hint graphify emits.
+   `git add` hint graphify emits. **Heads-up — this writes more than a skill:** it
+   also appends a `## graphify` section to the repo `CLAUDE.md` and installs
+   **repo-wide `PreToolUse` hooks** into `.claude/settings.json` that inject a
+   "run `graphify query` before grepping/reading source" message on every
+   Bash/Read/Glob once `graphify-out/graph.json` exists. These are committed and
+   affect **every contributor + subagent** in the repo. Surface them for consent;
+   reword the `MANDATORY/MUST` phrasing to advisory or remove the hooks
+   (`graphify claw uninstall` / edit `.claude/settings.json`) if they degrade
+   review/debug/edit flows.
 4. **Map, then export.** Run `graphify . --backend <name>`. graphify does a free
    tree-sitter AST pass then an LLM semantic pass on docs; on a semantic run it
    **checkpoints after writing `graphify-out/graph.json`** ("run cluster-only
