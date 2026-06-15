@@ -88,6 +88,7 @@ find -L "$VAULT_PATH" -name "*.md" \
     -not -path "*/.obsidian/*" \
     -not -path "*/node_modules/*" \
     -not -path "*/_Templates/*" \
+    -not -path "*/generated/*" \
     | while IFS= read -r f; do
         REL="${f#$VAULT_PATH/}"
         DIR="$MINE_TMPDIR/$(dirname "$REL")"
