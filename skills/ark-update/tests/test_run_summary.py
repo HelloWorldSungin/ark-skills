@@ -108,8 +108,10 @@ def test_skip_count_in_summary(tmp_path: Path) -> None:
     """Summary Phase 2 line reports correct skipped count."""
     _copy_fixture_pre("pre-v1.12", tmp_path)
     result = _run_engine(tmp_path)
-    # pre-v1.12: 1 skipped (setup-vault-symlink.sh already present)
-    assert "1 skipped" in result.stdout
+    # pre-v1.12: 2 skipped — setup-vault-symlink.sh already present, plus the
+    # graphify-exclude-generated op (vault/_meta/generate-index.py absent in fixture
+    # → skipped_idempotent, no file created).
+    assert "2 skipped" in result.stdout
 
 
 def test_drift_overwrite_count_in_summary(tmp_path: Path) -> None:

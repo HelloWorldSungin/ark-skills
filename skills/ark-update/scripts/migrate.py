@@ -243,6 +243,7 @@ def _validate_target_profile_paths(project_root: Path, target_profile: dict) -> 
         "ensured_files": ["target"],
         "ensured_gitignore": ["file"],
         "ensured_mcp_servers": ["file"],
+        "ensured_python_set_entries": ["file"],
     }
     for section, keys in sections.items():
         for entry in target_profile.get(section, []):
@@ -503,7 +504,7 @@ def _iter_target_profile_entries(target_profile: dict):
         "ensured_gitignore": "ensure_gitignore_entry",
         "ensured_mcp_servers": "ensure_mcp_server",
     }
-    for section_key in ("managed_regions", "ensured_files", "ensured_gitignore", "ensured_mcp_servers"):
+    for section_key in ("managed_regions", "ensured_files", "ensured_gitignore", "ensured_mcp_servers", "ensured_python_set_entries"):
         implicit_op = _IMPLICIT_OPS.get(section_key)
         for entry in target_profile.get(section_key, []):
             # Gate: only_if_has_omc — skip when ARK_HAS_OMC=0

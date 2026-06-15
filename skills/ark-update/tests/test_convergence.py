@@ -152,7 +152,9 @@ def test_convergence_pre_v1_12_skips_existing_script(tmp_path: Path) -> None:
     result = _run_engine(tmp_path)
     assert result.returncode == 0
     assert "3 applied" in result.stdout, f"Expected 3 applied:\n{result.stdout}"
-    assert "1 skipped" in result.stdout, f"Expected 1 skipped:\n{result.stdout}"
+    # 2 skipped: setup-vault-symlink.sh (already present) + graphify-exclude-generated
+    # (vault/_meta/generate-index.py absent in fixture → skipped_idempotent).
+    assert "2 skipped" in result.stdout, f"Expected 2 skipped:\n{result.stdout}"
 
 
 def test_convergence_pre_v1_13_converges_existing(tmp_path: Path) -> None:
@@ -164,13 +166,16 @@ def test_convergence_pre_v1_13_converges_existing(tmp_path: Path) -> None:
     - .ark-workflow/ ignore  → applied (appended)
     - routing-rules          → drift-overwritten (marker version 1.12.0 < target 1.17.0)
     - setup-vault-symlink.sh → skipped (already present)
+    - graphify-exclude-generated → skipped (vault/_meta/generate-index.py absent)
     """
     _copy_fixture_pre("pre-v1.13", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
     assert "2 applied" in result.stdout, f"Expected 2 applied:\n{result.stdout}"
     assert "1 drift-overwritten" in result.stdout, f"Expected 1 drift-overwritten:\n{result.stdout}"
-    assert "1 skipped" in result.stdout, f"Expected 1 skipped:\n{result.stdout}"
+    # 2 skipped: setup-vault-symlink.sh (already present) + graphify-exclude-generated
+    # (vault/_meta/generate-index.py absent in fixture → skipped_idempotent).
+    assert "2 skipped" in result.stdout, f"Expected 2 skipped:\n{result.stdout}"
 
 
 def test_convergence_fresh_creates_all(tmp_path: Path) -> None:
