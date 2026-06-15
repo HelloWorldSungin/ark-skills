@@ -30,6 +30,8 @@ def scan_dir(root, max_bytes):
         if not p.is_file():
             continue
         size = p.stat().st_size
+        # Size check applies to every file (a huge binary in the output is worth flagging);
+        # only content scanning below skips known binary extensions.
         if size > max_bytes:
             findings.append({"kind": "oversized", "file": str(p), "bytes": size})
         if p.suffix.lower() in SKIP_EXT:
