@@ -15,3 +15,7 @@
 
 # Python bytecode cache
 **/__pycache__/
+
+# graphify — regenerable/local; commit graph.json but not cache/cost
+graphify-out/cache/
+graphify-out/cost.json
