@@ -343,3 +343,20 @@ fi
 - Pass: `graphify-out/graph.json` present and not stale vs the vault quarantine meta
 - Warn: missing graph or stale → `/graph-map setup` | `/graph-map update`
 - Skip: graphify not installed (optional integration)
+
+---
+
+## Check 25 — Vault index excludes graphify output
+
+Detects whether `vault/_meta/generate-index.py` has converged to the v1.28.0 quarantine exclusion (`"generated"` in `EXCLUDE_DIRS`). Skip if no vault index generator exists.
+
+```bash
+GI="${VAULT_ROOT:-vault/}_meta/generate-index.py"
+if [ ! -f "$GI" ]; then
+  echo "SKIP: no vault index generator ($GI)"
+elif grep -qE 'EXCLUDE_DIRS[^=]*=.*"generated"' "$GI"; then
+  echo "PASS: vault index excludes generated/"
+else
+  echo "WARN: generate-index.py missing 'generated' in EXCLUDE_DIRS — run /ark-update"
+fi
+```
