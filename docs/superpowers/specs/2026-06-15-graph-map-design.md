@@ -248,8 +248,12 @@ The dogfood run is the acceptance test. Assert:
 3. `vault/generated/graphify/` populated; relative links resolve (no broken
    back-links); `_graphify-meta.json` written.
 4. This repo's `CLAUDE.md` has the Code-Structural Retrieval section.
-5. `.gitattributes` has the merge driver; `.git/config` registers it; per-clone
-   setup documented.
+5. ~~`.gitattributes` merge driver~~ — **DOGFOOD FINDING:** graphifyy 0.8.39
+   `hook install` installs post-commit + post-checkout hooks ONLY; it does NOT
+   create a `.gitattributes`/`.git/config` union-merge driver (the changelog
+   claim doesn't hold in this release). No merge driver to assert. Team
+   parallel-commit conflicts on `graph.json` are unmitigated until upstream ships
+   it; downstream guidance should not promise it.
 6. `.git/hooks/post-commit` **and** `post-checkout` exist; `graphify hook
    status` clean; worktree clean after a graph-only commit.
 7. `graphify query "what skills does ark-skills define?"` returns a graph-backed
