@@ -5,6 +5,9 @@ it relative to the NEW location so source back-links keep resolving.
 
 Usage: python3 relink.py --old-dir <path> --new-dir <path>
 Operates in place over *.md under --new-dir. Wikilinks ([[name]]) are untouched.
+Assumes relative [text](path) links point to NON-moved repo source files (source
+signposts); inter-note navigation uses wikilinks, and image assets move with the
+export — both are left untouched. Verify against real graphify output.
 """
 import argparse
 import os
@@ -12,7 +15,9 @@ import re
 import sys
 from pathlib import Path
 
-LINK_RE = re.compile(r"(\[[^\]]*\]\()([^)]+)(\))")
+# (?<!!) so markdown image links ![alt](path) are NOT rewritten — image assets
+# move with the export and keep their relative paths.
+LINK_RE = re.compile(r"(?<!!)(\[[^\]]*\]\()([^)]+)(\))")
 
 
 def _is_relative_path(target: str) -> bool:

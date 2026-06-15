@@ -38,3 +38,14 @@ class TestProcessFile:
         assert changed == 1
         assert "https://x" in page.read_text()
         assert "../src/a.py" not in page.read_text()
+
+    def test_leaves_image_link_untouched(self, tmp_path):
+        old_dir = tmp_path / "graphify-out" / "obs"
+        new_dir = tmp_path / "vault" / "generated" / "graphify"
+        new_dir.mkdir(parents=True)
+        page = new_dir / "page.md"
+        page.write_text("![diagram](assets/x.png) and [A](../src/a.py)")
+        (tmp_path / "graphify-out" / "src").mkdir(parents=True)
+        (tmp_path / "graphify-out" / "src" / "a.py").write_text("x")
+        rl.process_file(page, old_dir, new_dir)
+        assert "![diagram](assets/x.png)" in page.read_text()
