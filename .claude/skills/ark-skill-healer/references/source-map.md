@@ -56,10 +56,15 @@ transitive-pin annotation on `mempalace-cli`, not an independent cascade target.
   shipped MUST be treated as fork-only and cross-checked against **mempalace-cli**
   (PyPI release tier) before driving any pin-bump or workaround-retire. In S015,
   treating a fork `3.3.6` header as a release caused a wrong floor-bump + a wrong
-  `#1457` workaround-retire that had to be reverted. Pin/version/workaround
-  authority lives ONLY on `mempalace-cli`.
-- **mempalace-cli** — PyPI install (`mempalace --version` → `MemPalace 3.3.5`,
-  pin `>=3.3.5`). The #1457 / #976 / #1322 workaround logic anchors on THIS
+  `#1457` workaround-retire that had to be reverted. (PyPI has since caught up —
+  3.3.6 published 2026-06-06, latest 3.4.1 — and `#1457` was correctly retired in
+  v1.27.1; the lesson stands: at probe time the fork led PyPI, so a fork header is
+  never the release authority.) Pin/version/workaround authority lives ONLY on
+  `mempalace-cli`.
+- **mempalace-cli** — PyPI install (`mempalace --version` → `MemPalace 3.4.1`,
+  floor `>=3.3.6`; re-probed 2026-06-15, was `3.3.5`/`>=3.3.5` at 2026-06-05 — the
+  `#1457` fix shipped in v3.3.6 (PyPI 2026-06-06), so the floor moved off 3.3.5).
+  The #976 / #1322 workaround logic anchors on THIS
   record — it is the **single source of version/pin/workaround authority** for
   mempalace (see the mempalace-plugin guardrail above). `chromadb 1.5.7` is carried
   as an annotation here (M2/NIT-2), not a standalone record.

@@ -87,9 +87,11 @@ adopt. Same `impact × confidence` scoring. These rank among the must-change fin
 - ⚠️ **A closed GitHub issue is NOT a shipped fix (S015 lesson).** Only flag a
   workaround retire-able when the fix is published to the AUTHORITATIVE release
   channel (PyPI for mempalace-cli) **AND** the installed copy has it. A fork-changelog
-  or a closed-issue ref alone is insufficient — `#1457` was closed-as-issue yet its
-  fix never shipped to PyPI (latest `3.3.5`), so its workaround must stay. Honor each
-  entry's `retire_when` literally.
+  or a closed-issue ref alone is insufficient — in S015 `#1457` was closed-as-issue
+  while its fix was still unshipped (PyPI latest was `3.3.5`), so its workaround
+  correctly stayed; it was retired (v1.27.1) only once the fix actually shipped to
+  PyPI (v3.3.6, 2026-06-06) AND the install was upgraded. Honor each entry's
+  `retire_when` literally.
 - Surface `workaround_proposal` records (untracked refs) as **proposals** for the
   human to add to the registry — never write `workarounds.yaml`.
 
