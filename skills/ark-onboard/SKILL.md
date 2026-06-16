@@ -618,13 +618,27 @@ if [ -z "$MEMPALACE_OK" ] && command -v mempalace >/dev/null 2>&1; then
         MEMPALACE_OK=false
       fi
     fi
+    # Version floor: ensure the package is >=3.3.6 (the #1457 zero-byte
+    # link_lists.bin SIGSEGV fix shipped in 3.3.6). `pipx reinstall` preserves the
+    # OLD version and a pre-existing 3.13 install is never re-resolved, so without
+    # this an existing 3.3.5 stays on 3.3.5 even though the fresh-install path pins
+    # >=3.3.6. Version-gated via `sort -V`, so it's a no-op once >=3.3.6.
+    if [ "$MEMPALACE_OK" = "true" ]; then
+      INSTALLED_MP="$(mempalace --version 2>/dev/null | awk '{print $NF}')"
+      if [ -n "$INSTALLED_MP" ] && [ "$(printf '%s\n3.3.6\n' "$INSTALLED_MP" | sort -V | head -1)" != "3.3.6" ]; then
+        echo "MemPalace $INSTALLED_MP is below the 3.3.6 floor (missing the #1457 fix) — upgrading..."
+        pipx upgrade mempalace \
+          || pipx install --force --python "$PY313" "mempalace>=3.3.6,<4.0.0" \
+          || echo "WARNING: upgrade to >=3.3.6 failed — install remains on $INSTALLED_MP (manual: pipx upgrade mempalace)."
+      fi
+    fi
   fi
 fi
 
 # Fresh install on Python 3.13
 if [ -z "$MEMPALACE_OK" ]; then
   echo "Installing mempalace on Python 3.13 via pipx..."
-  if pipx install --python "$PY313" "mempalace>=3.3.5,<4.0.0"; then
+  if pipx install --python "$PY313" "mempalace>=3.3.6,<4.0.0"; then
     MEMPALACE_OK=true
   else
     MEMPALACE_OK=false

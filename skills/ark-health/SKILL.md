@@ -203,7 +203,7 @@ command -v mempalace 2>/dev/null && mempalace --version 2>/dev/null && echo "PAS
 ```
 
 - Pass: `mempalace` CLI on PATH
-- Upgrade action: prefer `pipx install "mempalace>=3.0.0,<4.0.0"`; fallback `pip install` if `pipx` unavailable
+- Upgrade action: prefer `pipx install "mempalace>=3.3.6,<4.0.0"` (floor is **3.3.6** — the #1457 fix); fallback `pip install` if `pipx` unavailable
 - Unlocks: T2 retrieval for `/wiki-query` (deep synthesis, experiential recall) + history auto-index hook
 
 **Check 14a — MemPalace plugin installed (user scope)** | Tier: Full | Returns: `warn`
@@ -277,7 +277,7 @@ fi
 
 **Check 14c — MemPalace hook state (informational)** | Tier: Full | Returns: `pass` (both states)
 
-> mempalace v3.3.5 ships [#1023](https://github.com/MemPalace/mempalace/pull/1023) (PID-file guard), [#784](https://github.com/MemPalace/mempalace/pull/784) (per-source-file `mine_lock`), [#976](https://github.com/MemPalace/mempalace/pull/976) (HNSW thread-safety, v3.3.4), [#1322](https://github.com/MemPalace/mempalace/pull/1322) (wires `quarantine_stale_hnsw` for #1121/#1132/#1263), and [#1162](https://github.com/MemPalace/mempalace/pull/1162) (serialize ChromaCollection writes through palace lock). With this stack landed, the plugin's own Stop/PreCompact hooks are substantially safer than at v3.3.2. Neutralizing them is now a defense-in-depth choice for very large palaces, not a corruption-prevention requirement. Watch [#1457](https://github.com/MemPalace/mempalace/issues/1457) (quarantine gate misses zero-byte `link_lists.bin` — the issue is CLOSED upstream via PR [#1461](https://github.com/MemPalace/mempalace/pull/1461) merged 2026-05-14, but the fix is NOT yet in a PyPI release: v3.3.5 still treats a 0-byte `link_lists.bin` as benign, and the fix is slated for unpublished v3.3.6); this check can retire once 3.3.6 ships to PyPI and is installed.
+> mempalace v3.3.5 ships [#1023](https://github.com/MemPalace/mempalace/pull/1023) (PID-file guard), [#784](https://github.com/MemPalace/mempalace/pull/784) (per-source-file `mine_lock`), [#976](https://github.com/MemPalace/mempalace/pull/976) (HNSW thread-safety, v3.3.4), [#1322](https://github.com/MemPalace/mempalace/pull/1322) (wires `quarantine_stale_hnsw` for #1121/#1132/#1263), and [#1162](https://github.com/MemPalace/mempalace/pull/1162) (serialize ChromaCollection writes through palace lock). With this stack landed, the plugin's own Stop/PreCompact hooks are substantially safer than at v3.3.2. Neutralizing them is now a defense-in-depth choice for very large palaces, not a corruption-prevention requirement. The zero-byte `link_lists.bin` gap ([#1457](https://github.com/MemPalace/mempalace/issues/1457)) is **fixed in v3.3.6** (PR [#1461](https://github.com/MemPalace/mempalace/pull/1461), published to PyPI 2026-06-06; release notes: "#1452, #1461, fixes #1457"): on installs **>=3.3.6** the quarantine gate rejects partially-written segments, so this watch-item is retired (floor is now `>=3.3.6`).
 
 ```bash
 # JSON-aware: check `.hooks.Stop` and `.hooks.PreCompact` specifically.
@@ -391,6 +391,25 @@ fi
 - **Requires:** Check 14a (plugin), Check 14b (MCP server responds).
 - **Self-heal opportunity:** when upstream [#1062](https://github.com/MemPalace/mempalace/pull/1062) lands (wires `quarantine_stale_hnsw()` automatically on MCP startup), this check can be retired.
 
+**Check 14e — MemPalace version floor (>=3.3.6)** | Tier: Full | Returns: `warn` | Requires Check 14
+
+The #1457 zero-byte `link_lists.bin` SIGSEGV fix shipped in mempalace **3.3.6** (PyPI 2026-06-06). The manual `mv` workaround was removed in v1.27.1, so an install below 3.3.6 is exposed with no documented fallback — flag it.
+
+```bash
+MP_VER="$(mempalace --version 2>/dev/null | awk '{print $NF}')"
+if [ -z "$MP_VER" ]; then
+  echo "SKIP: mempalace not installed (see Check 14)"
+elif [ "$(printf '%s\n3.3.6\n' "$MP_VER" | sort -V | head -1)" != "3.3.6" ]; then
+  echo "WARN: mempalace $MP_VER < 3.3.6 — missing the #1457 link_lists.bin SIGSEGV fix"
+else
+  echo "PASS: mempalace $MP_VER >= 3.3.6"
+fi
+```
+
+- Pass: installed mempalace `>= 3.3.6`
+- Warn: `< 3.3.6` — Fix: `pipx upgrade mempalace` (or `pipx install "mempalace>=3.3.6,<4.0.0"`); re-running `/ark-onboard` also upgrades it.
+- Requires: Check 14 (CLI installed). Self-skips when mempalace is absent.
+
 **Check 15 — MemPalace wing indexed** | Tier: Full | Requires Check 14
 
 Covers the vault content wing (indexed by `mine-vault.sh`). The conversation history wing is separate — see Check 16.
@@ -403,6 +422,36 @@ mempalace status 2>/dev/null | grep -q "$WING" && echo "PASS: wing found" || ech
 
 - Pass: `mempalace status` shows a wing for this project
 - Fail action: `bash skills/shared/mine-vault.sh`
+
+**Check 15a — MemPalace legacy wing names** | Tier: Full | Returns: `warn` | Requires Check 14
+
+Detects pre-#1675 wing names left by older mempalace versions — wings with a leading or trailing separator (e.g. path-slug wings like `-Users-me--superset-projects-foo`). After a mempalace ≥3.4.0 upgrade the save-hook emits the normalized format (`users_me__superset_projects_foo`), so legacy wings fragment retrieval: old drawers stay under the old name while new drawers land under the new one. `mempalace migrate-wings` consolidates them.
+
+```bash
+PALACE=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.mempalace/config.json')))['palace_path'])" 2>/dev/null || echo "$HOME/.mempalace/palace")
+DB="$PALACE/chroma.sqlite3"
+if [ ! -f "$DB" ]; then
+  echo "SKIP: no palace at $DB"
+elif ! command -v sqlite3 >/dev/null 2>&1; then
+  echo "SKIP: sqlite3 not installed — cannot run the diagnostic"
+else
+  # sqlite-only (no chromadb client → no SIGSEGV risk). GLOB, not LIKE: `_` is a
+  # LIKE wildcard, so LIKE '_%' matches everything; GLOB '[-_]*' is literal.
+  LEGACY=$(sqlite3 "$DB" "SELECT COUNT(DISTINCT string_value) FROM embedding_metadata WHERE key='wing' AND (string_value GLOB '[-_]*' OR string_value GLOB '*[-_]');" 2>/dev/null)
+  if ! printf '%s' "$LEGACY" | grep -qE '^[0-9]+$'; then
+    echo "SKIP: palace query failed (locked/corrupt DB or schema mismatch) — inconclusive, NOT a pass"
+  elif [ "$LEGACY" -gt 0 ]; then
+    echo "WARN: $LEGACY legacy wing name(s) — run migrate-wings"
+  else
+    echo "PASS: no legacy wing names"
+  fi
+fi
+```
+
+- Pass: zero wings with a leading/trailing separator (or no palace yet)
+- Warn: one or more legacy wings — **back up the palace dir first** (`cp -a "$PALACE" "$PALACE.bak-$(date +%Y%m%d)"` — `$PALACE` is the `palace_path` from `~/.mempalace/config.json`, default `~/.mempalace/palace`; do NOT assume the default if a custom path is configured), then `mempalace migrate-wings --dry-run` to preview, then `mempalace migrate-wings --yes`. `migrate-wings` has **no `--backup` flag**, so the manual backup is mandatory.
+- Skip: no palace, `sqlite3` missing, or the query couldn't run — reported as SKIP (inconclusive), never silently as PASS.
+- Read-only: queries `chroma.sqlite3` directly via sqlite3, never opens a chromadb client.
 
 **Check 16 — History auto-index hook** | Tier: Full | Requires Check 14
 
@@ -584,7 +633,7 @@ Detects whether the project has converged to the v1.28.0 quarantine exclusion: `
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking (Check 2a gstack install integrity, Check 10 staleness, Check 14a/14b/14d MemPalace, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22, Check 23, Check 24, Check 25) |
+| `~~` | Warning | Non-blocking (Check 2a gstack install integrity, Check 10 staleness, Check 14a/14b/14d/14e MemPalace, Check 15a legacy wings, Check 16 hook-state drift, Check 16b hook content drift, Check 20, Check 22, Check 23, Check 24, Check 25) |
 | `--` | Available upgrade | Feature not installed, above current tier |
 | `>>` | Informational | State display only (Check 14c MemPalace hook state — always passes) |
 
@@ -595,7 +644,7 @@ Detects whether the project has converged to the v1.28.0 quarantine exclusion: `
 - **Standard:** no fail in checks 1–13 (TaskNotes MCP configured)
 - **Full:** no fail in checks 1–20 (MemPalace + history hook + NotebookLM + vault externalized OR embedded opt-out)
 
-Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (2a gstack install integrity, 10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 16b history hook content drift, 20 vault externalized, 22 plugin version, 23 plugin cache integrity, 24 graphify code graph, 25 vault index excludes generated/) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
+Check 21 (OMC plugin) is tier-agnostic. Warn-returning checks (2a gstack install integrity, 10 index staleness, 14a MemPalace plugin, 14b MemPalace MCP reachable, 14d MemPalace palace read sanity, 14e MemPalace version floor, 15a MemPalace legacy wing names, 16b history hook content drift, 20 vault externalized, 22 plugin version, 23 plugin cache integrity, 24 graphify code graph, 25 vault index excludes generated/) are advisory — they surface in the scorecard but never block tier classification. Upgrade-returning checks (14 MemPalace, 17 NotebookLM CLI, 18 NotebookLM config, 21 OMC plugin) are also non-blocking. Informational checks (14c MemPalace hook state) always return `pass` and exist purely to surface state on the scorecard.
 
 4. **Emit scorecard** per the Output Format below. Always end with `Run /ark-onboard to fix or upgrade`.
 
@@ -632,7 +681,7 @@ Integrations
       Fix: Add tasknotes HTTP transport to .mcp.json
   --  MemPalace -- not installed
       Unlock: T2 retrieval for /wiki-query
-      Install: pipx install "mempalace>=3.0.0,<4.0.0"
+      Install: pipx install "mempalace>=3.3.6,<4.0.0"
   ~~  MemPalace plugin -- not installed (user scope)
       Unlock: Auto-MCP server on all Claude Code sessions (19 read tools for T2)
       Install: claude plugin marketplace add milla-jovovich/mempalace && claude plugin install --scope user mempalace@mempalace

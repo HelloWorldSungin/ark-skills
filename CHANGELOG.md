@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.29.1] - 2026-06-15
+
+### Changed
+
+- **mempalace `#1457` fix shipped → floor bumped to `>=3.3.6`, workaround retired.** mempalace **3.3.6** published to PyPI 2026-06-06 (latest now **3.4.1**) carrying PR [#1461](https://github.com/MemPalace/mempalace/pull/1461) — the authoritative `MemPalace/mempalace` v3.3.6 release notes read "#1452, #1461, **fixes #1457**" (the zero-byte `link_lists.bin` SIGSEGV gap). This reverses the S015 / v1.25.0 hold that deliberately kept the floor at `>=3.3.5` because 3.3.6 was then unpublished (bumping then would have documented an uninstallable requirement). Now-shipped fact propagated across every carrier:
+  - **`ark-onboard`** install floor `mempalace>=3.3.5` → **`>=3.3.6`**, and the existing-install path now **version-gates an upgrade** (`sort -V`) so a pre-existing 3.3.5-on-Python-3.13 install is moved to `>=3.3.6` instead of left untouched (`pipx reinstall` preserves the old version) — re-running `/ark-onboard` is now a genuine install lever, not just a fresh-install pin. chromadb is re-pinned to 1.5.7 afterward.
+  - **`ark-health`** Check 14c `#1457` watch-item retired (was telling every repo the fix was unshipped).
+  - **`CLAUDE.md`** T2 retrieval-defaults guidance: `#1457` reframed from "manual `mv` workaround until 3.3.6 ships" to "Resolved (v3.3.6)".
+  - **`ark-skill-healer`**: `references/workarounds.yaml` `#1457` entry removed (its `retire_when` — published-to-PyPI **and** installed — is now satisfied); `references/source-map.md` re-probed (`3.3.5`/`>=3.3.5` → `3.4.1`/`>=3.3.6`); `SKILL.md` Step 5 S015 guardrail updated to "shipped + retired" while **preserving** the fork-vs-PyPI methodology lesson.
+- **chromadb stays pinned `1.5.7`** — mempalace 3.4.1 still requires `chromadb<2,>=1.5.4`, so the pin is unaffected (verified before upgrading); `chromadb#1092` workaround entry retained.
+- **`/ark-update` intentionally untouched** — a mempalace CLI version is **user-machine** scope (propagates via `ark-onboard` + `ark-health`), not a project-repo convention. Consistent with the established ark-update scope boundary.
+
+### Added
+
+- **`ark-health` Check 14e — MemPalace version floor (warn-only).** Warns when the installed mempalace is `< 3.3.6` (below the #1457-fix floor) — closes the gap where Check 14 passed any version while the workaround had been removed. `sort -V` comparison (correctly orders `3.10` vs `3.3`); self-skips when mempalace is absent. Check 14's recommended install command and the scorecard sample also bumped `>=3.0.0` → `>=3.3.6`.
+- **`ark-health` Check 15a — MemPalace legacy wing names (warn-only).** Detects pre-#1675 wing names (leading/trailing separators, e.g. `-Users-me--superset-projects-foo`) that fragment retrieval after a mempalace ≥3.4.0 upgrade — the new save-hook emits the normalized `users_me__superset_projects_foo` format, so old drawers and new drawers split across two wings for the same project. Warns with the `migrate-wings` remediation (back up first — `migrate-wings` has no `--backup` flag, and the backup command uses the configured `palace_path`, not a hardcoded default). sqlite-only (no chromadb client, no SIGSEGV risk); distinguishes a real zero-count PASS from an inconclusive SKIP (sqlite missing / unreadable DB) rather than silently passing. Advisory/non-blocking. Numbered 15a/14e as sub-checks (per the 14a–14d / 16b convention), so the headline check count is unchanged.
+
 ## [1.29.0] - 2026-06-15
 
 ### Added
