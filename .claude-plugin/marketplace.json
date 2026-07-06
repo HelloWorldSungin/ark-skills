@@ -8,7 +8,7 @@
     {
       "name": "ark-skills",
       "source": "./",
-      "description": "Shared skills for ArkNode projects: Obsidian vault management, NotebookLM, TaskNotes, code review, codebase maintenance, and Claude history ingest via MemPalace, onboarding wizard, health diagnostics.",
+      "description": "Two co-equal cores for ArkNode projects: a stateless workflow consultant that routes each task to one execution ecosystem and files a GitHub epic as the plan of record, plus a conventions layer (OKF v0.1 knowledge bundles, GitHub Issues, NotebookLM sync) applied via onboarding, health, and migration.",
       "version": "1.29.1"
     }
   ]
