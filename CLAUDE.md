@@ -20,8 +20,6 @@ When a skill says "Run Project Discovery," follow this procedure:
 | Task prefix | "Task Management" row, includes trailing dash | `ArkSignal-` |
 | Vault root | Parent of project docs and TaskNotes | `vault/` |
 | Project docs path | "Obsidian Vault" row — project-specific content | `vault/Trading-Signal-AI/` |
-| TaskNotes path | "Task Management" row — sibling of project docs, NOT nested under it | `vault/TaskNotes/` |
-| Counter file | `{tasknotes_path}/meta/{task_prefix}counter` — prefix includes dash | `vault/TaskNotes/meta/ArkSignal-counter` |
 | Deployment targets | Infrastructure section | CT100, CT110, CT120 (if defined) |
 | NotebookLM config | `.notebooklm/config.json` in **project repo** (tracked config) | notebook keys, persona |
 
@@ -67,7 +65,7 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 | **Obsidian Vault** | `vault/` |
 | **Project docs path** | `vault/` (standalone layout — same as vault root) |
 | **Session Logs** | `vault/Session-Logs/` |
-| **Task Management** | `vault/TaskNotes/` — prefix: `Arkskill-`, project: `ark-skills` |
+| **Task Management** | GitHub Issues via `gh` CLI — labels: triage (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`), type (`epic`, `story`, `task`), priority (`P1`/`P2`/`P3`), components (`consultant`, `conventions`, `vault`, `onboarding`); see `docs/agents/issue-tracker.md` for the full convention (`gh issue create/view/list/edit/comment/close` crib) |
 
 ## Available Skills
 
