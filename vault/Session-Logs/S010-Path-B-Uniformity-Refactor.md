@@ -12,7 +12,7 @@ tags:
   - refactor
   - audit
   - drift-lint
-summary: "Audited /ark-workflow Path B routing; implemented 2026-04-14 uniformity decision in 7 atomic commits on branch ark-workflow-improve-OMC. All chain Path B engines collapsed to /autopilot except Migration Heavy (/team). Added chain drift lint (R4). 17 blocks / 4 classifier shapes / 5 raw-text hashes. Shipped in v1.16.0 via PR #18 (renumbered from S008 during rebase onto master's S008/S009)."
+description: "Audited /ark-workflow Path B routing; implemented 2026-04-14 uniformity decision in 7 atomic commits on branch ark-workflow-improve-OMC. All chain Path B engines collapsed to /autopilot except Migration Heavy (/team). Added chain drift lint (R4). 17 blocks / 4 classifier shapes / 5 raw-text hashes. Shipped in v1.16.0 via PR #18 (renumbered from S008 during rebase onto master's S008/S009)."
 session: "S010"
 status: complete
 date: 2026-04-15
@@ -23,6 +23,7 @@ source-tasks:
   - "[[Arkskill-003-omc-integration]]"
 created: 2026-04-15
 last-updated: 2026-04-15
+timestamp: 2026-04-15T00:00:00Z
 ---
 
 # Session 8: Path B Uniformity Refactor

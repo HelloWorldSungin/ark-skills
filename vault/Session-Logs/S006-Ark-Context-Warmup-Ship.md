@@ -11,7 +11,7 @@ tags:
   - codex-review
   - hardening
   - release
-summary: "Shipped /ark-context-warmup as step 0 of every chain. Fixed 13 codex-raised findings across 5 review passes (YAML safety, shell-escape, shel-path resolution, 2-layer interp, availability probes, evidence pipeline, index table parser). Tests 107→143. v1.11.0 → v1.12.0. PR #14."
+description: "Shipped /ark-context-warmup as step 0 of every chain. Fixed 13 codex-raised findings across 5 review passes (YAML safety, shell-escape, shel-path resolution, 2-layer interp, availability probes, evidence pipeline, index table parser). Tests 107→143. v1.11.0 → v1.12.0. PR #14."
 session: "S006"
 status: complete
 date: 2026-04-13
@@ -21,6 +21,7 @@ source-tasks:
   - "[[Arkskill-002-ark-context-warmup]]"
 created: 2026-04-13
 last-updated: 2026-04-13
+timestamp: 2026-04-13T00:00:00Z
 ---
 
 # Session 6: /ark-context-warmup Ship + Codex Harden (v1.12.0)

@@ -6,13 +6,14 @@ tags:
   - infrastructure
   - mempalace
   - debugging
-summary: "When `_upsert`/`_query` segfaults persist after upgrading mempalace, the on-disk HNSW segment is bloated and must be manually moved aside before `mempalace repair` can run. v3.3.4 prevents future bloat but doesn't repair existing on-disk corruption."
+description: "When `_upsert`/`_query` segfaults persist after upgrading mempalace, the on-disk HNSW segment is bloated and must be manually moved aside before `mempalace repair` can run. v3.3.4 prevents future bloat but doesn't repair existing on-disk corruption."
 source-sessions:
   - "[[S014-MemPalace-v3-3-4-Upgrade-Mutex-Retirement]]"
 source-tasks:
   - "[[Arkskill-010-retire-cross-wing-mutex-when-mempalace-976-merges]]"
 created: 2026-05-05
 last-updated: 2026-05-05
+timestamp: 2026-05-05T00:00:00Z
 ---
 
 # MemPalace HNSW Bloat Repair
@@ -123,14 +124,14 @@ Use the equals form: `--wing=-Users-…`. This applies to any shell invocation �
 
 ## Smoke Test Verification
 
-After repair, verify the upstream lock works by simulating the original cross-wing race. See [[PID-Aware-Cross-Wing-Mutex]] § Retired (2026-05-05) for the smoke-test methodology — 4 concurrent `mempalace mine` against 4 different wings produces zero HNSW bloat and zero segfaults on v3.3.4+.
+After repair, verify the upstream lock works by simulating the original cross-wing race. See [PID-Aware-Cross-Wing-Mutex](PID-Aware-Cross-Wing-Mutex.md) § Retired (2026-05-05) for the smoke-test methodology — 4 concurrent `mempalace mine` against 4 different wings produces zero HNSW bloat and zero segfaults on v3.3.4+.
 
 ## Implications
 
 - **Upgrading mempalace alone is insufficient when there is pre-existing bloat.** Always pair version upgrades with a `du -sh ~/.mempalace/palace/*` audit. If any VECTOR segment is in tens-of-GB range, the upgrade will not stop crashes — repair must run too.
 - **`tee` is unsafe for capturing exit codes from chromadb-backed tools.** Anywhere we pipe mempalace output for logging, we must capture exit via `> file 2>&1; echo $?` or `${PIPESTATUS[0]}` instead. This gotcha is general to any subprocess that can segfault inside a Rust extension — bash does not propagate pipe-segment exit codes by default.
 - **Trust the SQLite metadata segment as ground truth.** No matter how badly the HNSW index corrupts, the actual drawer text is in `chroma.sqlite3`. Backups should prioritize the SQLite file; HNSW segments can always be rebuilt from it.
-- **Tag every workaround mutex with its retirement trigger.** [[PID-Aware-Cross-Wing-Mutex]] applies — but the corollary here is: when the trigger lands, *also* schedule a sweep for any state the mutex was protecting against. The mutex retirement closed the door on *new* bloat; it did not clean up *old* bloat. Two separate fixes for two separate concerns.
+- **Tag every workaround mutex with its retirement trigger.** [PID-Aware-Cross-Wing-Mutex](PID-Aware-Cross-Wing-Mutex.md) applies — but the corollary here is: when the trigger lands, *also* schedule a sweep for any state the mutex was protecting against. The mutex retirement closed the door on *new* bloat; it did not clean up *old* bloat. Two separate fixes for two separate concerns.
 - **Plugin cache lag introduces fix-application visibility risk.** Even after the source-of-truth hook is committed and pushed, the live `~/.claude/hooks/ark-history-hook.sh` may stay stale until the marketplace cache picks up the new version and `/claude-history-ingest` re-runs install. If urgent, manually `cp` the repo source-of-truth over the live hook — same content, forward-compatible with the eventual auto-install.
 
 ## Evidence

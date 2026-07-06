@@ -9,7 +9,7 @@ tags:
   - deep-interview
   - consensus
   - ralph
-summary: "Rebuilt the (lost, untracked) ark-skill-healer via deep-interview→omc-plan consensus→ralph. Consensus caught a false .claude/skills discovery path + the mempalace dual-upstream bug pre-execution. Discovered S015 had already run an untracked copy; folded its two methodology fixes (binary install-lag, fork-vs-PyPI authority) back in before committing/tracking. 28-test bats suite green."
+description: "Rebuilt the (lost, untracked) ark-skill-healer via deep-interview→omc-plan consensus→ralph. Consensus caught a false .claude/skills discovery path + the mempalace dual-upstream bug pre-execution. Discovered S015 had already run an untracked copy; folded its two methodology fixes (binary install-lag, fork-vs-PyPI authority) back in before committing/tracking. 28-test bats suite green."
 session: "S016"
 status: complete
 date: 2026-06-05
@@ -19,6 +19,7 @@ source-sessions: []
 source-tasks: []
 created: 2026-06-05
 last-updated: 2026-06-05
+timestamp: 2026-06-05T00:00:00Z
 ---
 
 # Session 16: ark-skill-healer tracked rebuild + S015 fix fold-in
@@ -29,7 +30,7 @@ consensus → ralph), then commit/track it so it stops getting lost as an untrac
 skill.
 
 ## Context
-Follows [[S015-Ark-Skill-Healer-Run-Mempalace-Fork-vs-PyPI]]. **Key discovery mid-session:**
+Follows [S015-Ark-Skill-Healer-Run-Mempalace-Fork-vs-PyPI](S015-Ark-Skill-Healer-Run-Mempalace-Fork-vs-PyPI.md). **Key discovery mid-session:**
 S015 had already built and *run* `ark-skill-healer` — but it lived **untracked** at
 `.claude/skills/ark-skill-healer/` and was lost (git history shows it was never
 committed). This session rebuilt it from scratch (the pipeline was blind to S015's

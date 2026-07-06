@@ -2,6 +2,7 @@
 tags:
   - task
 title: "Multi-Backend Vault Retrieval Tiers"
+description: "Epic tracking the multi-backend vault retrieval tier design (NotebookLM/MemPalace/Obsidian-CLI/index.md) — in progress."
 task-id: "Arkskill-001"
 status: in-progress
 priority: high
@@ -11,6 +12,8 @@ task-type: epic
 urgency: normal
 session: "S002"
 created: "2026-04-08"
+type: epic
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Arkskill-001: Multi-Backend Vault Retrieval Tiers
@@ -45,4 +48,4 @@ Add T1-T4 retrieval backends (NotebookLM, MemPalace, Obsidian-CLI, index.md) to 
 
 ## Session Log
 
-- [[S002-Vault-Retrieval-Tiers-Phase1]] — 2026-04-08: Phase 1 implemented, all reviews passed, 4 commits
+- [S002-Vault-Retrieval-Tiers-Phase1](../../../Session-Logs/S002-Vault-Retrieval-Tiers-Phase1.md) — 2026-04-08: Phase 1 implemented, all reviews passed, 4 commits

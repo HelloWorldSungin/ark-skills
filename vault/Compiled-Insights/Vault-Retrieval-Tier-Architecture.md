@@ -5,13 +5,14 @@ tags:
   - compiled-insight
   - vault
   - skill
-summary: "Four-tier retrieval: NotebookLM (T1, ~500 tokens), MemPalace (T2, ~2500), Obsidian-CLI (T3, ~119+reads), index.md (T4, ~2100). Routing by query type, not corpus. Key finding: MemPalace on vault pages scored 8/10 vs 0/10 on conversations alone."
+description: "Four-tier retrieval: NotebookLM (T1, ~500 tokens), MemPalace (T2, ~2500), Obsidian-CLI (T3, ~119+reads), index.md (T4, ~2100). Routing by query type, not corpus. Key finding: MemPalace on vault pages scored 8/10 vs 0/10 on conversations alone."
 source-sessions:
   - "[[S002-Vault-Retrieval-Tiers-Phase1]]"
 source-tasks:
   - "[[Arkskill-001-vault-retrieval-tiers]]"
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Vault Retrieval Tier Architecture — T1-T4 Design
@@ -24,7 +25,7 @@ The vault retrieval system uses four backends (T1-T4) routed by query type rathe
 
 ### MemPalace on Vault Pages Is the Missing Piece
 
-The initial benchmark (see [[Retrieval-Backend-Benchmark]]) tested MemPalace on conversation history only and scored 0/10. When vault markdown pages were mined into MemPalace alongside conversations, the score jumped to 8/10 — it surfaced the reasoning trail (Session 269 pivot, failure modes, metalabel dead end) that other backends missed. The `mine-vault.sh` script enables this by indexing vault .md files into the same wing as conversation history.
+The initial benchmark (see [Retrieval-Backend-Benchmark](Retrieval-Backend-Benchmark.md)) tested MemPalace on conversation history only and scored 0/10. When vault markdown pages were mined into MemPalace alongside conversations, the score jumped to 8/10 — it surfaced the reasoning trail (Session 269 pivot, failure modes, metalabel dead end) that other backends missed. The `mine-vault.sh` script enables this by indexing vault .md files into the same wing as conversation history.
 
 ### Route by Query Intent, Not Corpus Type
 

@@ -7,13 +7,14 @@ tags:
   - plugin
   - workflow
   - refactor
-summary: "Rewrote /ark-workflow SKILL.md to address 22 gaps: 7 scenarios, risk+density triage, batch triage, continuity mechanism, cross-session resume. Shipped 1.6.0 in 6 phases."
+description: "Rewrote /ark-workflow SKILL.md to address 22 gaps: 7 scenarios, risk+density triage, batch triage, continuity mechanism, cross-session resume. Shipped 1.6.0 in 6 phases."
 prev: "[[S002-Ark-Workflow-Skill]]"
 epic: ""
 session: "S003"
 source-tasks: []
 created: 2026-04-09
 last-updated: 2026-04-09
+timestamp: 2026-04-09T00:00:00Z
 ---
 
 # Session: /ark-workflow v2 Rewrite

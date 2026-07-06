@@ -6,20 +6,21 @@ tags:
   - lint
   - composition
   - codex
-summary: "Why the ark-skills plugin is rejecting a wikilink-traversal/tier-frontmatter graph rebuild in favor of a smaller composition-contract + lint pass. Records the /codex consult+challenge transcripts that drove the v3 plan."
+description: "Why the ark-skills plugin is rejecting a wikilink-traversal/tier-frontmatter graph rebuild in favor of a smaller composition-contract + lint pass. Records the /codex consult+challenge transcripts that drove the v3 plan."
 session: ""
 source-sessions: []
 source-tasks:
   - "[[Arkskill-012-skill-graph-hardening-pass]]"
 created: 2026-04-24
 last-updated: 2026-04-24
+timestamp: 2026-04-24T00:00:00Z
 ---
 
 # Skill-Graph Hardening Pass — Design Rationale
 
 ## TL;DR
 
-Two skill-graph design patterns (Heinrich's `[[wikilinks]]` traversal, Shiv's atom/molecule/compound tiers) circulated in early 2026. A prior session proposed adopting elements of both for ark-skills. A `/codex` consult + challenge session against this repo overruled the proposal and surfaced **catalog drift + brittle section-anchor refs + no internal/external skill classification + oversized active SKILL.md bodies** as the actual failure modes worth hardening. The v3 plan is a composition-contract + lint pass, not a graph rebuild. Tracked under [[Arkskill-012-skill-graph-hardening-pass]].
+Two skill-graph design patterns (Heinrich's `[[wikilinks]]` traversal, Shiv's atom/molecule/compound tiers) circulated in early 2026. A prior session proposed adopting elements of both for ark-skills. A `/codex` consult + challenge session against this repo overruled the proposal and surfaced **catalog drift + brittle section-anchor refs + no internal/external skill classification + oversized active SKILL.md bodies** as the actual failure modes worth hardening. The v3 plan is a composition-contract + lint pass, not a graph rebuild. Tracked under [Arkskill-012-skill-graph-hardening-pass](../TaskNotes/Tasks/Epic/Arkskill-012-skill-graph-hardening-pass.md).
 
 ## Two Patterns Considered
 

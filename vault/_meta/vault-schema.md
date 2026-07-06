@@ -4,9 +4,10 @@ type: meta
 tags:
   - meta
   - schema
-summary: "Self-documenting vault structure, frontmatter conventions, and navigation patterns for ark-skills."
+description: "Self-documenting vault structure, frontmatter conventions, and navigation patterns for ark-skills."
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Vault Schema — ark-skills

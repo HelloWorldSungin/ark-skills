@@ -10,7 +10,7 @@ tags:
   - continuous-checkpoint
   - context-save
   - release
-summary: "Shipped v1.20.0 — Wave 1 of gstack v1.5.1.0 integration: 8 /checkpoint refs renamed to /context-save, continuous-checkpoint wired into Step 6.5 (opt-in), /context-save added as compaction-recovery option (d). 4 atomic commits on master; review and security passes both green."
+description: "Shipped v1.20.0 — Wave 1 of gstack v1.5.1.0 integration: 8 /checkpoint refs renamed to /context-save, continuous-checkpoint wired into Step 6.5 (opt-in), /context-save added as compaction-recovery option (d). 4 atomic commits on master; review and security passes both green."
 session: "S013"
 status: complete
 date: 2026-04-22
@@ -20,6 +20,7 @@ source-tasks:
   - "[[Arkskill-009-gstack-v1-5-1-0-integration]]"
 created: 2026-04-22
 last-updated: 2026-04-22
+timestamp: 2026-04-22T00:00:00Z
 ---
 
 # Session 13: gstack v1.5.1.0 integration Wave 1 (v1.20.0)

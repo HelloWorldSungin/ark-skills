@@ -13,7 +13,9 @@ work-type: "refactor"
 component: "ark-health"
 urgency: "normal"
 created: "2026-04-23"
-summary: "v1.21.0 Shrink-to-Core moved heavy bash to references/. v1.21.1/2 added new checks inline. Relocate them to honor the original direction once they've stabilized."
+description: "v1.21.0 Shrink-to-Core moved heavy bash to references/. v1.21.1/2 added new checks inline. Relocate them to honor the original direction once they've stabilized."
+type: task
+timestamp: 2026-04-23T00:00:00Z
 ---
 
 # Relocate Check 14a/14b/14c/14d/16b bash blocks to references/

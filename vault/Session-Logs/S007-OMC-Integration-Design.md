@@ -12,7 +12,7 @@ tags:
   - ralplan
   - autopilot
   - release
-summary: "Shipped dual-mode /ark-workflow routing. Every chain variant now has Path A (Ark-native) and Path B (OMC-powered) when HAS_OMC=true. 19 variants across 7 chain files; 3 canonicalized shapes (vanilla + special-a + special-b). HAS_OMC probe + omc-integration reference doc + check_path_b_coverage.py CI. v1.12.0 → v1.13.0."
+description: "Shipped dual-mode /ark-workflow routing. Every chain variant now has Path A (Ark-native) and Path B (OMC-powered) when HAS_OMC=true. 19 variants across 7 chain files; 3 canonicalized shapes (vanilla + special-a + special-b). HAS_OMC probe + omc-integration reference doc + check_path_b_coverage.py CI. v1.12.0 → v1.13.0."
 session: "S007"
 status: complete
 date: 2026-04-13
@@ -22,6 +22,7 @@ source-tasks:
   - "[[Arkskill-003-omc-integration]]"
 created: 2026-04-13
 last-updated: 2026-04-13
+timestamp: 2026-04-13T00:00:00Z
 ---
 
 # Session 7: OMC ↔ /ark-workflow Dual-Mode Integration (v1.13.0)

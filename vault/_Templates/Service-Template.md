@@ -4,9 +4,10 @@ type: service
 tags:
   - service
   - infrastructure
-summary: ""
+description: ""
 created: {DATE}
 last-updated: {DATE}
+timestamp: 2026-04-08T12:36:00-07:00
 ---
 
 # {SERVICE_NAME}

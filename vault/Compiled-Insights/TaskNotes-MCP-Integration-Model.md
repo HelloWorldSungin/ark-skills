@@ -5,11 +5,12 @@ tags:
   - compiled-insight
   - plugin
   - infrastructure
-summary: "TaskNotes MCP is an HTTP endpoint inside Obsidian (not standalone), with limited schema — custom frontmatter requires post-edit or direct markdown write."
+description: "TaskNotes MCP is an HTTP endpoint inside Obsidian (not standalone), with limited schema — custom frontmatter requires post-edit or direct markdown write."
 source-sessions: []
 source-tasks: []
 created: 2026-04-08
 last-updated: 2026-04-09
+timestamp: 2026-04-09T00:00:00Z
 ---
 
 # TaskNotes MCP Integration — Architecture & Limitations
@@ -53,7 +54,7 @@ The `/ark-tasknotes status` subcommand uses MCP query tools for read-only task o
 
 The LLM computes derived signals (staleness, blocked chains, velocity) from raw data and generates opinionated triage recommendations. No algorithmic scoring — the LLM's natural reasoning handles prioritization using ordered heuristics: unblock first → priority×urgency → batch related work → quick wins.
 
-Fallback: when MCP is unavailable, reads frontmatter directly from `TaskNotes/Tasks/**/*.md` and `Archive/**/*.md`. See [[Compiled-Insights/TaskNotes-Status-Triage-Design|TaskNotes Status & Triage Design]] for full design rationale.
+Fallback: when MCP is unavailable, reads frontmatter directly from `TaskNotes/Tasks/**/*.md` and `Archive/**/*.md`. See [TaskNotes Status & Triage Design](TaskNotes-Status-Triage-Design.md) for full design rationale.
 
 ### Error Handling Patterns
 

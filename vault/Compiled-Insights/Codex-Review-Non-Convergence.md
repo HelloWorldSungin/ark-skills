@@ -7,13 +7,14 @@ tags:
   - code-review
   - codex
   - workflow
-summary: "codex review --base master samples different code paths on each invocation. Successive passes drop earlier findings and surface new ones. Never rerun hoping for a clean gate — fix current-pass P1s, accept non-blocking P2/P3s with justification, stop."
+description: "codex review --base master samples different code paths on each invocation. Successive passes drop earlier findings and surface new ones. Never rerun hoping for a clean gate — fix current-pass P1s, accept non-blocking P2/P3s with justification, stop."
 source-sessions:
   - "[[S006-Ark-Context-Warmup-Ship]]"
 source-tasks:
   - "[[Arkskill-002-ark-context-warmup]]"
 created: 2026-04-13
 last-updated: 2026-04-13
+timestamp: 2026-04-13T00:00:00Z
 ---
 
 # Codex Review Does Not Converge Across Passes
@@ -50,6 +51,6 @@ Chasing a clean GATE: PASS by re-running codex indefinitely. The tool is adversa
 
 ## See Also
 
-- [[Development-Workflow-Patterns]] — broader review rhythms (brainstorm → spec → codex → plan → implement)
-- [[Dogfooding-Driven-Skill-Development]] — the `/ship` flow tested here surfaced a real pre-landing review finding (backlog enum completeness) that 5 codex passes missed
+- [Development-Workflow-Patterns](Development-Workflow-Patterns.md) — broader review rhythms (brainstorm → spec → codex → plan → implement)
+- [Dogfooding-Driven-Skill-Development](Dogfooding-Driven-Skill-Development.md) — the `/ship` flow tested here surfaced a real pre-landing review finding (backlog enum completeness) that 5 codex passes missed
 - The user's memory at `~/.claude/projects/.../memory/feedback_workflow.md` already notes "Use /codex to review specs before implementation" — this insight extends that: codex also works for post-implementation audit, but treat successive passes as sampling, not convergence

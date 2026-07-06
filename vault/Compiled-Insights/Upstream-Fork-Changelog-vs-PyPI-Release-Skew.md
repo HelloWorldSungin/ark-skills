@@ -7,12 +7,13 @@ tags:
   - mempalace
   - upstream-watch
   - dependency-management
-summary: "A CLOSED GitHub issue is not a shipped release. ark-skill-healer's changelog tier reads a plugin-fork CHANGELOG that runs ahead of the PyPI package — verify pypi.org/pypi/<pkg>/json before floor-bumping or retiring a workaround on an upstream fix."
+description: "A CLOSED GitHub issue is not a shipped release. ark-skill-healer's changelog tier reads a plugin-fork CHANGELOG that runs ahead of the PyPI package — verify pypi.org/pypi/<pkg>/json before floor-bumping or retiring a workaround on an upstream fix."
 source-sessions:
   - "[[S015-Ark-Skill-Healer-Run-Mempalace-Fork-vs-PyPI]]"
 source-tasks: []
 created: 2026-06-05
 last-updated: 2026-06-05
+timestamp: 2026-06-05T00:00:00Z
 ---
 
 # Upstream Fork CHANGELOG vs PyPI Release Skew
@@ -52,6 +53,6 @@ python3 -c "import json,urllib.request; print(json.load(urllib.request.urlopen('
 Gate the retirement on **"shipped to the package index AND installed"**, not "issue closed." A workaround's `retire_when` should name the published version, e.g. *"mempalace 3.3.6 published to PyPI AND installed CLI upgraded to it."*
 
 ## Related
-- [[MemPalace-HNSW-Bloat-Repair]] — the #1457 workaround this gotcha kept alive (manual segment `mv` until 3.3.6 ships).
-- [[Plugin-Versioning-and-Cache-Pitfalls]] — sibling versioning trap (plugin cache staleness).
-- [[Ecosystem-Architecture-Map]] — where mempalace sits in the dependency graph.
+- [MemPalace-HNSW-Bloat-Repair](MemPalace-HNSW-Bloat-Repair.md) — the #1457 workaround this gotcha kept alive (manual segment `mv` until 3.3.6 ships).
+- [Plugin-Versioning-and-Cache-Pitfalls](Plugin-Versioning-and-Cache-Pitfalls.md) — sibling versioning trap (plugin cache staleness).
+- [Ecosystem-Architecture-Map](Ecosystem-Architecture-Map.md) — where mempalace sits in the dependency graph.

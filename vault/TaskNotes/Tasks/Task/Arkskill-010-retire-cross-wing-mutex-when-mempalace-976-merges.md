@@ -15,7 +15,9 @@ urgency: "normal"
 created: "2026-04-23"
 last-updated: "2026-05-05"
 session: "S014"
-summary: "Watch MemPalace #976 (HNSW thread-safety). When merged, retire palace-global mutex and revisit dropping our custom Stop-hook in favor of the plugin's native auto-ingest."
+description: "Watch MemPalace #976 (HNSW thread-safety). When merged, retire palace-global mutex and revisit dropping our custom Stop-hook in favor of the plugin's native auto-ingest."
+type: task
+timestamp: 2026-05-05T00:00:00Z
 ---
 
 # Retire cross-wing mutex + revisit hook strategy when MemPalace #976 merges
@@ -49,5 +51,5 @@ Two follow-on actions become possible:
 
 ## Related
 
-- [[Arkskill-009]] (if exists)
+- [Arkskill-009](../Epic/Arkskill-009-gstack-v1-5-1-0-integration.md) (if exists)
 - Vault: `Session-Logs/2026-04-23-mempalace-corruption-recovery.md` (when written)

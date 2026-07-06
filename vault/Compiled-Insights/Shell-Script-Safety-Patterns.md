@@ -5,7 +5,7 @@ tags:
   - compiled-insight
   - skill
   - bash
-summary: "Four shell scripting pitfalls caught by code review: TMPDIR env collision, pipefail+tail swallowing, missing EXIT traps, and unquoted-tilde parameter stripping. All patterns survived spec review in plans and were only caught by code quality review."
+description: "Four shell scripting pitfalls caught by code review: TMPDIR env collision, pipefail+tail swallowing, missing EXIT traps, and unquoted-tilde parameter stripping. All patterns survived spec review in plans and were only caught by code quality review."
 source-sessions:
   - "[[S002-Vault-Retrieval-Tiers-Phase1]]"
   - "[[S005-Ark-Onboard-Centralized-Vault]]"
@@ -13,6 +13,7 @@ source-tasks:
   - "[[Arkskill-001-vault-retrieval-tiers]]"
 created: 2026-04-08
 last-updated: 2026-04-12
+timestamp: 2026-04-12T00:00:00Z
 ---
 
 # Shell Script Safety Patterns — Lessons from mine-vault.sh Review

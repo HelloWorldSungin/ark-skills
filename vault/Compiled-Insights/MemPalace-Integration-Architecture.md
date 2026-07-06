@@ -5,13 +5,14 @@ tags:
   - compiled-insight
   - plugin
   - infrastructure
-summary: "claude-history-ingest wraps mempalace with custom hooks and three modes (index/compile/full) — NOT using mempalace's built-in hooks, which are too intrusive."
+description: "claude-history-ingest wraps mempalace with custom hooks and three modes (index/compile/full) — NOT using mempalace's built-in hooks, which are too intrusive."
 source-sessions:
   - "[[S014-MemPalace-v3-3-4-Upgrade-Mutex-Retirement]]"
 source-tasks:
   - "[[Arkskill-010]]"
 created: 2026-04-08
 last-updated: 2026-05-05
+timestamp: 2026-05-05T00:00:00Z
 ---
 
 # MemPalace Integration Architecture

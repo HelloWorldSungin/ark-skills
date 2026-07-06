@@ -9,7 +9,7 @@ tags:
   - gstack
   - upstream-watch
   - data-ingest
-summary: "First real /ark-skill-healer advisory run. Upgraded gstack 1.42.1.0→1.56.0.0. Caught a fork-vs-PyPI error: mempalace #1457 closed via #1461 but NOT on PyPI (latest 3.3.5) — reverted a wrong floor-bump + workaround-retire. Wired MarkItDown office-doc front-end into ingest skills."
+description: "First real /ark-skill-healer advisory run. Upgraded gstack 1.42.1.0→1.56.0.0. Caught a fork-vs-PyPI error: mempalace #1457 closed via #1461 but NOT on PyPI (latest 3.3.5) — reverted a wrong floor-bump + workaround-retire. Wired MarkItDown office-doc front-end into ingest skills."
 session: "S015"
 status: complete
 date: 2026-06-05
@@ -18,6 +18,7 @@ epic: ""
 source-tasks: []
 created: 2026-06-05
 last-updated: 2026-06-05
+timestamp: 2026-06-05T00:00:00Z
 ---
 
 # Session 15: /ark-skill-healer first real run — gstack upgrade, mempalace fork-vs-PyPI correction, MarkItDown ingest

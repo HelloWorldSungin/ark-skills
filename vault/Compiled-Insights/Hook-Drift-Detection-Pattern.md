@@ -5,12 +5,13 @@ tags:
   - compiled-insight
   - infrastructure
   - plugin
-summary: "Plugin updates don't overwrite files installed outside the plugin tree (~/.claude/hooks/, ~/.local/bin/). Drift detection requires byte-compare against a version-aware canonical path — naive globs sort alphabetically and silently pick the oldest cached version."
+description: "Plugin updates don't overwrite files installed outside the plugin tree (~/.claude/hooks/, ~/.local/bin/). Drift detection requires byte-compare against a version-aware canonical path — naive globs sort alphabetically and silently pick the oldest cached version."
 source-sessions: []
 source-tasks:
   - "[[Arkskill-011]]"
 created: 2026-04-24
 last-updated: 2026-04-24
+timestamp: 2026-04-24T00:00:00Z
 ---
 
 # Hook Drift Detection Pattern
@@ -23,7 +24,7 @@ Three independent v1.21.x patches converged on the pattern:
 
 1. **`/ark-health` Check 16b** (v1.21.2) added byte-compare drift detection.
 2. **v1.21.3** fixed a path-resolver bug where the check picked the *oldest* cached plugin version instead of the newest.
-3. **The scope rule** (already in [[Plugin-Architecture-and-Context-Discovery]] but worth pinning): `/ark-update` converges project repo state only; `~/.claude/**` drift is `/ark-health` + `/ark-onboard repair` territory.
+3. **The scope rule** (already in [Plugin-Architecture-and-Context-Discovery](Plugin-Architecture-and-Context-Discovery.md) but worth pinning): `/ark-update` converges project repo state only; `~/.claude/**` drift is `/ark-health` + `/ark-onboard repair` territory.
 
 Together they define a generalizable shape for any "managed-but-installable" file the plugin owns logically but doesn't physically host.
 

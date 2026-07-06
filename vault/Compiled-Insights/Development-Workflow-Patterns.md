@@ -5,12 +5,13 @@ tags:
   - compiled-insight
   - skill
   - workflow
-summary: "Workflow patterns: brainstorm→spec→codex→plan→implement, audit-first, NotebookLM queries, risk-primary triage with density escalation, hybrid TodoWrite+file continuity."
+description: "Workflow patterns: brainstorm→spec→codex→plan→implement, audit-first, NotebookLM queries, risk-primary triage with density escalation, hybrid TodoWrite+file continuity."
 source-sessions:
   - "[[S003-Ark-Workflow-v2-Rewrite]]"
 source-tasks: []
 created: 2026-04-08
 last-updated: 2026-04-09
+timestamp: 2026-04-09T00:00:00Z
 ---
 
 # Development Workflow Patterns
@@ -69,7 +70,7 @@ When classifying a task into a weight class (light/medium/heavy), risk alone set
 - A Heavy risk stays Heavy even when the fix is obvious (can't downgrade a high-risk task for being a small diff)
 - File count and duration are informational context only, never classification inputs
 
-**Evidence of value:** The v2 rewrite in [[S003-Ark-Workflow-v2-Rewrite]] used this rule to fix two common misclassifications in the old factor-matrix triage:
+**Evidence of value:** The v2 rewrite in [S003-Ark-Workflow-v2-Rewrite](../Session-Logs/S003-Ark-Workflow-v2-Rewrite.md) used this rule to fix two common misclassifications in the old factor-matrix triage:
 - A 20-file test-utility rename (low risk, obvious) correctly stays Light instead of being mis-flagged Heavy by file count
 - A 1-file auth validation fix (high risk) correctly stays Heavy instead of being mis-flagged Light by file count
 
@@ -94,7 +95,7 @@ Neither mechanism alone is sufficient:
 6. Add the file directory to `.gitignore` — it's per-project ongoing work, not code
 7. On workflow completion, archive the file rather than delete — archives are the workflow history
 
-**Evidence of value:** Introduced in `/ark-workflow` v2 ([[S003-Ark-Workflow-v2-Rewrite]]) as the Continuity section of the skill. Solves the "skill outputs a chain and exits, agent loses position" problem that plagued v1.
+**Evidence of value:** Introduced in `/ark-workflow` v2 ([S003-Ark-Workflow-v2-Rewrite](../Session-Logs/S003-Ark-Workflow-v2-Rewrite.md)) as the Continuity section of the skill. Solves the "skill outputs a chain and exits, agent loses position" problem that plagued v1.
 
 **Pattern:** Any orchestrator skill that outputs a multi-step chain should persist state to a known project-local file AND populate TodoWrite. Any skill that triggers a workflow should check for an in-progress chain at session start before starting fresh.
 
@@ -104,7 +105,7 @@ Neither mechanism alone is sufficient:
 - Memory: `feedback_notebooklm_for_vault.md` (NotebookLM query pattern)
 - Design spec §2a: ark-code-review multi-agent pattern preserved across generalization
 - Conversations `f7f9e4ce`, `29145231`: /ship pipeline behavior and feature branch requirement
-- [[S003-Ark-Workflow-v2-Rewrite]] + `docs/superpowers/specs/2026-04-09-ark-workflow-v2-design.md` (risk-primary triage + hybrid continuity patterns)
+- [S003-Ark-Workflow-v2-Rewrite](../Session-Logs/S003-Ark-Workflow-v2-Rewrite.md) + `docs/superpowers/specs/2026-04-09-ark-workflow-v2-design.md` (risk-primary triage + hybrid continuity patterns)
 
 ## Implications
 

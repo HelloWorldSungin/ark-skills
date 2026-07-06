@@ -6,13 +6,14 @@ tags:
   - python
   - gotcha
   - dataclass
-summary: "On Python 3.14, combining @dataclass with `from __future__ import annotations` breaks when the module is loaded via importlib.util.spec_from_file_location without being registered in sys.modules. Dataclass internals read sys.modules[cls.__module__].__dict__ and get None."
+description: "On Python 3.14, combining @dataclass with `from __future__ import annotations` breaks when the module is loaded via importlib.util.spec_from_file_location without being registered in sys.modules. Dataclass internals read sys.modules[cls.__module__].__dict__ and get None."
 source-sessions:
   - "[[S006-Ark-Context-Warmup-Ship]]"
 source-tasks:
   - "[[Arkskill-002-ark-context-warmup]]"
 created: 2026-04-13
 last-updated: 2026-04-13
+timestamp: 2026-04-13T00:00:00Z
 ---
 
 # Python 3.14 @dataclass + future annotations + spec_from_file_location
@@ -73,5 +74,5 @@ If a test harness dynamically loads modules via `spec_from_file_location` (commo
 ## See Also
 
 - PEP 563 (postponed annotation evaluation)
-- [[Codex-Review-Non-Convergence]] — codex pass 5 incorrectly flagged the post-fix `dict | None` annotations as a Python 3.9 blocker; verified false because `from __future__ import annotations` stringifies them per PEP 563
-- [[Plugin-Architecture-and-Context-Discovery]] — skill plugins commonly use `spec_from_file_location` because scripts are loaded by path, not package import
+- [Codex-Review-Non-Convergence](Codex-Review-Non-Convergence.md) — codex pass 5 incorrectly flagged the post-fix `dict | None` annotations as a Python 3.9 blocker; verified false because `from __future__ import annotations` stringifies them per PEP 563
+- [Plugin-Architecture-and-Context-Discovery](Plugin-Architecture-and-Context-Discovery.md) — skill plugins commonly use `spec_from_file_location` because scripts are loaded by path, not package import

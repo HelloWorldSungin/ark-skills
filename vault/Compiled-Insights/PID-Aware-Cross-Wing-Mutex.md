@@ -6,20 +6,21 @@ tags:
   - pattern
   - infrastructure
   - concurrency
-summary: "Shell mutex that embeds the holder PID so contenders can distinguish a live long-running lock from a stale one. Fixes the 'live mine wiped by age-only stale recovery' regression in age-only timestamp mutexes. Distinct from in-process fcntl.flock — this is for cross-process shell hook serialization with planned retirement when upstream concurrency lands."
+description: "Shell mutex that embeds the holder PID so contenders can distinguish a live long-running lock from a stale one. Fixes the 'live mine wiped by age-only stale recovery' regression in age-only timestamp mutexes. Distinct from in-process fcntl.flock — this is for cross-process shell hook serialization with planned retirement when upstream concurrency lands."
 source-sessions:
   - "[[S014-MemPalace-v3-3-4-Upgrade-Mutex-Retirement]]"
 source-tasks:
   - "[[Arkskill-010]]"
 created: 2026-04-24
 last-updated: 2026-05-05
+timestamp: 2026-05-05T00:00:00Z
 ---
 
 # PID-Aware Cross-Wing Mutex
 
 ## Summary
 
-Shell-level mutex for serializing cross-process workloads (separate Claude sessions, separate worktrees, separate ark-history-hook firings) against a shared resource — in this case the MemPalace ChromaDB palace. Distinct in shape and intent from [[Atomic-Chain-File-Mutation-Pattern]]: that one uses `fcntl.flock` inside a single Python helper for in-process coordination. This one is a shell `mkdir`-based lock with the holder's PID embedded so a contender can ask "is the holder still alive?" before reclaiming.
+Shell-level mutex for serializing cross-process workloads (separate Claude sessions, separate worktrees, separate ark-history-hook firings) against a shared resource — in this case the MemPalace ChromaDB palace. Distinct in shape and intent from [Atomic-Chain-File-Mutation-Pattern](Atomic-Chain-File-Mutation-Pattern.md): that one uses `fcntl.flock` inside a single Python helper for in-process coordination. This one is a shell `mkdir`-based lock with the holder's PID embedded so a contender can ask "is the holder still alive?" before reclaiming.
 
 The v1.21.4 release replaced an age-only mutex (introduced in v1.21.1 as a 10-minute mtime check) with the PID-aware variant. The age-only version had a real failure mode: a legitimate `mempalace mine` that ran past 10 minutes could have its live lock wiped by a later session, reopening the exact HNSW write race v1.21.1 was meant to close. PID-awareness fixes that regression.
 
@@ -62,13 +63,13 @@ Two key properties:
 
 ## Why not fcntl.flock here
 
-The [[Atomic-Chain-File-Mutation-Pattern]]'s `fcntl.flock` is the right tool for *in-process* read-modify-write. Three reasons it doesn't fit here:
+The [Atomic-Chain-File-Mutation-Pattern](Atomic-Chain-File-Mutation-Pattern.md)'s `fcntl.flock` is the right tool for *in-process* read-modify-write. Three reasons it doesn't fit here:
 
 - **Cross-shell coordination.** The contenders are separate `bash` processes from separate Claude Code sessions; they don't share a Python interpreter. Wrapping every hook firing in a Python helper just to call `flock` adds startup cost.
 - **No file to lock.** The protected resource is a SQLite + HNSW palace directory, not a single markdown file. Locking would require a sentinel file, which is what the `mkdir` lockdir already is.
 - **OS releases flock on FD close.** That's a feature when the lock holder is one process — but `mempalace mine` shells out to subprocesses; if the parent shell's FD closes mid-mine the OS releases the lock while children are still writing. The mkdir+pid pattern survives this because lock release is explicit.
 
-For a single-process atomic file write, use [[Atomic-Chain-File-Mutation-Pattern]]. For cross-shell mutual exclusion against a shared external resource, this is the shape.
+For a single-process atomic file write, use [Atomic-Chain-File-Mutation-Pattern](Atomic-Chain-File-Mutation-Pattern.md). For cross-shell mutual exclusion against a shared external resource, this is the shape.
 
 ## Portable `stat` for `_mtime`
 
@@ -102,7 +103,7 @@ The `_upsert` crash that triggered the original `FAIL_COUNT` accumulation came f
 
 ### Smoke-test verification (2026-05-05)
 
-After repairing the bloated HNSW (see [[MemPalace-HNSW-Bloat-Repair]]), executed Arkskill-010's final acceptance criterion: 4 concurrent `mempalace mine` processes against 4 different wings, all started simultaneously. This is the exact race that produced the original 294GB bloat pre-v3.3.4.
+After repairing the bloated HNSW (see [MemPalace-HNSW-Bloat-Repair](MemPalace-HNSW-Bloat-Repair.md)), executed Arkskill-010's final acceptance criterion: 4 concurrent `mempalace mine` processes against 4 different wings, all started simultaneously. This is the exact race that produced the original 294GB bloat pre-v3.3.4.
 
 Result: all 4 mines exited 0, +317 drawers SQLite (monotonic, no data loss), HNSW segments unchanged at 172-200K (zero bloat from concurrent writes), repair-status reports normal flush-lag (not DIVERGED). PR #976's `mine_palace_lock()` verified working in production. Smoke-test script preserved at `/tmp/mempalace-smoke-test.sh` for future regression testing if a downstream MemPalace release ever regresses the lock.
 
@@ -120,4 +121,4 @@ Result: all 4 mines exited 0, +317 drawers SQLite (monotonic, no data loss), HNS
 - **Don't use `stat -f` portably.** Prefer `stat -f %m … || stat -c %Y …` or the equivalent in whatever shell the script targets.
 - **Tag every workaround mutex with its retirement trigger** (upstream PR number, version, condition) inline in the CHANGELOG and in the skill comment block. Otherwise temporary becomes permanent.
 - **`mkdir`-as-lock survives crashes the way file-creation-with-O_EXCL does** — atomic, race-free, no lingering FDs. PID-file inside the dir is what makes liveness detection cheap.
-- **Pre-push tri-model review (CCG)** caught all four v1.21.4 fixes. None were caught by single-model review or local test runs. This is consistent with [[Codex-Review-Non-Convergence]] — multiple independent reviewers find disjoint issue sets.
+- **Pre-push tri-model review (CCG)** caught all four v1.21.4 fixes. None were caught by single-model review or local test runs. This is consistent with [Codex-Review-Non-Convergence](Codex-Review-Non-Convergence.md) — multiple independent reviewers find disjoint issue sets.

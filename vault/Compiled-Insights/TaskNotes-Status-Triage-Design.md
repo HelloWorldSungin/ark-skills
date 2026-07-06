@@ -5,11 +5,12 @@ tags:
   - compiled-insight
   - skill
   - plugin
-summary: "ark-tasknotes status uses MCP-first data gathering with LLM triage — no algorithmic scoring. Six-section report with opinionated work plan recommendations."
+description: "ark-tasknotes status uses MCP-first data gathering with LLM triage — no algorithmic scoring. Six-section report with opinionated work plan recommendations."
 source-sessions: []
 source-tasks: []
 created: 2026-04-09
 last-updated: 2026-04-09
+timestamp: 2026-04-09T00:00:00Z
 ---
 
 # TaskNotes Status & Triage — Design Decisions
@@ -31,7 +32,7 @@ Chose option 1. Rationale: LLMs handle qualitative signals (task descriptions, d
 
 ### Subcommand Pattern (Modes)
 
-Rather than creating a separate skill, status was added as a mode of the existing `/ark-tasknotes` skill. The skill now has a Modes table at the top routing to Create (default) or Status based on the invocation argument. This keeps all task operations in one place and shares the [[Compiled-Insights/Plugin-Architecture-and-Context-Discovery|context-discovery]] pattern and [[Compiled-Insights/TaskNotes-MCP-Integration-Model|MCP tool reference]].
+Rather than creating a separate skill, status was added as a mode of the existing `/ark-tasknotes` skill. The skill now has a Modes table at the top routing to Create (default) or Status based on the invocation argument. This keeps all task operations in one place and shares the [context-discovery](Plugin-Architecture-and-Context-Discovery.md) pattern and [MCP tool reference](TaskNotes-MCP-Integration-Model.md).
 
 ### Report Structure
 

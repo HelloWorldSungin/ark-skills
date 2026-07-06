@@ -11,7 +11,7 @@ tags:
   - dual-mode
   - codex-review
   - release
-summary: "Shipped OMC plugin detection to /ark-health (Check 21) and /ark-onboard (Healthy Step 3 + Greenfield Step 18 + scorecard). Upgrade-style, tier-agnostic. Structural parity with canonical HAS_OMC probe enforced by diff. Combined v1.14.0 release alongside Session 2's Stream B. PR #17."
+description: "Shipped OMC plugin detection to /ark-health (Check 21) and /ark-onboard (Healthy Step 3 + Greenfield Step 18 + scorecard). Upgrade-style, tier-agnostic. Structural parity with canonical HAS_OMC probe enforced by diff. Combined v1.14.0 release alongside Session 2's Stream B. PR #17."
 session: "S009"
 status: complete
 date: 2026-04-14
@@ -24,6 +24,7 @@ related:
   - "[[Arkskill-003-omc-integration]]"
 created: 2026-04-14
 last-updated: 2026-04-14
+timestamp: 2026-04-14T00:00:00Z
 ---
 
 # Session 9: OMC Detection Surfaces in /ark-health + /ark-onboard (v1.14.0 Stream A)
@@ -41,9 +42,9 @@ framework).
 
 ## Context
 
-- [[S007-OMC-Integration-Design]] shipped v1.13.0 dual-mode routing but
+- [S007-OMC-Integration-Design](S007-OMC-Integration-Design.md) shipped v1.13.0 dual-mode routing but
   explicitly deferred detection surfaces to a follow-up.
-- [[S008-Ark-Update-Framework]] ran in parallel on the same branch
+- [S008-Ark-Update-Framework](S008-Ark-Update-Framework.md) ran in parallel on the same branch
   (`ark-update`) as a separate worktree session; coordination was explicit —
   neither stream shipped solo, version bump was batched.
 - Branch: `ark-update`. Worktree: `/Users/sunginkim/.superset/worktrees/ark-skills/ark-update`.
@@ -147,7 +148,7 @@ Session 2 additionally extended the diagnostic surface by adding their own
   plan's `grep`-based verification would have landed with a broken internal
   contradiction and drifted probes. The diff-based parity check emerged
   directly from finding #1 and is now reusable convention — see
-  [[Structural-Probe-Parity-Pattern]].
+  [Structural-Probe-Parity-Pattern](../Compiled-Insights/Structural-Probe-Parity-Pattern.md).
 - **"Tier: Standard" + `tier-agnostic` is the right framing for optional-but-
   surfaced capabilities.** Keeping the tier label preserves scorecard
   placement semantics (surface alongside Standard-tier rows) while the

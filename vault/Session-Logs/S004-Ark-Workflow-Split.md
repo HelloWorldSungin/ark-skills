@@ -8,13 +8,14 @@ tags:
   - workflow
   - refactor
   - progressive-disclosure
-summary: "Split the 858-line ark-workflow SKILL.md into a 270-line router + 7 chain files + 4 reference files. All 22 v2 gaps + 19 chain variants preserved; 13/13 smoke tests pass."
+description: "Split the 858-line ark-workflow SKILL.md into a 270-line router + 7 chain files + 4 reference files. All 22 v2 gaps + 19 chain variants preserved; 13/13 smoke tests pass."
 prev: "[[S003-Ark-Workflow-v2-Rewrite]]"
 epic: ""
 session: "S004"
 source-tasks: []
 created: 2026-04-10
 last-updated: 2026-04-10
+timestamp: 2026-04-10T00:00:00Z
 ---
 
 # Session: /ark-workflow Progressive-Disclosure Split (1.7.0)

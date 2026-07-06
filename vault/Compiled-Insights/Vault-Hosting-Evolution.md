@@ -7,12 +7,13 @@ tags:
   - infrastructure
   - ark-onboard
   - symlink
-summary: "Vaults evolved from submodules in ark-skills to standalone repos at ~/.superset/vaults/, symlinked from projects. As of v1.11.0 this is /ark-onboard's greenfield default; embedded is an explicit escape hatch."
+description: "Vaults evolved from submodules in ark-skills to standalone repos at ~/.superset/vaults/, symlinked from projects. As of v1.11.0 this is /ark-onboard's greenfield default; embedded is an explicit escape hatch."
 source-sessions:
   - "[[S005-Ark-Onboard-Centralized-Vault]]"
 source-tasks: []
 created: 2026-04-08
 last-updated: 2026-04-12
+timestamp: 2026-04-12T00:00:00Z
 ---
 
 # Vault Hosting Evolution — Submodules to Standalone Repos
@@ -65,7 +66,7 @@ Sessions added to master after the restructure branch was created won't have `su
 
 ### Centralized-Symlink Pattern Codified in /ark-onboard v1.11.0
 
-What started as ArkNode-Poly's hand-rolled setup became the `/ark-onboard` greenfield default in v1.11.0 (see [[S005-Ark-Onboard-Centralized-Vault]]). The wizard now creates:
+What started as ArkNode-Poly's hand-rolled setup became the `/ark-onboard` greenfield default in v1.11.0 (see [S005-Ark-Onboard-Centralized-Vault](../Session-Logs/S005-Ark-Onboard-Centralized-Vault.md)). The wizard now creates:
 
 ```
 ~/.superset/vaults/<project>/       # its own git repo
@@ -98,7 +99,7 @@ Moving an existing embedded vault to the centralized layout is destructive: it `
 - Conversation `a5ed3c76`: submodule removal (commit `793cc13`)
 - Conversation `b4369062`: vault restructuring merge, branch recovery from worktrees
 - Conversation `29145231`: vault setup dogfooding inside plugin repo
-- [[S005-Ark-Onboard-Centralized-Vault]]: codified pattern as /ark-onboard v1.11.0 greenfield default, externalization plan-file generator, check #20 (warn-only)
+- [S005-Ark-Onboard-Centralized-Vault](../Session-Logs/S005-Ark-Onboard-Centralized-Vault.md): codified pattern as /ark-onboard v1.11.0 greenfield default, externalization plan-file generator, check #20 (warn-only)
 
 ## Implications
 

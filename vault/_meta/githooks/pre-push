@@ -1,0 +1,5 @@
+#!/bin/sh
+# OKF lint gate — blocks pushes that would break bundle conformance
+# (missing/unparseable frontmatter, empty `type`, broken relative links).
+# Wire per clone with:  git config core.hooksPath vault/_meta/githooks
+exec python3 "$(git rev-parse --show-toplevel)/vault/_meta/okf/okf_lint.py" --quiet

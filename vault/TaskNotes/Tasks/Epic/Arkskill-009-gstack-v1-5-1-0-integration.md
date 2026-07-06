@@ -2,6 +2,7 @@
 tags:
   - task
 title: "gstack v1.5.1.0 integration into /ark-workflow (Waves 1+2)"
+description: "Epic tracking gstack v1.5.1.0 integration into /ark-workflow across Waves 1 and 2 — in progress."
 task-id: "Arkskill-009"
 status: in-progress
 priority: high
@@ -16,6 +17,8 @@ source-sessions:
   - "[[S013-Gstack-v1-5-1-0-Integration-Wave1]]"
 parent:
   - "[[Arkskill-008-gstack-planning-brainstorm]]"
+type: epic
+timestamp: 2026-04-22T00:00:00Z
 ---
 
 # Arkskill-009: gstack v1.5.1.0 integration into /ark-workflow (Waves 1 + 2)
@@ -79,7 +82,7 @@ Two-wave release (Approach B, chosen over a single-bundle Approach A):
 
 ## Cross-links
 
-- Session: [[S013-Gstack-v1-5-1-0-Integration-Wave1]]
-- Parent epic: [[Arkskill-008-gstack-planning-brainstorm]]
-- Prior session: [[S012-Ark-Workflow-Gstack-Planning]]
+- Session: [S013-Gstack-v1-5-1-0-Integration-Wave1](../../../Session-Logs/S013-Gstack-v1-5-1-0-Integration-Wave1.md)
+- Parent epic: [Arkskill-008-gstack-planning-brainstorm](Arkskill-008-gstack-planning-brainstorm.md)
+- Prior session: [S012-Ark-Workflow-Gstack-Planning](../../../Session-Logs/S012-Ark-Workflow-Gstack-Planning.md)
 - Design spec: `docs/superpowers/specs/2026-04-22-gstack-v1.5.1.0-integration.md`

@@ -9,13 +9,14 @@ tags:
   - ark-health
   - has-probe
   - degradation
-summary: "For Claude Code plugin availability detection, the canonical signal is the session skill-list (semantic probe by the agent), not filesystem inspection. Filesystem/CLI probes are advisory only — they distinguish 'absent' from 'broken-install' but don't prove the plugin is loadable in the current session. Extracted from v1.18.0 gstack integration; matches pattern already proven in /ark-health and /ark-onboard."
+description: "For Claude Code plugin availability detection, the canonical signal is the session skill-list (semantic probe by the agent), not filesystem inspection. Filesystem/CLI probes are advisory only — they distinguish 'absent' from 'broken-install' but don't prove the plugin is loadable in the current session. Extracted from v1.18.0 gstack integration; matches pattern already proven in /ark-health and /ark-onboard."
 source-sessions:
   - "[[S012-Ark-Workflow-Gstack-Planning]]"
 source-tasks:
   - "[[Arkskill-008-gstack-planning-brainstorm]]"
 created: 2026-04-18
 last-updated: 2026-04-20
+timestamp: 2026-04-20T00:00:00Z
 ---
 
 # Session-Capability Plugin Detection Pattern
@@ -80,12 +81,12 @@ The semantic probe is prose-only and relies on the agent correctly counting skil
 
 Mitigation directions (all deferred):
 - Prefix-anchored detection (`superpowers:*`-style enumerated list) instead of bare-name matching.
-- Structural probe parity ([[Structural-Probe-Parity-Pattern]]) — byte-level equivalence between skills' detection blocks so `/ark-health` and `/ark-workflow` cannot drift apart.
+- Structural probe parity ([Structural-Probe-Parity-Pattern](Structural-Probe-Parity-Pattern.md)) — byte-level equivalence between skills' detection blocks so `/ark-health` and `/ark-workflow` cannot drift apart.
 - Agent-side verification step — after semantic probe, attempt to dry-run one of the target skills and confirm it's invokable. Heavier but more reliable.
 
 ## Related
 
-- [[Structural-Probe-Parity-Pattern]] — byte-level parity for duplicated detection bash probes across sibling skills.
-- [[Plugin-Architecture-and-Context-Discovery]] — how Claude Code plugins expose their skills to sessions.
-- [[Plugin-Versioning-and-Cache-Pitfalls]] — the four sources of truth for a plugin version.
-- Source: [[S012-Ark-Workflow-Gstack-Planning]] — v1.18.0 gstack integration.
+- [Structural-Probe-Parity-Pattern](Structural-Probe-Parity-Pattern.md) — byte-level parity for duplicated detection bash probes across sibling skills.
+- [Plugin-Architecture-and-Context-Discovery](Plugin-Architecture-and-Context-Discovery.md) — how Claude Code plugins expose their skills to sessions.
+- [Plugin-Versioning-and-Cache-Pitfalls](Plugin-Versioning-and-Cache-Pitfalls.md) — the four sources of truth for a plugin version.
+- Source: [S012-Ark-Workflow-Gstack-Planning](../Session-Logs/S012-Ark-Workflow-Gstack-Planning.md) — v1.18.0 gstack integration.
