@@ -6,11 +6,12 @@ tags:
   - plugin
   - context-discovery
   - skill
-summary: "Ark-skills uses a Claude Code plugin with context-discovery — skills read CLAUDE.md at runtime, eliminating hardcoded project config and enabling cross-project reuse."
+description: "Ark-skills uses a Claude Code plugin with context-discovery — skills read CLAUDE.md at runtime, eliminating hardcoded project config and enabling cross-project reuse."
 source-sessions: []
 source-tasks: []
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Plugin Architecture & Context-Discovery Pattern

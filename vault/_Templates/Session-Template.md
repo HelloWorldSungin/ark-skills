@@ -4,7 +4,7 @@ type: session-log
 tags:
   - session-log
   - "S{NNN}"
-summary: ""
+description: ""
 session: "S{NNN}"
 status: complete
 date: {DATE}
@@ -13,6 +13,7 @@ epic: ""
 source-tasks: []
 created: {DATE}
 last-updated: {DATE}
+timestamp: 2026-04-10T22:43:08-07:00
 ---
 
 # Session {NNN}: {TITLE}

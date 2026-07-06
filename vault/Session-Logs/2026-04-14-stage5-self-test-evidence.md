@@ -3,7 +3,8 @@ title: "Stage-5 Self-Test Gate Evidence — ark-update v1.14.0 pre-release"
 date: 2026-04-14
 type: session-log
 tags: [ark-update, stage5, self-test, release-gate]
-summary: "Complete Stage-5 self-test gate evidence for /ark-update v1.14.0 pre-release. All parts passed."
+description: "Complete Stage-5 self-test gate evidence for /ark-update v1.14.0 pre-release. All parts passed."
+timestamp: 2026-04-14T00:00:00Z
 ---
 
 # Stage-5 Self-Test Gate Evidence

@@ -4,9 +4,10 @@ type: meta
 tags:
   - meta
   - taxonomy
-summary: "Canonical tag vocabulary for ark-skills vault. All tags should come from this list."
+description: "Canonical tag vocabulary for ark-skills vault. All tags should come from this list."
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Tag Taxonomy — ark-skills

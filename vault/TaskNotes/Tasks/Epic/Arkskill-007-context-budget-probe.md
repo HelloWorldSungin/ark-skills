@@ -2,6 +2,7 @@
 tags:
   - task
 title: "/ark-workflow Context-Budget Probe (v1.17.0)"
+description: "Epic for the /ark-workflow context-budget probe shipped in v1.17.0 — done."
 task-id: "Arkskill-007"
 status: done
 priority: high
@@ -16,6 +17,8 @@ source-sessions:
   - "[[S011-Ark-Workflow-Context-Budget-Probe]]"
 parent:
   - "[[Arkskill-003-omc-integration]]"
+type: epic
+timestamp: 2026-04-17T00:00:00Z
 ---
 
 # Arkskill-007: /ark-workflow Context-Budget Probe
@@ -137,7 +140,7 @@ All filed at `docs/superpowers/followups/2026-04-17-ark-workflow-context-probe-r
 
 ## Cross-links
 
-- Session: [[S011-Ark-Workflow-Context-Budget-Probe]]
-- Parent epic: [[Arkskill-003-omc-integration]]
-- Session habits insight: [[Session-Habits-For-Context-Longevity]]
-- Atomic chain-file mutation pattern: [[Atomic-Chain-File-Mutation-Pattern]]
+- Session: [S011-Ark-Workflow-Context-Budget-Probe](../../../Session-Logs/S011-Ark-Workflow-Context-Budget-Probe.md)
+- Parent epic: [Arkskill-003-omc-integration](Arkskill-003-omc-integration.md)
+- Session habits insight: [Session-Habits-For-Context-Longevity](../../../Compiled-Insights/Session-Habits-For-Context-Longevity.md)
+- Atomic chain-file mutation pattern: [Atomic-Chain-File-Mutation-Pattern](../../../Compiled-Insights/Atomic-Chain-File-Mutation-Pattern.md)

@@ -9,7 +9,7 @@ tags:
   - bugfix
   - infrastructure
   - upstream-watch
-summary: "Shipped v1.23.1 — upgraded mempalace 3.3.2 → 3.3.4, retired palace-global mine mutex (Arkskill-010), repaired 294GB HNSW bloat, smoke-tested #976, synced live hook. Arkskill-010 closed."
+description: "Shipped v1.23.1 — upgraded mempalace 3.3.2 → 3.3.4, retired palace-global mine mutex (Arkskill-010), repaired 294GB HNSW bloat, smoke-tested #976, synced live hook. Arkskill-010 closed."
 session: "S014"
 status: complete
 date: 2026-05-05
@@ -19,6 +19,7 @@ source-tasks:
   - "[[Arkskill-010-retire-cross-wing-mutex-when-mempalace-976-merges]]"
 created: 2026-05-05
 last-updated: 2026-05-05
+timestamp: 2026-05-05T00:00:00Z
 ---
 
 # Session 14: MemPalace v3.3.4 upgrade + palace-global mutex retirement (v1.23.1)
@@ -95,7 +96,7 @@ Execute the open Next Steps from the morning session: confirm mines actually suc
 
 #### Discovered: v3.3.4 alone did not stop crashes — HNSW segment was still on-disk corrupt
 
-Verifying mines post-upgrade revealed `_upsert` was still segfaulting. Investigation traced this to **on-disk HNSW corruption left over from pre-v3.3.4 races**: segment `347d1275-b2dc-4332-868a-09596239e39f/link_lists.bin` had bloated to **294GB** (~14,000× normal — should be ~20MB for 21,392 vectors). The upstream #976 fix prevents *new* corruption but does not repair existing on-disk state. New compiled insight: [[MemPalace-HNSW-Bloat-Repair]].
+Verifying mines post-upgrade revealed `_upsert` was still segfaulting. Investigation traced this to **on-disk HNSW corruption left over from pre-v3.3.4 races**: segment `347d1275-b2dc-4332-868a-09596239e39f/link_lists.bin` had bloated to **294GB** (~14,000× normal — should be ~20MB for 21,392 vectors). The upstream #976 fix prevents *new* corruption but does not repair existing on-disk state. New compiled insight: [MemPalace-HNSW-Bloat-Repair](../Compiled-Insights/MemPalace-HNSW-Bloat-Repair.md).
 
 #### `mempalace repair` self-defeating without manual segment move
 
@@ -161,7 +162,7 @@ All 4 acceptance criteria now `[x]`. Status bumped `in-progress` → `done`. Smo
 
 ### Issues & Discoveries
 
-- **Tee masks segfault exit codes** — fundamental gotcha for any shell invocation of mempalace (or any chromadb-backed tool). Documented in [[MemPalace-HNSW-Bloat-Repair]].
+- **Tee masks segfault exit codes** — fundamental gotcha for any shell invocation of mempalace (or any chromadb-backed tool). Documented in [MemPalace-HNSW-Bloat-Repair](../Compiled-Insights/MemPalace-HNSW-Bloat-Repair.md).
 - **`mempalace repair-status` cannot detect physical file bloat** — only compares SQLite vs HNSW *counts*. A 294GB `link_lists.bin` for 21K vectors reports "OK / within tolerance" even though the file is unusable.
 - **Plugin marketplace cache lag** — caches `1.22.1`–`1.23.0` of ark-skills exist locally, but `1.23.1` is missing despite being pushed and tagged. The live hook is whatever `/claude-history-ingest` last installed; it does not auto-update from the cache. This is a fix-application visibility risk — version pinned in `VERSION`/`plugin.json` is decoupled from what's actually executing in `~/.claude/hooks/`.
 - **Argparse vs `-`-prefixed wing keys** — universal trap for any shell-invoked mempalace command on machines using path-derived wing keys.

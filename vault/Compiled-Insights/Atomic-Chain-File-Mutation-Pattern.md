@@ -9,13 +9,14 @@ tags:
   - atomic-writes
   - concurrency
   - ark-workflow
-summary: "fcntl.flock(LOCK_EX) + tempfile.mkstemp + os.replace — the stdlib-only pattern used in context_probe.py to serialize concurrent read-modify-write sequences against a shared markdown file with frontmatter + checklist content. Both torn-write protection and lost-update prevention in one shape."
+description: "fcntl.flock(LOCK_EX) + tempfile.mkstemp + os.replace — the stdlib-only pattern used in context_probe.py to serialize concurrent read-modify-write sequences against a shared markdown file with frontmatter + checklist content. Both torn-write protection and lost-update prevention in one shape."
 source-sessions:
   - "[[S011-Ark-Workflow-Context-Budget-Probe]]"
 source-tasks:
   - "[[Arkskill-007-context-budget-probe]]"
 created: 2026-04-17
 last-updated: 2026-04-17
+timestamp: 2026-04-17T00:00:00Z
 ---
 
 # Atomic Chain-File Mutation Pattern
@@ -184,6 +185,6 @@ garbage-valued `proceed_past_level:` lines. 14/14 bats runs pass.
 
 - `skills/ark-workflow/scripts/context_probe.py` — canonical implementation
 - `skills/ark-workflow/scripts/integration/test_probe_skill_invocation.bats` — stress test
-- [[S011-Ark-Workflow-Context-Budget-Probe]] — ship session
-- [[Arkskill-007-context-budget-probe]] — epic
+- [S011-Ark-Workflow-Context-Budget-Probe](../Session-Logs/S011-Ark-Workflow-Context-Budget-Probe.md) — ship session
+- [Arkskill-007-context-budget-probe](../TaskNotes/Tasks/Epic/Arkskill-007-context-budget-probe.md) — epic
 - Python docs: `tempfile.mkstemp`, `os.replace`, `fcntl.flock`

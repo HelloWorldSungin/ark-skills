@@ -8,13 +8,14 @@ tags:
   - ark-workflow
   - path-b
   - skill
-summary: "Byte-identity CI on structural chain blocks has two independent scalars: raw-text canonicalized hash count (varies with step count + descriptive text) and classifier-visible shape count (keys on semantic markers only). They diverge any time a pre-step or mid-block addition lengthens the block body without changing its semantic markers. Tracking them separately — and documenting the divergence — prevents false alarms on future additions."
+description: "Byte-identity CI on structural chain blocks has two independent scalars: raw-text canonicalized hash count (varies with step count + descriptive text) and classifier-visible shape count (keys on semantic markers only). They diverge any time a pre-step or mid-block addition lengthens the block body without changing its semantic markers. Tracking them separately — and documenting the divergence — prevents false alarms on future additions."
 source-sessions:
   - "[[S010-Path-B-Uniformity-Refactor]]"
 source-tasks:
   - "[[Arkskill-006-path-b-uniformity]]"
 created: 2026-04-15
 last-updated: 2026-04-15
+timestamp: 2026-04-15T00:00:00Z
 ---
 
 # Path B Canonicalization — Hash Count vs Classifier Shape Count
@@ -108,9 +109,9 @@ semantic. Let `max-distinct-shapes` tolerate small variation; rely on
 ## Evidence
 
 - [[check_path_b_coverage.py]] `_canonicalize`, `_hash`, `_classify_shape`
-- [[S010-Path-B-Uniformity-Refactor]] — R10 commit (`5856c2c`) where the
+- [S010-Path-B-Uniformity-Refactor](../Session-Logs/S010-Path-B-Uniformity-Refactor.md) — R10 commit (`5856c2c`) where the
   divergence first materialized
 - [[omc-integration]] § Section 4 footnote documenting the hash-vs-shape
   distinction inline with the closeout table
-- [[Execution-Philosophy-Dual-Mode]] — sibling insight on the overall
+- [Execution-Philosophy-Dual-Mode](Execution-Philosophy-Dual-Mode.md) — sibling insight on the overall
   dual-mode pattern that this canonicalization CI gates

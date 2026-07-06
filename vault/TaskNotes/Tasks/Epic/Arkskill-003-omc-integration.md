@@ -2,6 +2,7 @@
 tags:
   - task
 title: "OMC ↔ /ark-workflow Dual-Mode Integration"
+description: "Epic for the OMC / ark-workflow dual-mode integration — done."
 task-id: "Arkskill-003"
 status: done
 priority: high
@@ -14,6 +15,8 @@ created: "2026-04-13"
 last-updated: "2026-04-13"
 source-sessions:
   - "[[S007-OMC-Integration-Design]]"
+type: epic
+timestamp: 2026-04-13T00:00:00Z
 ---
 
 # Arkskill-003: OMC ↔ /ark-workflow Dual-Mode Integration
@@ -127,10 +130,10 @@ Follow-ups captured in the plan's ADR § Follow-ups:
 ## Follow-up landed — 2026-04-15
 
 Follow-up #1 ("Pin `/autopilot` execution-only mechanism") was resolved by
-[[Arkskill-006-path-b-uniformity]] via the 2026-04-14 uniformity decision.
+[Arkskill-006-path-b-uniformity](Arkskill-006-path-b-uniformity.md) via the 2026-04-14 uniformity decision.
 The fictional `OMC_EXECUTION_ONLY=1` env var was retired; under uniformity,
 `/autopilot` runs its full pipeline and auto-skips Phase 0+1 when the Path
-B artifacts are pre-placed. See [[S010-Path-B-Uniformity-Refactor]] for
+B artifacts are pre-placed. See [S010-Path-B-Uniformity-Refactor](../../../Session-Logs/S010-Path-B-Uniformity-Refactor.md) for
 the implementation (7 atomic commits on branch `ark-workflow-improve-OMC`).
 
 Post-refactor the CI contract is 17 blocks / 4 classifier shapes / 5

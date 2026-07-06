@@ -11,7 +11,7 @@ tags:
   - session-capability-detection
   - review-authority-substitution
   - release
-summary: "Shipped v1.18.0: wired gstack planning (/autoplan, /plan-*-review, /office-hours) into /ark-workflow and added Brainstorm scenario with Continuous Brainstorm pivot gate. Two /ccg review passes — design-level (6 reworks) and pre-push diff-level (4 fixes). 2 commits on branch gstack-improve, PR #21 open."
+description: "Shipped v1.18.0: wired gstack planning (/autoplan, /plan-*-review, /office-hours) into /ark-workflow and added Brainstorm scenario with Continuous Brainstorm pivot gate. Two /ccg review passes — design-level (6 reworks) and pre-push diff-level (4 fixes). 2 commits on branch gstack-improve, PR #21 open."
 session: "S012"
 status: complete
 date: 2026-04-18
@@ -22,6 +22,7 @@ source-tasks:
   - "[[Arkskill-003-omc-integration]]"
 created: 2026-04-18
 last-updated: 2026-04-20
+timestamp: 2026-04-20T00:00:00Z
 ---
 
 # Session 12: /ark-workflow gstack planning integration + Brainstorm scenario (v1.18.0 ship)
@@ -123,7 +124,7 @@ Pushed `gstack-improve` to origin, opened PR #21 with full summary, 8-item test 
 
 ## Decisions Made
 
-1. **Session-capability beats filesystem for plugin detection.** Established `HAS_GSTACK_PLANNING` via semantic skill-list probe; `GSTACK_STATE_PRESENT` filesystem check demoted to advisory. Matches the pattern already proven in `/ark-health` and `/ark-onboard`. Extracted as a compiled insight: [[Session-Capability-Plugin-Detection-Pattern]].
+1. **Session-capability beats filesystem for plugin detection.** Established `HAS_GSTACK_PLANNING` via semantic skill-list probe; `GSTACK_STATE_PRESENT` filesystem check demoted to advisory. Matches the pattern already proven in `/ark-health` and `/ark-onboard`. Extracted as a compiled insight: [Session-Capability-Plugin-Detection-Pattern](../Compiled-Insights/Session-Capability-Plugin-Detection-Pattern.md).
 
 2. **Replace, don't stack review authorities.** When gstack planning is available, it replaces `/ccg` for the plan-review slot in Heavy chains — not adds on top. Running multi-model consensus and multi-persona alignment as sibling committees is review-ceremony stacking with unclear conflict resolution. Pick one authority per phase.
 
@@ -157,7 +158,7 @@ Pushed `gstack-improve` to origin, opened PR #21 with full summary, 8-item test 
 
 - PR: https://github.com/HelloWorldSungin/ark-skills/pull/21
 - Commits: `4aa2c2b` (v1.18.0 core), `3d382c2` (pre-push fixes)
-- Parent epic: [[Arkskill-008-gstack-planning-brainstorm]]
-- Referenced upstream: [[Arkskill-003-omc-integration]] (ark-workflow dual-mode framework)
-- Extracted insight: [[Session-Capability-Plugin-Detection-Pattern]]
+- Parent epic: [Arkskill-008-gstack-planning-brainstorm](../TaskNotes/Tasks/Epic/Arkskill-008-gstack-planning-brainstorm.md)
+- Referenced upstream: [Arkskill-003-omc-integration](../TaskNotes/Tasks/Epic/Arkskill-003-omc-integration.md) (ark-workflow dual-mode framework)
+- Extracted insight: [Session-Capability-Plugin-Detection-Pattern](../Compiled-Insights/Session-Capability-Plugin-Detection-Pattern.md)
 - Raw advisor outputs preserved at `.omc/artifacts/ask/` (design pass + pre-push pass)

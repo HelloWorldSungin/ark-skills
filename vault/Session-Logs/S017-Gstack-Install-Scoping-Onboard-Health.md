@@ -8,7 +8,7 @@ tags:
   - ark-onboard
   - ark-health
   - ccg-review
-summary: "Repaired a broken Claude gstack install (deleted runtime root), then taught /ark-onboard to actively install gstack scoped to claude+codex and /ark-health to detect the failure class (Check 2a). /ccg review + live bash verification caught a find -type d symlink miss and a zsh word-split bug. Shipped v1.28.0, PR #29."
+description: "Repaired a broken Claude gstack install (deleted runtime root), then taught /ark-onboard to actively install gstack scoped to claude+codex and /ark-health to detect the failure class (Check 2a). /ccg review + live bash verification caught a find -type d symlink miss and a zsh word-split bug. Shipped v1.28.0, PR #29."
 session: "S017"
 status: complete
 date: 2026-06-15
@@ -17,6 +17,7 @@ epic: ""
 source-tasks: []
 created: 2026-06-15
 last-updated: 2026-06-15
+timestamp: 2026-06-15T00:00:00Z
 ---
 
 # Session 17: gstack install scoping (claude+codex) in /ark-onboard + /ark-health

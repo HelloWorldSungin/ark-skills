@@ -6,13 +6,14 @@ tags:
   - skill
   - plugin
   - workflow
-summary: "Implemented /ark-workflow skill: task triage, scenario detection, weight-class skill chains. 11 tasks via subagent-driven-development, shipped v1.2.0."
+description: "Implemented /ark-workflow skill: task triage, scenario detection, weight-class skill chains. 11 tasks via subagent-driven-development, shipped v1.2.0."
 prev: "[[S001-MemPalace-Integration]]"
 epic: ""
 session: "S002"
 source-tasks: []
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Session: /ark-workflow Skill Implementation
@@ -97,5 +98,5 @@ The spec reviewer caught a stray `9. /claude-history-ingest` line pasted into th
 
 ## Related Pages
 
-- [[S001-MemPalace-Integration]] — previous session
-- [[Compiled-Insights/Development-Workflow-Patterns|Development Workflow Patterns]] — the brainstorm → spec → codex pipeline this session followed
+- [S001-MemPalace-Integration](S001-MemPalace-Integration.md) — previous session
+- [Development Workflow Patterns](../Compiled-Insights/Development-Workflow-Patterns.md) — the brainstorm → spec → codex pipeline this session followed

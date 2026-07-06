@@ -2,6 +2,7 @@
 tags:
   - task
 title: "/ark-workflow Path B Uniformity Refactor"
+description: "Epic for the /ark-workflow Path B uniformity refactor — done."
 task-id: "Arkskill-006"
 status: done
 priority: high
@@ -16,6 +17,8 @@ source-sessions:
   - "[[S010-Path-B-Uniformity-Refactor]]"
 parent:
   - "[[Arkskill-003-omc-integration]]"
+type: epic
+timestamp: 2026-04-15T00:00:00Z
 ---
 
 # Arkskill-006: /ark-workflow Path B Uniformity Refactor
@@ -23,7 +26,7 @@ parent:
 ## Summary
 
 Audit the v1.13.0 dual-mode `/ark-workflow` Path B routing (shipped under
-[[Arkskill-003-omc-integration]]), then collapse its engine specializations
+[Arkskill-003-omc-integration](Arkskill-003-omc-integration.md)), then collapse its engine specializations
 into a uniform `/autopilot` choice across all chain variants except
 Migration Heavy (which keeps `/team`). Implemented audit recommendations
 R1, R2, R4, R10, R11, R15, R16, R17 across 7 atomic commits on branch

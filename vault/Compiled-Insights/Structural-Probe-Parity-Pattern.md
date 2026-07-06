@@ -9,7 +9,7 @@ tags:
   - canonical-constants
   - ark-workflow
   - ark-health
-summary: "When a canonical bash probe is duplicated into copy sites, substring-level grep verification misses structural drift. Use diff <(extract_probe canonical) <(extract_probe copy) to enforce byte-level structural parity. Pattern emerged from /codex finding on Arkskill-005."
+description: "When a canonical bash probe is duplicated into copy sites, substring-level grep verification misses structural drift. Use diff <(extract_probe canonical) <(extract_probe copy) to enforce byte-level structural parity. Pattern emerged from /codex finding on Arkskill-005."
 source-sessions:
   - "[[S009-OMC-Detection-Surfaces]]"
   - "[[S007-OMC-Integration-Design]]"
@@ -21,6 +21,7 @@ related:
   - "[[Codex-Review-Non-Convergence]]"
 created: 2026-04-14
 last-updated: 2026-04-14
+timestamp: 2026-04-14T00:00:00Z
 ---
 
 # Structural Probe Parity — Byte-Diff Verification for Duplicated Bash Snippets
@@ -137,10 +138,10 @@ each recurring pair becomes a candidate for the manifest.
 
 ## Related
 
-- [[Codex-Review-Non-Convergence]] — why second-opinion review catches gaps
+- [Codex-Review-Non-Convergence](Codex-Review-Non-Convergence.md) — why second-opinion review catches gaps
   first-party verification misses.
-- [[Plugin-Architecture-and-Context-Discovery]] — the context-discovery
+- [Plugin-Architecture-and-Context-Discovery](Plugin-Architecture-and-Context-Discovery.md) — the context-discovery
   pattern is itself a candidate for structural-parity enforcement across
   skills that duplicate it.
-- [[Shell-Script-Safety-Patterns]] — probes that mutate env vars (export
+- [Shell-Script-Safety-Patterns](Shell-Script-Safety-Patterns.md) — probes that mutate env vars (export
   lines, subshell scoping) have additional structural drift surfaces.

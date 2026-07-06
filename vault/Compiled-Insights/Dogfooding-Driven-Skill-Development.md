@@ -4,11 +4,12 @@ type: compiled-insight
 tags:
   - compiled-insight
   - skill
-summary: "The most effective way to develop skills is to use them on the plugin's own repo — wiki-setup grew from 10 to 13 steps after dogfooding."
+description: "The most effective way to develop skills is to use them on the plugin's own repo — wiki-setup grew from 10 to 13 steps after dogfooding."
 source-sessions: []
 source-tasks: []
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Dogfooding-Driven Skill Development

@@ -2,6 +2,7 @@
 tags:
   - task
 title: "/ark-update Version-Driven Migration Framework"
+description: "Epic for the /ark-update version-driven migration framework — ready to ship."
 task-id: "Arkskill-004"
 status: ready-to-ship
 priority: high
@@ -14,6 +15,8 @@ created: "2026-04-14"
 last-updated: "2026-04-14"
 source-sessions:
   - "[[S008-Ark-Update-Framework]]"
+type: epic
+timestamp: 2026-04-14T00:00:00Z
 ---
 
 # Arkskill-004: /ark-update Version-Driven Migration Framework

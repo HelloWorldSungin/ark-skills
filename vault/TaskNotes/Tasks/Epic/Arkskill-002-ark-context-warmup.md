@@ -2,6 +2,7 @@
 tags:
   - task
 title: "/ark-context-warmup — Automatic Context Loader"
+description: "Epic for the /ark-context-warmup automatic context loader — done."
 task-id: "Arkskill-002"
 status: done
 priority: high
@@ -12,6 +13,8 @@ urgency: normal
 session: "S006"
 created: "2026-04-12"
 last-updated: "2026-04-13"
+type: epic
+timestamp: 2026-04-13T00:00:00Z
 ---
 
 # Arkskill-002: /ark-context-warmup — Automatic Context Loader

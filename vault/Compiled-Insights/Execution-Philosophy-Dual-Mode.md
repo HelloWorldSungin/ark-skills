@@ -9,7 +9,7 @@ tags:
   - dual-mode
   - ark-workflow
   - handback-boundary
-summary: "Dual-mode execution — Ark-native (Path A, high checkpoint-density) and OMC-powered (Path B, low checkpoint-density) — co-exists per chain variant with discoverability-biased surfacing, variant-inherited handback with enumerated special cases, and byte-identity CI gating. Patterns replicate to any orchestrator skill that wants to add an autonomous alternative without removing the user-in-the-loop default. (Post-2026-04-15 refactor: variants dropped to 17 and classifier shapes to 4 under the uniformity decision — see [[Path-B-Canonicalization-Hash-vs-Shape]].)"
+description: "Dual-mode execution — Ark-native (Path A, high checkpoint-density) and OMC-powered (Path B, low checkpoint-density) — co-exists per chain variant with discoverability-biased surfacing, variant-inherited handback with enumerated special cases, and byte-identity CI gating. Patterns replicate to any orchestrator skill that wants to add an autonomous alternative without removing the user-in-the-loop default. (Post-2026-04-15 refactor: variants dropped to 17 and classifier shapes to 4 under the uniformity decision — see [[Path-B-Canonicalization-Hash-vs-Shape]].)"
 source-sessions:
   - "[[S007-OMC-Integration-Design]]"
   - "[[S010-Path-B-Uniformity-Refactor]]"
@@ -18,6 +18,7 @@ source-tasks:
   - "[[Arkskill-006-path-b-uniformity]]"
 created: 2026-04-13
 last-updated: 2026-04-15
+timestamp: 2026-04-15T00:00:00Z
 ---
 
 # Execution Philosophy — Dual-Mode Ark-Native ↔ OMC-Powered
@@ -36,7 +37,7 @@ mechanical gate instead of hand-audit. Post-2026-04-15 uniformity refactor
 the contract is 17 variants / 4 classifier shapes / 5 raw-text hashes (the
 classifier keys on engine + closeout markers; raw hashes diverge slightly
 when pre-steps like `/external-context` lengthen the block body — see
-[[Path-B-Canonicalization-Hash-vs-Shape]] for the classifier-vs-hash
+[Path-B-Canonicalization-Hash-vs-Shape](Path-B-Canonicalization-Hash-vs-Shape.md) for the classifier-vs-hash
 pattern).
 
 ## Key Insights
@@ -197,7 +198,7 @@ counting.**
 - Reference doc: `skills/ark-workflow/references/omc-integration.md`
   (Sections 0–6).
 - CI script: `skills/ark-context-warmup/scripts/check_path_b_coverage.py`.
-- Session log: [[S007-OMC-Integration-Design]].
+- Session log: [S007-OMC-Integration-Design](../Session-Logs/S007-OMC-Integration-Design.md).
 - User memory: [[feedback_version_bump]] (release-artifact lockstep).
 
 ## Implications

@@ -7,13 +7,14 @@ tags:
   - workflow
   - session-habits
   - ark-workflow
-summary: "Three habits that shape context longevity across a skill chain: rewind-before-correction, new-task-means-new-session, compact-with-forward-brief. Landed in ark-workflow SKILL.md as a coaching block in v1.17.0; the Step 6.5 probe surfaces them contextually."
+description: "Three habits that shape context longevity across a skill chain: rewind-before-correction, new-task-means-new-session, compact-with-forward-brief. Landed in ark-workflow SKILL.md as a coaching block in v1.17.0; the Step 6.5 probe surfaces them contextually."
 source-sessions:
   - "[[S011-Ark-Workflow-Context-Budget-Probe]]"
 source-tasks:
   - "[[Arkskill-007-context-budget-probe]]"
 created: 2026-04-17
 last-updated: 2026-04-17
+timestamp: 2026-04-17T00:00:00Z
 ---
 
 # Session Habits for Context Longevity
@@ -89,5 +90,5 @@ the habits guide every decision between them.
 - `skills/ark-workflow/SKILL.md` §"Session Habits" — canonical source
 - `skills/ark-workflow/references/routing-template.md` §"Session habits" subsection
 - `skills/ark-workflow/scripts/context_probe.py` — the probe that surfaces these at thresholds
-- [[S011-Ark-Workflow-Context-Budget-Probe]] — ship session
-- [[Arkskill-007-context-budget-probe]] — epic
+- [S011-Ark-Workflow-Context-Budget-Probe](../Session-Logs/S011-Ark-Workflow-Context-Budget-Probe.md) — ship session
+- [Arkskill-007-context-budget-probe](../TaskNotes/Tasks/Epic/Arkskill-007-context-budget-probe.md) — epic

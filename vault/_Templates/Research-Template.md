@@ -3,11 +3,12 @@ title: "Research: {TITLE}"
 type: research
 tags:
   - research
-summary: ""
+description: ""
 source-sessions: []
 source-tasks: []
 created: {DATE}
 last-updated: {DATE}
+timestamp: 2026-04-08T12:36:00-07:00
 ---
 
 # Research: {TITLE}

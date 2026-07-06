@@ -11,7 +11,7 @@ tags:
   - worktree
   - migration
   - release
-summary: "Shipped /ark-onboard centralized-vault default (symlinked vault repo at $HOME/.superset/vaults/<project>), externalization plan-file generator, check #20 (warn-only), downstream skill notes. v1.10.1 → v1.11.0. PR #13."
+description: "Shipped /ark-onboard centralized-vault default (symlinked vault repo at $HOME/.superset/vaults/<project>), externalization plan-file generator, check #20 (warn-only), downstream skill notes. v1.10.1 → v1.11.0. PR #13."
 session: "S005"
 status: complete
 date: 2026-04-12
@@ -20,6 +20,7 @@ epic: ""
 source-tasks: []
 created: 2026-04-12
 last-updated: 2026-04-12
+timestamp: 2026-04-12T00:00:00Z
 ---
 
 # Session 5: /ark-onboard Centralized Vault Recommendation (v1.11.0)
@@ -30,7 +31,7 @@ Extend `/ark-onboard` to recommend a **centralized vault** (externalized git rep
 
 ## Context
 
-S004 finished the `/ark-workflow` v2 progressive-disclosure split. This session picked up the next piece of plugin work: the `/ark-onboard` wizard still defaulted to `./vault/` embedded layout, while ArkNode-Poly had evolved to a symlinked-standalone pattern months prior (see [[Vault-Hosting-Evolution]]). The gap meant new projects onboarded with the inferior pattern, and existing embedded projects had no safe externalization path.
+S004 finished the `/ark-workflow` v2 progressive-disclosure split. This session picked up the next piece of plugin work: the `/ark-onboard` wizard still defaulted to `./vault/` embedded layout, while ArkNode-Poly had evolved to a symlinked-standalone pattern months prior (see [Vault-Hosting-Evolution](../Compiled-Insights/Vault-Hosting-Evolution.md)). The gap meant new projects onboarded with the inferior pattern, and existing embedded projects had no safe externalization path.
 
 Branch `vault-symlink` already contained the approved spec (revision 4, codex round-4 PASS at commit `dd80baa`) and the implementation plan (`docs/superpowers/plans/2026-04-12-ark-onboard-centralized-vault.md`). This session's job: execute the plan, verify, and ship.
 

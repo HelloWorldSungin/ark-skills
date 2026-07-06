@@ -4,11 +4,12 @@ type: compiled-insight
 tags:
   - compiled-insight
   - vault
-summary: "Session log knowledge burial is the primary vault problem — 103+ session logs with hard-won ML insights buried in chronological journals, inaccessible to retrieval."
+description: "Session log knowledge burial is the primary vault problem — 103+ session logs with hard-won ML insights buried in chronological journals, inaccessible to retrieval."
 source-sessions: []
 source-tasks: []
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Session Log Knowledge Burial — The Core Vault Problem

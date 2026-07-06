@@ -4,12 +4,17 @@ type: moc
 tags:
   - moc
   - task
-summary: "How task IDs, statuses, and task notes work in the ark-skills project."
+description: "How task IDs, statuses, and task notes work in the ark-skills project."
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Project Management Guide
+
+> **FROZEN 2026-07-06** — active tracking moved to GitHub Issues (see CLAUDE.md
+> Task Management). This tracker is read-only history; do not file new tasks
+> here.
 
 ## Task ID Format
 

@@ -5,11 +5,12 @@ tags:
   - compiled-insight
   - vault
   - skill
-summary: "Three-round recurring bug in notebooklm-vault-sync.sh — symlink traversal + standalone vs wrapped layout — kept resurfacing because retrieval scripts branched on the vault_root config string. Structural detection (marker dirs at vault root) survives misconfig where config-string parsing does not, and recurring fixes in the same file family are a layout-typing architectural smell."
+description: "Three-round recurring bug in notebooklm-vault-sync.sh — symlink traversal + standalone vs wrapped layout — kept resurfacing because retrieval scripts branched on the vault_root config string. Structural detection (marker dirs at vault root) survives misconfig where config-string parsing does not, and recurring fixes in the same file family are a layout-typing architectural smell."
 source-sessions: []
 source-tasks: []
 created: 2026-04-25
 last-updated: 2026-04-25
+timestamp: 2026-04-25T00:00:00Z
 ---
 
 # Vault Layout Detection — Structural Markers Beat Config Strings

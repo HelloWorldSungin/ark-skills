@@ -12,7 +12,7 @@ tags:
   - autopilot
   - code-review
   - release
-summary: "Shipped /ark-update — version-driven migration framework that converges projects to the current ark-skills target profile. 19-skill plugin, 237 tests, ~2000 LOC. Combined v1.14.0 release with Stream A (OMC detection)."
+description: "Shipped /ark-update — version-driven migration framework that converges projects to the current ark-skills target profile. 19-skill plugin, 237 tests, ~2000 LOC. Combined v1.14.0 release with Stream A (OMC detection)."
 session: "S008"
 status: complete
 date: 2026-04-14
@@ -22,6 +22,7 @@ source-tasks:
   - "[[Arkskill-004-ark-update-framework]]"
 created: 2026-04-14
 last-updated: 2026-04-14
+timestamp: 2026-04-14T00:00:00Z
 ---
 
 # Session 8: /ark-update Version-Driven Migration Framework (v1.14.0 Stream B)

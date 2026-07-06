@@ -5,11 +5,12 @@ tags:
   - compiled-insight
   - skill
   - plugin
-summary: "Cut SKILL.md verbosity by relocating long bash, prompts, templates, and report skeletons to references/*.md load-on-demand. v1.21.0 audit hit a 30% aggregate reduction (49–58% per-skill on slimmed targets) with zero behavior change. Verbosity reduction is not capability deletion — preserve all ark-specific IP inline only when its scannability matters at invocation time."
+description: "Cut SKILL.md verbosity by relocating long bash, prompts, templates, and report skeletons to references/*.md load-on-demand. v1.21.0 audit hit a 30% aggregate reduction (49–58% per-skill on slimmed targets) with zero behavior change. Verbosity reduction is not capability deletion — preserve all ark-specific IP inline only when its scannability matters at invocation time."
 source-sessions: []
 source-tasks: []
 created: 2026-04-24
 last-updated: 2026-04-24
+timestamp: 2026-04-24T00:00:00Z
 ---
 
 # SKILL.md Shrink-to-Core via References Extraction
@@ -56,7 +57,7 @@ Threshold: if the agent can do the right thing knowing *what* a step does and *w
    - Phase 3 `/ark-code-review`: 2 [P2] NITs (missing `--epic` Code Reviewer prompt variant; inaccurate agent-roster mode-applicability column). Both fixed before continuing.
    - Phase 4 `/ark-onboard`: 3 [P1]s — reference-pointer integrity (backtick-wrapped headings didn't match literal `§` lookups), Greenfield Step 1 wizard UX regression (compressed prompts), design-bullet/step-marker inconsistency. All fixed before release.
 
-The Phase-4 P1s would have been catastrophic — wizard UX is the high-direct-fire user contract — and weren't caught by self-review. This validates the [[Codex-Review-Non-Convergence]] insight at audit scale, not just per-PR scale.
+The Phase-4 P1s would have been catastrophic — wizard UX is the high-direct-fire user contract — and weren't caught by self-review. This validates the [Codex-Review-Non-Convergence](Codex-Review-Non-Convergence.md) insight at audit scale, not just per-PR scale.
 
 ## Reference-pointer integrity
 
@@ -94,4 +95,4 @@ The Phase-4 P1s would have been catastrophic — wizard UX is the high-direct-fi
 - **G1/G2/G3 invocation audit is the right pre-slim tool** for any skill whose verbosity has crept up. Without it, you slim by gut and risk regressing high-direct-fire surfaces (the Phase-4 wizard UX P1).
 - **Verify each phase with an independent reviewer before merging** the next phase. Slim changes don't show up in tests — only adversarial prompt-eyeball review catches the prompt drift, missing variant, or subtle UX regression.
 - **Treat `§` reference-pointer breakage as P1.** Plain-text heading discipline in `references/` is non-negotiable.
-- **The 30% number isn't the goal — the at-invocation footprint is.** What matters is that the skill is scannable at fire time and bulk content loads only when the agent traverses to it. Cross-reference [[Session-Habits-For-Context-Longevity]] for why this matters at the session level.
+- **The 30% number isn't the goal — the at-invocation footprint is.** What matters is that the skill is scannable at fire time and bulk content loads only when the agent traverses to it. Cross-reference [Session-Habits-For-Context-Longevity](Session-Habits-For-Context-Longevity.md) for why this matters at the session level.

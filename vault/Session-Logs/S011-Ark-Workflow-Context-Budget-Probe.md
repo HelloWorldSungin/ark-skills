@@ -12,7 +12,7 @@ tags:
   - nudge-suppression
   - session-habits
   - release
-summary: "Shipped v1.17.0: stdlib-only context_probe.py with 6 CLI modes + atomic chain-file helper + session habits coaching block. 22 atomic commits on branch context-management, merged via PR #19 as squash commit 8d42bd8. No P1 blockers in final /ccg review; 7 P2 + 4 P3 follow-ups filed."
+description: "Shipped v1.17.0: stdlib-only context_probe.py with 6 CLI modes + atomic chain-file helper + session habits coaching block. 22 atomic commits on branch context-management, merged via PR #19 as squash commit 8d42bd8. No P1 blockers in final /ccg review; 7 P2 + 4 P3 follow-ups filed."
 session: "S011"
 status: complete
 date: 2026-04-17
@@ -23,6 +23,7 @@ source-tasks:
   - "[[Arkskill-003-omc-integration]]"
 created: 2026-04-17
 last-updated: 2026-04-17
+timestamp: 2026-04-17T00:00:00Z
 ---
 
 # Session 11: /ark-workflow Context-Budget Probe (v1.17.0 ship)
@@ -129,11 +130,11 @@ vault work (the merged branch was deleted remotely and `/wiki-update`'s
 push step needed a live branch). Wrote this log plus the
 `Arkskill-007-context-budget-probe` epic plus two compiled-insight pages:
 
-- [[Session-Habits-For-Context-Longevity]] — the rewind/new-session/
+- [Session-Habits-For-Context-Longevity](../Compiled-Insights/Session-Habits-For-Context-Longevity.md) — the rewind/new-session/
   forward-brief triad from the Step 6.5 coaching block, promoted out of
   SKILL.md so vault retrieval can surface it without reading the whole
   skill file.
-- [[Atomic-Chain-File-Mutation-Pattern]] — the `fcntl.flock(LOCK_EX)` +
+- [Atomic-Chain-File-Mutation-Pattern](../Compiled-Insights/Atomic-Chain-File-Mutation-Pattern.md) — the `fcntl.flock(LOCK_EX)` +
   temp-file + `os.replace` shape, reusable for any stdlib-only atomic
   read-modify-write against a shared markdown file.
 

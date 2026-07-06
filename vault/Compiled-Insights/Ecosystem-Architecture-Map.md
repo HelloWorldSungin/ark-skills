@@ -5,11 +5,12 @@ tags:
   - compiled-insight
   - infrastructure
   - plugin
-summary: "The Ark ecosystem connects 7 repos via shared skills plugin, Obsidian vaults synced to NotebookLM, Linear via linear-updater, and Proxmox homelab infrastructure."
+description: "The Ark ecosystem connects 7 repos via shared skills plugin, Obsidian vaults synced to NotebookLM, Linear via linear-updater, and Proxmox homelab infrastructure."
 source-sessions: []
 source-tasks: []
 created: 2026-04-08
 last-updated: 2026-04-08
+timestamp: 2026-04-08T00:00:00Z
 ---
 
 # Ecosystem Architecture Map
@@ -36,7 +37,7 @@ The Ark ecosystem spans two active AI/ML projects (ArkNode-AI and ArkNode-Poly),
 | Arknode-AI-Obsidian-Vault | 321-file vault, task prefix `ArkSignal-` (standalone at `~/.superset/vaults/ArkNode-AI/`) |
 | Arknode-Poly-Obsidian-Vault | 181-file vault, task prefix `ArkPoly-` (standalone at `~/.superset/vaults/ArkNode-Poly/`) |
 | linear-updater | Polls vaults, syncs TaskNotes to Linear (5-min interval) |
-| tasknotes | Obsidian plugin with MCP server at `/mcp` endpoint (see [[Compiled-Insights/TaskNotes-MCP-Integration-Model|MCP Integration Model]]) |
+| tasknotes | Obsidian plugin with MCP server at `/mcp` endpoint (see [MCP Integration Model](TaskNotes-MCP-Integration-Model.md)) |
 | obsidian-wiki | 13 skills for vault maintenance (Karpathy llm-wiki pattern) — upstream reference only |
 
 ### Obsidian Plugin Config Pattern
@@ -85,7 +86,7 @@ NotebookLM (indexed vault content)
 
 ## Implications
 
-- Any cross-project tool must handle per-project config via [[Compiled-Insights/Plugin-Architecture-and-Context-Discovery|context-discovery]], not hardcoded constants.
+- Any cross-project tool must handle per-project config via [context-discovery](Plugin-Architecture-and-Context-Discovery.md), not hardcoded constants.
 - Adding new projects requires: CLAUDE.md config, plugin install, MCP setup, and linear-updater refactor (for the 3rd+ project).
 - SSH access to HelloWorldSungin GitHub org and CT110 are prerequisites for full ecosystem access.
 - The 5-minute linear-updater poll cycle means task changes are not immediately reflected in Linear.

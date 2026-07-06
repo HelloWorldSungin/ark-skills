@@ -2,9 +2,10 @@
 title: "Step 11 — /codex + /ark-code-review findings + triage"
 date: 2026-04-14
 type: session-log
-summary: "Two-lane review of shipped /ark-update framework. 1 P1 fixed (gate-flag test coverage), 2 P1 codex-only deferred (atomic writes — bounded blast radius), 11 P2/P3 deferred to v1.1 ADR."
+description: "Two-lane review of shipped /ark-update framework. 1 P1 fixed (gate-flag test coverage), 2 P1 codex-only deferred (atomic writes — bounded blast radius), 11 P2/P3 deferred to v1.1 ADR."
 tags: [ark-update, release, v1.14.0, code-review, stream-b]
 source-sessions: [stream-b-ark-update-v1.14.0]
+timestamp: 2026-04-14T00:00:00Z
 ---
 
 # Step 11 — Review Findings & Triage

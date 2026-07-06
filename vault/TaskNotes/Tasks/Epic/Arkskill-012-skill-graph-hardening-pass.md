@@ -6,7 +6,7 @@ tags:
   - skill-design
   - lint
   - composition
-summary: "Hardening pass for the ark-skills plugin: catalog drift lint, external skill registry, anchor-ref lint, exception-aware composition guardrails. Replaces the rejected wikilink-graph and tier-only-frontmatter proposals."
+description: "Hardening pass for the ark-skills plugin: catalog drift lint, external skill registry, anchor-ref lint, exception-aware composition guardrails. Replaces the rejected wikilink-graph and tier-only-frontmatter proposals."
 task-id: Arkskill-012
 status: done
 priority: medium
@@ -16,6 +16,7 @@ source-sessions: []
 source-tasks: []
 created: 2026-04-24
 last-updated: 2026-04-24
+timestamp: 2026-04-24T00:00:00Z
 ---
 
 # Arkskill-012: Skill-Graph Hardening Pass

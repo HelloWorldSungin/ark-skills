@@ -2,6 +2,7 @@
 tags:
   - task
 title: "/ark-workflow gstack planning integration + Brainstorm scenario (v1.18.0)"
+description: "Epic for /ark-workflow gstack planning integration and the Brainstorm scenario (v1.18.0) — done."
 task-id: "Arkskill-008"
 status: done
 priority: high
@@ -16,6 +17,8 @@ source-sessions:
   - "[[S012-Ark-Workflow-Gstack-Planning]]"
 parent:
   - "[[Arkskill-003-omc-integration]]"
+type: epic
+timestamp: 2026-04-20T00:00:00Z
 ---
 
 # Arkskill-008: /ark-workflow gstack planning integration + Brainstorm scenario
@@ -28,7 +31,7 @@ Shipped v1.18.0 on branch `gstack-improve` in 2 commits (`4aa2c2b` + `3d382c2`);
 
 ## Core design decisions
 
-- **Session-capability detection** — `HAS_GSTACK_PLANNING` is an agent-executed semantic probe that reads the session skill-list, matching the detection pattern already used by `/ark-health` and `/ark-onboard`. `GSTACK_STATE_PRESENT` is a filesystem advisory (`$HOME/.gstack/config.yaml`) used only to distinguish absent vs broken-install. See [[Session-Capability-Plugin-Detection-Pattern]].
+- **Session-capability detection** — `HAS_GSTACK_PLANNING` is an agent-executed semantic probe that reads the session skill-list, matching the detection pattern already used by `/ark-health` and `/ark-onboard`. `GSTACK_STATE_PRESENT` is a filesystem advisory (`$HOME/.gstack/config.yaml`) used only to distinguish absent vs broken-install. See [Session-Capability-Plugin-Detection-Pattern](../../../Compiled-Insights/Session-Capability-Plugin-Detection-Pattern.md).
 - **Three-state UX** — healthy (include), absent (silent skip), broken-install (one notice per chain pointing to `/ark-health`). Silent-by-default prevents clippy noise.
 - **Heavy Path A planning authority substitution** — gstack **replaces** `/ccg` plan review (not stacks on top). Greenfield Heavy → `/autoplan`, Migration/Performance Heavy → `/plan-eng-review`. Spec-review `/ccg` stays (different purpose). Prevents the "Review Hell" anti-pattern Gemini called out.
 - **Path B gstack-independence** — documented as explicit product decision. Path B's `/autopilot`/`/team` engines include internal review phases; layering gstack planning would reintroduce stacked-committee ceremony.
@@ -58,7 +61,7 @@ Shipped v1.18.0 on branch `gstack-improve` in 2 commits (`4aa2c2b` + `3d382c2`);
 
 ## Cross-links
 
-- Session: [[S012-Ark-Workflow-Gstack-Planning]]
-- Parent epic: [[Arkskill-003-omc-integration]]
-- Insight: [[Session-Capability-Plugin-Detection-Pattern]]
+- Session: [S012-Ark-Workflow-Gstack-Planning](../../../Session-Logs/S012-Ark-Workflow-Gstack-Planning.md)
+- Parent epic: [Arkskill-003-omc-integration](Arkskill-003-omc-integration.md)
+- Insight: [Session-Capability-Plugin-Detection-Pattern](../../../Compiled-Insights/Session-Capability-Plugin-Detection-Pattern.md)
 - PR: https://github.com/HelloWorldSungin/ark-skills/pull/21

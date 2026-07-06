@@ -2,6 +2,7 @@
 tags:
   - task
 title: "OMC Plugin Detection Surfaces in /ark-health + /ark-onboard"
+description: "Epic for OMC plugin detection surfaces added to /ark-health and /ark-onboard — done."
 task-id: "Arkskill-005"
 status: done
 priority: medium
@@ -16,13 +17,15 @@ source-sessions:
   - "[[S009-OMC-Detection-Surfaces]]"
 related:
   - "[[Arkskill-003-omc-integration]]"
+type: epic
+timestamp: 2026-04-14T00:00:00Z
 ---
 
 # Arkskill-005: OMC Plugin Detection Surfaces in /ark-health + /ark-onboard
 
 ## Summary
 
-Follow-up to [[Arkskill-003-omc-integration]] (v1.13.0 dual-mode routing).
+Follow-up to [Arkskill-003-omc-integration](Arkskill-003-omc-integration.md) (v1.13.0 dual-mode routing).
 v1.13.0 wired OMC into `/ark-workflow` runtime routing but left the **detection-
 surfacing** side unwired: `/ark-health` had no check reporting whether OMC was
 installed, and `/ark-onboard` had no upgrade-opportunity entry pointing users
@@ -69,9 +72,9 @@ scorecard, Repair path, Migration path, tier descriptions).
   all addressed).
 - Commits: `28030b3`, `1535214`, `47d7190`, `a5645a3`.
 - PR: #17 (combined v1.14.0 release).
-- Session log: [[S009-OMC-Detection-Surfaces]].
-- Related compiled insight: [[Structural-Probe-Parity-Pattern]].
+- Session log: [S009-OMC-Detection-Surfaces](../../../Session-Logs/S009-OMC-Detection-Surfaces.md).
+- Related compiled insight: [Structural-Probe-Parity-Pattern](../../../Compiled-Insights/Structural-Probe-Parity-Pattern.md).
 
 ## Sessions
 
-- [[S009-OMC-Detection-Surfaces]] — 2026-04-14: implementation + codex review + ship
+- [S009-OMC-Detection-Surfaces](../../../Session-Logs/S009-OMC-Detection-Surfaces.md) — 2026-04-14: implementation + codex review + ship
