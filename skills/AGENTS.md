@@ -1,58 +1,29 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-13 | Updated: 2026-04-13 -->
+<!-- Generated: 2026-04-13 | Updated: 2026-07-06 -->
 
 # skills
 
 ## Purpose
 
-The 20 Claude Code skills published by this plugin. Each subdirectory is one skill; each skill has a `SKILL.md` whose YAML frontmatter defines the trigger string that makes Claude Code invoke it. Skills fall into five categories: workflow orchestration, core workflows, task automation, onboarding, and vault maintenance.
+The Claude Code skills published by this plugin. Each subdirectory is one skill; each skill has a `SKILL.md` whose YAML frontmatter defines the trigger string that makes Claude Code invoke it. As of the v2.0.0 restructure, 6 skills remain, falling into two categories: core (workflow consultant + conventions layer) and onboarding & health.
 
 ## Subdirectories
-
-### Workflow Orchestration
-
-| Directory | Purpose |
-|-----------|---------|
-| `ark-workflow/` | Task triage and skill chain orchestration — entry point for all non-trivial work. |
-| `ark-context-warmup/` | Context loader that runs as step 0 of every `/ark-workflow` chain. Also invokable standalone. |
-| `wiki-handoff/` | Writes a validated session bridge page to `.omc/wiki/` before `/compact` or `/clear`. Invoked from `/ark-workflow` Step 6.5 action branch. |
 
 ### Core
 
 | Directory | Purpose |
 |-----------|---------|
-| `ark-code-review/` | Multi-agent code review with fan-out architecture (epic/plan/full modes). |
-| `codebase-maintenance/` | Repo cleanup, vault doc sync, skill health sweep before merge. |
+| `ark-consult/` | Stateless workflow consultant — the planning phase for any non-trivial task. Recommends exactly one execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) and hands off. Replaces the retired `ark-workflow`. |
+| `vault/` | Write-side knowledge operations for the OKF vault bundle at `vault/` — durable insights, research, decisions, reference pages. Not session logs, not task tracking. |
 | `notebooklm-vault/` | NotebookLM-backed persistent context (bootstrap, ask, session-continue, conflict-check). |
-
-### Task Automation
-
-| Directory | Purpose |
-|-----------|---------|
-| `ark-tasknotes/` | Agent-driven task creation and status via the tasknotes MCP or direct markdown write. |
 
 ### Onboarding & Health
 
 | Directory | Purpose |
 |-----------|---------|
 | `ark-onboard/` | Interactive setup wizard — greenfield, vault migration, partial repair. **Exempt from context-discovery.** |
-| `ark-health/` | 22-check diagnostic scorecard for the Ark ecosystem. **Exempt from context-discovery.** |
+| `ark-health/` | Diagnostic scorecard for the Ark ecosystem. **Exempt from context-discovery.** |
 | `ark-update/` | Version-driven migration framework. Converges downstream projects to the current ark-skills target profile via additive replays + pending destructive migrations. Distinct from `/ark-onboard` repair (failure-driven). |
-
-### Vault Maintenance
-
-| Directory | Purpose |
-|-----------|---------|
-| `wiki-query/` | Tiered vault retrieval (T1 NotebookLM → T2 MemPalace → T3 Obsidian-CLI → T4 index.md). |
-| `wiki-lint/` | Audit vault health (links, frontmatter, tags, index staleness). |
-| `wiki-status/` | Vault statistics and page-count insights. |
-| `wiki-update/` | End-of-session handoff: session log, TaskNote sync, compiled insights, index regen. |
-| `wiki-setup/` | Initialize a new Ark vault with the standard structure and artifacts. |
-| `wiki-ingest/` | Distill source documents into vault pages. |
-| `tag-taxonomy/` | Validate and normalize tags against `_meta/taxonomy.md`. |
-| `cross-linker/` | Discover and add missing wikilinks between pages. |
-| `claude-history-ingest/` | Mine Claude conversations into compiled insights via MemPalace. Ships a hook installer. |
-| `data-ingest/` | Process logs, transcripts, chat exports into vault pages. |
 
 ### Shared
 
@@ -92,8 +63,6 @@ Within a skill directory:
 |--------------|----------|
 | `scripts/` | Executable helpers invoked by the skill (bash/python). Keep them idempotent. |
 | `references/` | Long reference tables or prompts the skill links to instead of inlining. |
-| `chains/` | Pre-scripted skill sequences (used by `ark-workflow`). |
-| `hooks/` | Hook installers (used by `claude-history-ingest`). |
 | `fixtures/` | Sample inputs for manual testing. |
 
 Python `__pycache__/` is gitignored and must never be committed.
@@ -103,7 +72,7 @@ Python `__pycache__/` is gitignored and must never be committed.
 1. Create `skills/<kebab-name>/SKILL.md` with the frontmatter shown above.
 2. Register it in the top-level `README.md` "Available Skills" table and in `CLAUDE.md`'s "Available Skills" section.
 3. Bump `VERSION`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and add a `CHANGELOG.md` entry in the same commit.
-4. If the skill reads the vault, follow the four-tier retrieval order documented in the root `CLAUDE.md` and log any unavailable tier before falling back.
+4. If the skill reads the vault, follow the retrieval order documented in the root `CLAUDE.md` and log any unavailable tier before falling back.
 
 ### Modifying an Existing Skill
 
@@ -113,22 +82,22 @@ Python `__pycache__/` is gitignored and must never be committed.
 
 ### Common Patterns
 
-- **Early exits for missing prerequisites.** Skills that depend on a vault check `HAS_VAULT` and bail out with an actionable message (e.g. "Run `/wiki-setup` first") rather than proceeding with half-state.
-- **Four-tier retrieval with logged fallbacks.** Never silently drop to a lower tier — tell the user which tier failed and why.
+- **Early exits for missing prerequisites.** Skills that depend on a vault check `HAS_VAULT` and bail out with an actionable message (e.g. "Run `/ark-onboard` first") rather than proceeding with half-state.
+- **Retrieval with logged fallbacks.** Never silently drop to a lower tier — tell the user which tier failed and why.
 - **Context-discovery over hardcoded paths.** If you find yourself typing a specific vault path or task prefix inside a skill file, stop and route it through `CLAUDE.md` instead.
 
 ### Composition Guardrails
 
 Top-level orchestrators may sequence other orchestrating skills only through explicit chain steps, with conditions resolved before presentation. Do not rely on implicit nested routing. Avoid compound-to-compound calls unless the target has a bounded mode/argument and a documented handback point.
 
-Live examples that satisfy this rule today: `/ark-workflow` chains call `/ark-code-review --{weight}` (bounded mode), `/codebase-maintenance` (multi-step but explicit), and conditionally `/wiki-handoff` (Step 6.5). Each has a documented handback step. The `/wiki-lint` skill-graph audit (Check 13) emits soft warnings on every compound-to-compound call so they can be reviewed periodically; it does not block them.
+`ark-consult` is the only remaining top-level orchestrator; it is explicitly prohibited from any post-handoff orchestration (see `skills/ark-consult/SKILL.md`) — it recommends one ecosystem, files the plan, and hands off, with no further steps of its own. There are currently no compound-to-compound calls between surviving skills to guard against; revisit this section if that changes.
 
 ## Dependencies
 
 ### Internal
 
-- All skills read the top-level `CLAUDE.md` for the context-discovery pattern and vault retrieval tier definitions.
-- Several skills reference `skills/shared/mine-vault.sh` for MemPalace initialization.
+- All skills read the top-level `CLAUDE.md` for the context-discovery pattern and vault retrieval definitions.
+- `ark-onboard` and `ark-health` reference `skills/shared/mine-vault.sh` for MemPalace initialization.
 
 ### External
 
