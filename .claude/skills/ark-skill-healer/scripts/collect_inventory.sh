@@ -201,14 +201,3 @@ fi
 emit "obsidian-skills" "plugin" "kepano/obsidian-skills" "null" \
     "null" "$(json_str_or_null "$ob_sha")" "$(json_str_or_null "$OB_CLONE")" \
     "$ob_crc" "$ob_tiers" '[]'
-
-# ── graphify — python CLI; PyPI (graphifyy), repo safishamsi/graphify ────────
-graphify_version=""
-if command -v graphify >/dev/null 2>&1; then
-    graphify_version="$(graphify --version 2>/dev/null | awk '{print $NF}' || true)"
-fi
-graphify_path="$(command -v graphify 2>/dev/null || true)"
-emit "graphify" "python" "safishamsi/graphify" "null" \
-    "$(json_str_or_null "$graphify_version")" "null" \
-    "$(json_str_or_null "$graphify_path")" \
-    "false" '["changelog","release"]' '[]'
