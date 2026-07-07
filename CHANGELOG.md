@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.1] - 2026-07-07
+
+Retired the **graphify** code-graph integration — the tool is no longer used in this
+repo. The 2.1 MB `graphify-out/graph.json` and its siblings are removed from the tree,
+along with the local skill, hooks, and doc references that assumed graphify was present.
+
+### Removed
+
+- **`graphify-out/`** — the entire generated code-graph directory (`graph.json`,
+  `graph.html`, `manifest.json`, `GRAPH_REPORT.md`, `cache/`, dated snapshots) is
+  deleted and git-ignored.
+- **`.claude/skills/graphify/`** — the local graphify skill and its `references/`.
+- **graphify `PreToolUse` hooks** in `.claude/settings.json` — the two hooks that
+  forced `graphify query` before grep/read. Only the `Stop` history hook remains.
+- **graphify doc sections** — the `## graphify` + "Code-Structural Retrieval" blocks in
+  `CLAUDE.md`, the graphify-only `.claude/CLAUDE.md`, `.graphifyignore`, and the
+  graphify opt-in/upgrade lines in `skills/ark-onboard/SKILL.md`.
+
 ## [2.1.0] - 2026-07-06
 
 `ark-update` engine now implements the two v2.0.0 `pending_migrations` as real,
