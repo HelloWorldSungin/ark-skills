@@ -51,3 +51,6 @@ other content:
 Every progress comment is also appended to the OKF bundle's `log.md` in the same
 turn. The GitHub comment is authoritative; `log.md` is a synced mirror that keeps
 the vault's log continuous for NotebookLM.
+
+Keep the mirror **terse** — one line, let the link carry the detail (don't
+duplicate the comment). Format: `- YYYY-MM-DD — #<issue> — <short hook> — <link>`.
