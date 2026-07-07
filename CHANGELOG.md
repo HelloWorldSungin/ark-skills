@@ -37,6 +37,10 @@ trading-signal-ai, …) can now converge to the v2.0.0 profile with one opt-in r
 - 24 new tests: per-op unit tests (fresh / partially-converged / already-converged
   idempotent re-run), backup-provenance, engine e2e (`--run-pending-migrations`), and
   pending-migrations schema validation. Full suite: 244 passed (was 220).
+- **`okf_cli.py search --rank [--limit N]`** — scored-relevance search mode ported from
+  the ark-business bundle's `okf-cli.py find` (frontmatter hit = 3x, body hit = 1x,
+  summed; any-term; best-first). Additive — the default `search` keeps its AND-match,
+  unranked behavior. Seeded into downstream vaults by the `okf_conversion` op.
 
 ### Changed
 
