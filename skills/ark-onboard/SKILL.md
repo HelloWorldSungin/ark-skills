@@ -164,6 +164,36 @@ If `AGENTS.md` exists, mirror the region into it: copy the whole
 (markers included) from the CLAUDE.md region you just seeded, and append it to `AGENTS.md`.
 Do **not** create `AGENTS.md` if it is absent — the managed region converges CLAUDE.md only.
 
+### Block C.2 — vault-reminder Stop hook (v2.2.0)
+
+Install the gentle end-of-session reminder that suggests `/vault` (suggestion-only: it never
+writes to the vault and never blocks the stop; it fires at most once per session).
+
+1. Copy the hook into the project and make it executable:
+
+   ```bash
+   mkdir -p .claude/hooks
+   cp "$ARK_SKILLS_ROOT/skills/ark-onboard/assets/ark-vault-reminder-hook.sh" \
+       .claude/hooks/ark-vault-reminder-hook.sh
+   chmod +x .claude/hooks/ark-vault-reminder-hook.sh
+   ```
+
+2. Register it under `hooks.Stop` in `.claude/settings.json`, **merging** into any existing
+   Stop array — never clobber hooks already present:
+
+   ```json
+   {
+     "hooks": {
+       "Stop": [
+         { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/ark-vault-reminder-hook.sh\"" } ] }
+       ]
+     }
+   }
+   ```
+
+   If `settings.json` or its `hooks.Stop` array is missing, create it; if a Stop array already
+   exists, append this entry to it (do not overwrite sibling hooks).
+
 ---
 
 ## Path: No Vault (Greenfield)
