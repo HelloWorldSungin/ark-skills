@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """CI validator for ark-update target-profile.yaml.
 
-Mirrors the pattern of skills/ark-context-warmup/scripts/check_chain_integrity.py.
+Mirrors the schema/reference-validation-with-path-safety pattern used by this
+repo's other CI validator scripts.
 
 Checks:
   1. target-profile.yaml structure (schema_version, required fields per entry type).
