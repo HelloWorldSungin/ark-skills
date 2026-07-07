@@ -51,6 +51,16 @@ OP_REGISTRY = {
     "create_file_from_template",
 }
 
+# Registered destructive op types — mirrors DESTRUCTIVE_OP_REGISTRY (issue #34).
+DESTRUCTIVE_OP_REGISTRY = {
+    "okf_conversion",
+    "gh_issues_adoption",
+}
+
+# Valid plugin-side implementation-lifecycle states for pending_migrations.
+_PENDING_STATUSES = {"pending", "active", "retired"}
+_PENDING_REQUIRED = {"id", "op", "since", "status"}
+
 # Required fields per entry type.
 _MANAGED_REGION_REQUIRED = {"op", "file", "since", "version"}
 _ENSURED_FILE_REQUIRED = {"op", "target", "template", "since", "version"}
@@ -230,6 +240,34 @@ def _check_migrations_schema(migrations_dir: Path, errors: list[str]) -> None:
             )
 
 
+def _check_pending_migrations(data: dict, errors: list[str]) -> None:
+    """Check 8 (issue #34): pending_migrations schema.
+
+    Each entry must carry id/op/since/status; ``op`` must name a registered
+    destructive op; ``status`` must be one of pending|active|retired.
+    """
+    for i, entry in enumerate(data.get("pending_migrations", []) or []):
+        if not isinstance(entry, dict):
+            errors.append(f"pending_migrations[{i}] must be a mapping")
+            continue
+        eid = entry.get("id", f"pending_migrations[{i}]")
+        missing = _PENDING_REQUIRED - set(entry.keys())
+        if missing:
+            errors.append(f"pending_migrations entry {eid!r} missing required fields: {sorted(missing)}")
+        op = entry.get("op")
+        if op is not None and op not in DESTRUCTIVE_OP_REGISTRY:
+            errors.append(
+                f"pending_migrations entry {eid!r}: op type {op!r} not in "
+                f"DESTRUCTIVE_OP_REGISTRY {sorted(DESTRUCTIVE_OP_REGISTRY)}"
+            )
+        status = entry.get("status")
+        if status is not None and status not in _PENDING_STATUSES:
+            errors.append(
+                f"pending_migrations entry {eid!r}: status {status!r} not one of "
+                f"{sorted(_PENDING_STATUSES)}"
+            )
+
+
 def _check_mcp_sentinel_docs(data: dict, errors: list[str]) -> None:
     """Check 7: ensure_mcp_server entries should document _ark_managed sentinel.
 
@@ -285,6 +323,7 @@ def validate(
     _check_since_values(data, changelog_text, errors)
     _check_path_safety(data, errors)
     _check_migrations_schema(migrations_dir, errors)
+    _check_pending_migrations(data, errors)
     _check_mcp_sentinel_docs(data, errors)
 
     return errors
