@@ -144,6 +144,26 @@ Create CLAUDE.md if missing, or add the missing rows. The Project Configuration 
 
 Never add task-prefix / TaskNotes-counter rows (retired). The mattpocock setup (Block B step 2) adds the `## Agent skills` block automatically.
 
+### Block C.1 — vault-awareness region (v2.2.0)
+
+CLAUDE.md also carries the ark-managed **vault-awareness** region: it tells agents to
+consult the OKF vault before non-trivial work and to distill via `/vault` at session end.
+It is a managed region owned by `/ark-update` (`vault-awareness` in `target-profile.yaml`),
+so seed it by running the convergence once. This inserts the block marker-wrapped and
+version-stamped from the target profile, and is idempotent (safe to re-run):
+
+```bash
+# $ARK_SKILLS_ROOT = the ark-skills plugin root (the dir containing skills/ark-update/) —
+# the same path /ark-update resolves.
+python3 "$ARK_SKILLS_ROOT/skills/ark-update/scripts/migrate.py" \
+    --project-root "$(pwd)" --skills-root "$ARK_SKILLS_ROOT"
+```
+
+If `AGENTS.md` exists, mirror the region into it: copy the whole
+`<!-- ark:begin id=vault-awareness … -->` … `<!-- ark:end id=vault-awareness -->` block
+(markers included) from the CLAUDE.md region you just seeded, and append it to `AGENTS.md`.
+Do **not** create `AGENTS.md` if it is absent — the managed region converges CLAUDE.md only.
+
 ---
 
 ## Path: No Vault (Greenfield)
