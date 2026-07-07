@@ -15,41 +15,57 @@ knowledge bundles, GitHub Issues task management, NotebookLM sync). 21 skills
 
 14 deleted outright, 2 folded into `vault`, 1 replaced by `ark-consult`:
 
-- `wiki-lint` — deleted. OKF conformance is now `vault/_meta/okf/okf_lint.py`, run as
-  part of the `vault` skill's mandatory finish-gate and the pre-push hook.
-- `wiki-query` — deleted. Reading the vault now goes through NotebookLM
-  (synthesized recall) or `vault/_meta/okf/okf_cli.py {list,search,read}`.
-- `wiki-status` — deleted. `okf_cli.py list` + the generated `index.md` cover
-  page/type counts; no dedicated stats skill.
-- `tag-taxonomy` — deleted. `vault/_meta/taxonomy.md` is read directly by
-  writers (the `vault` skill's schema-first rule); no separate validator skill.
-- `cross-linker` — deleted. `vault/_meta/okf/convert_links.py` + `okf_lint.py`
-  warnings cover link health; no automated cross-linking skill.
-- `wiki-setup` — deleted. Vault bootstrap (OKF `_meta` tooling + templates)
-  is now part of `ark-onboard`.
-- `wiki-handoff` — deleted. Session-bridge state is out of scope for the v2
-  conventions layer (no `.omc` state per `ark-consult`'s no-orchestration rule).
+- `wiki-lint` — deleted → **`vault/_meta/okf/okf_lint.py`**, run as part of the
+  `vault` skill's mandatory finish-gate and the pre-push hook.
+- `wiki-query` — deleted → **NotebookLM + `okf_cli.py`**. Reading the vault now
+  goes through NotebookLM (synthesized recall) or `vault/_meta/okf/okf_cli.py
+  {list,search,read}`.
+- `wiki-status` — deleted → **`okf_cli.py list`**. `okf_cli.py list` + the
+  generated `index.md` cover page/type counts; no dedicated stats skill.
+- `tag-taxonomy` — deleted → **OKF lint warnings**. `okf_lint.py`'s
+  missing-`description` warnings plus `vault/_meta/taxonomy.md` (read directly
+  by writers per the `vault` skill's schema-first rule) replace the dedicated
+  validator; no separate tag-taxonomy skill.
+- `cross-linker` — retired (OKF tolerates dangling links, spec §5.3). Link
+  conversion is `vault/_meta/okf/convert_links.py`; `okf_lint.py` warns on
+  leftover wikilinks but does not auto-fix cross-links — a broken/dangling
+  link is documented as not-yet-written knowledge, not an error to
+  automatically repair.
+- `wiki-setup` — deleted → **`ark-onboard` OKF init**. Vault bootstrap (OKF
+  `_meta` tooling + templates) is now part of `ark-onboard`.
+- `wiki-handoff` — deleted → **GitHub epic as state**. Session-bridge state is
+  out of scope for the v2 conventions layer; the GitHub epic `ark-consult`
+  files is the persistent plan-of-record (no `.omc` state per `ark-consult`'s
+  no-orchestration rule).
 - `wiki-update` — **folded into `vault`** (Operation 1, end-of-session
   distillation) — durable-knowledge-only, no session-log narrative.
 - `wiki-ingest` — **folded into `vault`** (Operation 2, document ingestion),
   rewritten for OKF frontmatter/links.
-- `ark-context-warmup` — deleted. Context loading is now ecosystem-native
-  (gstack/superpowers/mattpocock/OMC each have their own); no ark-specific
-  warmup chain step.
-- `ark-code-review` — deleted. Code review is delegated to the chosen
-  ecosystem (e.g. gstack `/review`, OMC `code-reviewer`), not re-implemented.
-- `ark-tasknotes` — deleted. Task management is GitHub Issues; TaskNotes is
-  frozen read-only (see `vault/TaskNotes/00-Project-Management-Guide.md`).
-- `graph-map` — deleted. Code-structural retrieval is out of scope for the
-  two-core model; the graphify integration and its CLAUDE.md routing section
-  were removed (folded into a plain note where still relevant).
-- `codebase-maintenance` — deleted. Its constituent concerns (vault sync,
-  skill health) are covered by `vault` + `ark-health` individually; no
-  orchestrating maintenance skill.
-- `claude-history-ingest` — deleted. MemPalace-backed history mining is
-  dropped; NotebookLM is the single synthesized-recall backend.
-- `data-ingest` — deleted. Generic ingestion is covered by `vault`'s document
-  ingestion operation.
+- `ark-context-warmup` — deleted → **`ark-consult`'s planning step**. Context
+  loading is now the triage step of `ark-consult` plus each ecosystem's own
+  warmup (gstack/superpowers/mattpocock/OMC); no separate ark-specific warmup
+  chain step.
+- `ark-code-review` — deleted → **chosen ecosystem's review**. Code review is
+  delegated to the ecosystem `ark-consult` routes to (e.g. gstack `/review`,
+  OMC `code-reviewer`), not re-implemented.
+- `ark-tasknotes` — deleted → **`gh` CLI conventions**
+  (`docs/agents/issue-tracker.md`). Task management is GitHub Issues per the
+  mattpocock-authored `docs/agents/issue-tracker.md`; TaskNotes is frozen
+  read-only (see `vault/TaskNotes/00-Project-Management-Guide.md`).
+- `graph-map` — deleted from the plugin's distributed `skills/` →
+  **project-level graphify**. The plugin no longer ships a `graph-map` skill
+  or CLAUDE.md routing section; code-structural graphify usage continues as a
+  project-level integration (this repo's own `.claude/skills/graphify` +
+  `.claude/CLAUDE.md`), not a distributed ark-skills surface.
+- `codebase-maintenance` — deleted → **ecosystem hygiene flows**. Its
+  constituent concerns (vault sync, skill health) are covered by `vault` +
+  `ark-health` individually, or by the chosen ecosystem's own hygiene tooling;
+  no orchestrating maintenance skill.
+- `claude-history-ingest` — retired (MemPalace dropped). MemPalace-backed
+  history mining is dropped; NotebookLM is the single synthesized-recall
+  backend.
+- `data-ingest` — deleted → **`vault` ingestion**. Generic ingestion is
+  covered by `vault`'s document ingestion operation.
 - `ark-workflow` — **replaced by `ark-consult`**. The 8-chain orchestrator is
   gone; `ark-consult` is a stateless triage-and-handoff consultant with no
   chains and no post-handoff steps.
@@ -78,8 +94,11 @@ knowledge bundles, GitHub Issues task management, NotebookLM sync). 21 skills
   rows. Removed TaskNotes-MCP install, wiki-setup absorption, MemPalace shims.
 - **`ark-update`** — v2.0.0 target-profile authored: `okf-conversion` (wraps the
   playbook recipe) and `gh-issues-adoption` (labels + freeze + CLAUDE.md
-  rewrite) migrations, pending for downstream projects. Retired v1 routing/omc
-  ops.
+  rewrite) migrations declared pending for downstream projects. The migration
+  *engine* implementation for these two new ops is tracked in
+  [issue #34](https://github.com/HelloWorldSungin/ark-skills/issues/34) — the
+  target-profile declares them; `ark-update` does not yet execute them.
+  Retired v1 routing/omc ops.
 - **`CLAUDE.md`** — "Available Skills" rewritten to the 6-skill two-core
   framing; the 4-tier retrieval table replaced by NotebookLM + `okf_cli.py`
   routing; MemPalace/obsidian-cli availability blocks and failure messages
