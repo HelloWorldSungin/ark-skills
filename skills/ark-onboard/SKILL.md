@@ -149,12 +149,13 @@ Never add task-prefix / TaskNotes-counter rows (retired). The mattpocock setup (
 CLAUDE.md also carries the ark-managed **vault-awareness** region: it tells agents to
 consult the OKF vault before non-trivial work and to distill via `/vault` at session end.
 It is a managed region owned by `/ark-update` (`vault-awareness` in `target-profile.yaml`),
-so seed it by running the convergence once. This inserts the block marker-wrapped and
-version-stamped from the target profile, and is idempotent (safe to re-run):
+so seed it by running the convergence once. First resolve `$ARK_SKILLS_ROOT` (the ark-skills
+plugin root) exactly as **`/ark-update` Step 1** does — prefer `$CLAUDE_PLUGIN_DIR`, else the
+`.claude-plugin/marketplace.json` anchor in CWD, else the newest install under
+`~/.claude/plugins/cache`. Then run the convergence (inserts the block marker-wrapped and
+version-stamped from the target profile; idempotent, safe to re-run):
 
 ```bash
-# $ARK_SKILLS_ROOT = the ark-skills plugin root (the dir containing skills/ark-update/) —
-# the same path /ark-update resolves.
 python3 "$ARK_SKILLS_ROOT/skills/ark-update/scripts/migrate.py" \
     --project-root "$(pwd)" --skills-root "$ARK_SKILLS_ROOT"
 ```
