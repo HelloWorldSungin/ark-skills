@@ -8,11 +8,17 @@ Checks:
   2. All op: names are in OP_REGISTRY.
   3. All template: references resolve to files under templates/.
   4. All since: values appear in repo's CHANGELOG.md.
-  5. Byte-equality: templates/routing-template.md == skills/ark-workflow/references/routing-template.md.
-  6. Path-safety: every file:/target: field resolves via paths.safe_resolve without raising
+  5. Path-safety: every file:/target: field resolves via paths.safe_resolve without raising
      (absolute paths and .. escapes will fail — codex P1-1).
-  7. Schema acceptance for failed_ops[] and depends_on_op in migrations/*.yaml (codex P2-4).
-  8. _ark_managed sentinel documentation check for ensure_mcp_server entries.
+  6. Schema acceptance for failed_ops[] and depends_on_op in migrations/*.yaml (codex P2-4).
+  7. _ark_managed sentinel documentation check for ensure_mcp_server entries.
+
+v2.0.0 NOTE: the former Check 5 (byte-equality between templates/routing-template.md
+and skills/ark-workflow/references/routing-template.md) was removed. Both sides of
+that comparison were retired in the v2.0.0 restructure — target-profile.yaml no
+longer declares a routing-template managed region (see its v2.0.0 NOTE), and
+skills/ark-workflow/ (the reference copy this check drifted against) was deleted
+outright. The remaining checks were renumbered.
 
 Exit 0 on success, non-zero on failure with clear error messages on stderr.
 ~200 LOC.
@@ -160,26 +166,8 @@ def _check_since_values(data: dict, changelog_text: str, errors: list[str]) -> N
                 )
 
 
-def _check_routing_template_byte_equality(
-    templates_dir: Path, ark_workflow_ref: Path, errors: list[str]
-) -> None:
-    """Check 5: templates/routing-template.md byte-equals the ark-workflow reference."""
-    local = templates_dir / "routing-template.md"
-    if not local.exists():
-        errors.append("templates/routing-template.md does not exist")
-        return
-    if not ark_workflow_ref.exists():
-        errors.append(f"ark-workflow reference not found at {ark_workflow_ref}")
-        return
-    if local.read_bytes() != ark_workflow_ref.read_bytes():
-        errors.append(
-            f"templates/routing-template.md differs from {ark_workflow_ref} "
-            "(byte-equality drift; re-run: cp <ark-workflow-ref> templates/routing-template.md)"
-        )
-
-
 def _check_path_safety(data: dict, errors: list[str]) -> None:
-    """Check 6 (codex P1-1): every file:/target: field is path-safe."""
+    """Check 5 (codex P1-1): every file:/target: field is path-safe."""
     # Use a synthetic project root to test resolution. Any non-.. relative path is safe.
     synthetic_root = Path("/tmp/test-ark-update-path-safety")
     all_entries = data.get("managed_regions", []) + data.get("ensured_files", [])
@@ -194,7 +182,7 @@ def _check_path_safety(data: dict, errors: list[str]) -> None:
 
 
 def _check_migrations_schema(migrations_dir: Path, errors: list[str]) -> None:
-    """Check 7 (codex P2-4): migrations/*.yaml accept failed_ops[] and depends_on_op.
+    """Check 6 (codex P2-4): migrations/*.yaml accept failed_ops[] and depends_on_op.
 
     v1.0 has no destructive migrations, so this is a schema-acceptance check only:
     we verify the parser (yaml.safe_load) accepts these fields when present in any
@@ -240,7 +228,7 @@ def _check_migrations_schema(migrations_dir: Path, errors: list[str]) -> None:
 
 
 def _check_mcp_sentinel_docs(data: dict, errors: list[str]) -> None:
-    """Check 8: ensure_mcp_server entries should document _ark_managed sentinel.
+    """Check 7: ensure_mcp_server entries should document _ark_managed sentinel.
 
     This is a documentation check — entries without a 'description' field that
     mentions _ark_managed are flagged as warnings (not errors). The sentinel is
@@ -264,7 +252,6 @@ def validate(
     profile_path: Path,
     templates_dir: Path,
     changelog_path: Path,
-    ark_workflow_ref: Path,
     migrations_dir: Path,
 ) -> list[str]:
     """Run all checks. Return list of error strings (empty = valid)."""
@@ -293,7 +280,6 @@ def validate(
     _check_op_registry(data, errors)
     _check_template_refs(data, templates_dir, errors)
     _check_since_values(data, changelog_text, errors)
-    _check_routing_template_byte_equality(templates_dir, ark_workflow_ref, errors)
     _check_path_safety(data, errors)
     _check_migrations_schema(migrations_dir, errors)
     _check_mcp_sentinel_docs(data, errors)
@@ -328,13 +314,11 @@ def main() -> int:
 
     repo_root = args.repo_root or _find_repo_root(skill_dir)
     changelog_path = repo_root / "CHANGELOG.md"
-    ark_workflow_ref = repo_root / "skills" / "ark-workflow" / "references" / "routing-template.md"
 
     errors = validate(
         profile_path=profile_path,
         templates_dir=templates_dir,
         changelog_path=changelog_path,
-        ark_workflow_ref=ark_workflow_ref,
         migrations_dir=migrations_dir,
     )
 

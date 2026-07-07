@@ -3,11 +3,18 @@
 Refusal scenarios tested:
   1. Dirty working tree (uncommitted changes) → exit 2.
   2. Malformed migrations-applied.jsonl (invalid JSON) → exit 4.
-  3. Mismatched marker id in CLAUDE.md → MarkerIntegrityError, exit 1.
-  4. .ark/ directory gitignored (contains '.ark/' line in .gitignore) → exit 1, message.
-  5. Malformed CLAUDE.md (unclosed marker) → MarkerIntegrityError, exit 1.
-  6. Path traversal in target-profile (would need a patched profile) is tested
+  3. .ark/ directory gitignored (contains '.ark/' line in .gitignore) → exit 1, message.
+  4. Path traversal in target-profile (would need a patched profile) is tested
      in test_paths.py; not re-tested here.
+
+v2.0.0 NOTE: the marker-mismatch and unclosed-marker refusal scenarios (former
+items 3 and 5) are retired. MarkerIntegrityError only ever fires while iterating
+managed_regions entries in migrate.py, and target-profile.yaml v2 declares
+``managed_regions: []`` (the v1 CLAUDE.md routing/omc regions were removed in the
+v2.0.0 restructure — see target-profile.yaml's v2.0.0 NOTE). With no managed
+regions to check a project's CLAUDE.md against, the engine has nothing to
+validate and never raises MarkerIntegrityError, regardless of what markers (if
+any) happen to be present in CLAUDE.md.
 """
 from __future__ import annotations
 
@@ -139,30 +146,7 @@ def test_malformed_jsonl_missing_field_refuses(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3. Mismatched marker id in CLAUDE.md → exit 1
-# ---------------------------------------------------------------------------
-
-def test_mismatched_marker_id_refuses(tmp_path: Path) -> None:
-    """Engine exits 1 when CLAUDE.md has mismatched begin/end marker ids."""
-    claude = tmp_path / "CLAUDE.md"
-    claude.write_text(
-        "# Project\n"
-        "<!-- ark:begin id=foo version=1.0.0 -->\n"
-        "some content\n"
-        "<!-- ark:end id=bar -->\n",
-        encoding="utf-8",
-    )
-    (tmp_path / ".gitignore").write_text("*.pyc\n")
-
-    result = _run_engine(tmp_path, extra_args=["--force"])
-    assert result.returncode == 1, (
-        f"Expected exit 1 for mismatched marker id, got {result.returncode}:\n"
-        f"stdout: {result.stdout}\nstderr: {result.stderr}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# 4. .ark/ gitignored → exit 1
+# 3. .ark/ gitignored → exit 1
 # ---------------------------------------------------------------------------
 
 def test_ark_dir_gitignored_refuses(tmp_path: Path) -> None:
@@ -179,27 +163,4 @@ def test_ark_dir_gitignored_refuses(tmp_path: Path) -> None:
     combined = result.stdout + result.stderr
     assert ".ark" in combined, (
         f"Expected '.ark' mentioned in output: stdout={result.stdout!r} stderr={result.stderr!r}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# 5. Unclosed marker (malformed CLAUDE.md structure) → exit 1
-# ---------------------------------------------------------------------------
-
-def test_unclosed_marker_refuses(tmp_path: Path) -> None:
-    """Engine exits 1 when CLAUDE.md has an unclosed ark:begin marker."""
-    claude = tmp_path / "CLAUDE.md"
-    claude.write_text(
-        "# Project\n"
-        "<!-- ark:begin id=routing-rules version=1.12.0 -->\n"
-        "some content\n"
-        "# No closing marker — malformed\n",
-        encoding="utf-8",
-    )
-    (tmp_path / ".gitignore").write_text("*.pyc\n")
-
-    result = _run_engine(tmp_path, extra_args=["--force"])
-    assert result.returncode == 1, (
-        f"Expected exit 1 for unclosed marker, got {result.returncode}:\n"
-        f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )

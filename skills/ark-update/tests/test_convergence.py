@@ -7,12 +7,19 @@ Gate-flag wiring note (Step 7, commit a9958c8):
   Gate-flag resolution IS wired in migrate.py (_read_gate_flags / _iter_target_profile_entries).
   These convergence tests intentionally run with ARK_HAS_OMC and ARK_CENTRALIZED_VAULT
   UNSET so the engine falls back to backward-compat (unconditional-apply) mode.
-  As a result, expected-post/ for ALL fixtures includes both the omc-routing managed
-  region AND scripts/setup-vault-symlink.sh — this preserves full coverage of the
-  unconditional code path.
 
   Gate-specific behaviour (skip paths) is covered by test_gate_flags.py, which runs
   the engine with explicit env-var overrides and asserts inline (not against expected-post/).
+
+v2.0.0 NOTE: target-profile.yaml v2 declares ``managed_regions: []`` and
+``ensured_gitignore: []`` — the v1 CLAUDE.md routing/omc-routing managed regions
+and the .ark-workflow/ gitignore entry were retired in the v2.0.0 restructure (see
+target-profile.yaml's v2.0.0 NOTE). The only remaining convergence-relevant entry is
+the ``setup-vault-symlink`` ensured_files op. expected-post/ fixtures were
+regenerated accordingly via ``tests/regenerate_fixtures.py --apply`` — CLAUDE.md
+and .gitignore are no longer touched by the engine at all (they pass through
+byte-identical to the fixture's pre-state, or don't exist post-run if they didn't
+exist pre-run, as for the ``fresh`` fixture).
 """
 from __future__ import annotations
 
@@ -137,64 +144,54 @@ def test_convergence_byte_exact(fixture_name: str, tmp_path: Path) -> None:
     _assert_convergence(fixture_name, tmp_path)
 
 
-def test_convergence_pre_v1_11_applies_four_ops(tmp_path: Path) -> None:
-    """pre-v1.11: engine must apply exactly 4 ops (omc-routing, routing-rules, gitignore, setup-vault-symlink)."""
+def test_convergence_pre_v1_11_applies_one_op(tmp_path: Path) -> None:
+    """pre-v1.11: engine must apply exactly 1 op (setup-vault-symlink; the only
+    surviving convergence entry in v2 — see module docstring's v2.0.0 NOTE)."""
     _copy_fixture_pre("pre-v1.11", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
-    # Summary line: "4 applied"
-    assert "4 applied" in result.stdout, f"Expected 4 applied, got:\n{result.stdout}"
+    # Summary line: "1 applied"
+    assert "1 applied" in result.stdout, f"Expected 1 applied, got:\n{result.stdout}"
 
 
 def test_convergence_pre_v1_12_skips_existing_script(tmp_path: Path) -> None:
-    """pre-v1.12: setup-vault-symlink.sh already present → must be skipped_idempotent."""
+    """pre-v1.12: setup-vault-symlink.sh already present → all ops idempotent → clean run."""
     _copy_fixture_pre("pre-v1.12", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
-    assert "3 applied" in result.stdout, f"Expected 3 applied:\n{result.stdout}"
-    assert "1 skipped" in result.stdout, f"Expected 1 skipped:\n{result.stdout}"
+    assert "clean" in result.stdout.lower(), f"Expected a clean run:\n{result.stdout}"
 
 
 def test_convergence_pre_v1_13_converges_existing(tmp_path: Path) -> None:
-    """pre-v1.13: omc-routing missing, routing-rules stale (v1.12.0),
-    setup-vault-symlink.sh already present.
+    """pre-v1.13: setup-vault-symlink.sh already present → all ops idempotent → clean run.
 
-    Expected breakdown against current target-profile:
-    - omc-routing            → applied (inserted)
-    - .ark-workflow/ ignore  → applied (appended)
-    - routing-rules          → drift-overwritten (marker version 1.12.0 < target 1.17.0)
-    - setup-vault-symlink.sh → skipped (already present)
+    (In v1 this fixture also exercised omc-routing/routing-rules convergence;
+    those managed regions are retired in v2 — see module docstring's v2.0.0 NOTE.)
     """
     _copy_fixture_pre("pre-v1.13", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
-    assert "2 applied" in result.stdout, f"Expected 2 applied:\n{result.stdout}"
-    assert "1 drift-overwritten" in result.stdout, f"Expected 1 drift-overwritten:\n{result.stdout}"
-    assert "1 skipped" in result.stdout, f"Expected 1 skipped:\n{result.stdout}"
+    assert "clean" in result.stdout.lower(), f"Expected a clean run:\n{result.stdout}"
 
 
-def test_convergence_fresh_creates_all(tmp_path: Path) -> None:
-    """fresh: empty project; engine must create all 4 managed artifacts."""
+def test_convergence_fresh_creates_symlink_script(tmp_path: Path) -> None:
+    """fresh: empty project; engine must create the one surviving managed artifact."""
     _copy_fixture_pre("fresh", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
-    assert "4 applied" in result.stdout, f"Expected 4 applied:\n{result.stdout}"
-    assert (tmp_path / "CLAUDE.md").exists()
-    assert (tmp_path / ".gitignore").exists()
+    assert "1 applied" in result.stdout, f"Expected 1 applied:\n{result.stdout}"
     assert (tmp_path / "scripts" / "setup-vault-symlink.sh").exists()
 
 
-def test_convergence_drift_inside_markers_overwrites_and_backs_up(tmp_path: Path) -> None:
-    """drift-inside-markers: engine must report drift-overwritten and create backups."""
-    _copy_fixture_pre("drift-inside-markers", tmp_path)
-    result = _run_engine(tmp_path)
-    assert result.returncode == 0
-    assert "drift-overwritten" in result.stdout, (
-        f"Expected drift-overwritten in summary:\n{result.stdout}"
-    )
-    # At least one backup file must exist
-    backups = list((tmp_path / ".ark" / "backups").glob("*.bak"))
-    assert backups, "Expected at least one .bak backup file in .ark/backups/"
+# v2.0.0 NOTE: test_convergence_drift_inside_markers_overwrites_and_backs_up was
+# removed here. It asserted drift/backup behavior of the retired omc-routing /
+# routing-rules managed regions. The only remaining op (create_file_from_template,
+# used for setup-vault-symlink) never drifts by design — its _detect_drift_impl
+# always returns has_drift=False (once a file exists, the engine never overwrites
+# or re-stamps it; see ops/create_file_from_template.py). drift-inside-markers now
+# produces a clean run with no backups, same as any fixture where the script
+# already exists. See the ark-update engine-v2 follow-up issue for restoring
+# drift/backup coverage once the okf-conversion / gh-issues-adoption ops land.
 
 
 def test_convergence_drift_outside_markers_zero_touch(tmp_path: Path) -> None:

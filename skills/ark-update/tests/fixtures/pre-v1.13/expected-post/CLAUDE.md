@@ -16,7 +16,7 @@ Missing OMC routing block and .ark-workflow/ gitignore entry.
 ## Notes
 
 Some user-authored content that must not be touched by ark-update.
-<!-- ark:begin id=routing-rules version=1.17.0 -->
+<!-- ark:begin id=routing-rules version=1.12.0 -->
 # Routing Rules Template
 
 Copy the block below into a project's CLAUDE.md to auto-trigger /ark-workflow and enable cross-session chain resume in that project.
@@ -61,72 +61,9 @@ For trivial tasks (single obvious change, no ambiguity), skip triage and work di
 4. Announce: `Next: [next skill] — [purpose]`
 5. Mark the next task as `in_progress`
 6. If the chain is complete, move the file to `.ark-workflow/archive/YYYY-MM-DD-[scenario].md`
-
-### Session habits
-
-Three habits keep context healthy across long chains:
-
-- **Rewind beats correction.** When a step produces a wrong result, prefer
-  `/rewind` (double-Esc) over replying "that didn't work, try X." Rewind drops
-  the failed attempt from context; correction stacks it.
-- **New task, new session.** When the current chain completes and the next
-  task is unrelated, `/clear` and start fresh.
-- **`/compact` with a forward brief.** When compacting mid-chain, steer the
-  summary: `/compact focus on the auth refactor; drop the test debugging`.
-  `/ark-workflow`'s step-boundary probe pre-fills this template from chain
-  state when context crosses the nudge or strong threshold.
 `````
 
 ---
 
 To add routing to a new project, copy the block above into the project's CLAUDE.md. The `/ark-workflow` skill is already available globally via the ark-skills plugin.
 <!-- ark:end id=routing-rules -->
-<!-- ark:begin id=omc-routing version=1.13.0 -->
-## Skill routing — OMC integration
-
-This section is managed by `/ark-update`. Do not hand-edit content between the ark markers.
-
-### When OMC is available
-
-When `HAS_OMC=true` (i.e., `command -v omc` succeeds and `ARK_SKIP_OMC` is not set),
-`/ark-workflow` Step 6 renders a 3-button choice after triage:
-
-```
-[Accept Path B]   [Use Path A]   [Show me both]
-```
-
-**Path A (Ark-native):** step-by-step, user-in-the-loop, discrete skills at every decision
-point. Always available. Default when OMC is not detected.
-
-**Path B (OMC-powered):** front-loaded judgment + consensus plan + autonomous execution +
-Ark closeout. Recommended when any of these signals fires:
-- Prompt contains an OMC keyword (`autopilot`, `ralph`, `ulw`, `deep interview`, etc.)
-- Triaged weight class is Heavy
-- Task touches ≥3 independent modules
-- User explicitly requests hands-off execution
-
-**Emergency rollback:** `ARK_SKIP_OMC=true /ark-workflow "<prompt>"` forces Path A
-regardless of OMC detection. Intended for incident response.
-
-### Install OMC
-
-OMC not detected? Install it to unlock Path B chains:
-
-  See INSTALL_HINT_URL for installation instructions.
-  (Constant defined in `skills/ark-workflow/references/omc-integration.md` § Section 0.)
-
-After installation, re-run `/ark-workflow` — OMC detection is automatic.
-
-### Path B routing table
-
-| Variant | OMC engine | Handback boundary |
-|---------|-----------|-------------------|
-| Greenfield / Bugfix / Hygiene / Ship / Migration (non-Heavy) | `/autopilot` | After Phase 4; Phase 5 (docs/ship) skipped |
-| Greenfield Heavy (multi-module) | `/ultrawork` | After last parallel lane completes |
-| Bugfix Heavy / Performance Medium+Heavy | `/ralph` | After loop-to-verified exits with success |
-| Migration Heavy | `/team` | After `team-verify`, before `team-fix` |
-
-After `<<HANDBACK>>`, Ark resumes from the variant's Path A closeout step.
-See `skills/ark-workflow/references/omc-integration.md` § Section 4 for the full
-variant-inherited handback contract and expected-closeout table.
-<!-- ark:end id=omc-routing -->
