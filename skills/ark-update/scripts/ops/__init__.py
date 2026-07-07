@@ -152,9 +152,8 @@ def register_op(op_type: str):
 class TargetProfileOp(ABC):
     """Abstract base class for target-profile convergence ops.
 
-    All 5 v1.0 ops (``ensure_claude_md_section``, ``ensure_gitignore_entry``,
-    ``ensure_mcp_server``, ``create_file_from_template``,
-    ``ensure_routing_rules_block``) subclass this.
+    All 4 v2.0.0 ops (``ensure_claude_md_section``, ``ensure_gitignore_entry``,
+    ``ensure_mcp_server``, ``create_file_from_template``) subclass this.
 
     Path-safety contract (codex P1-1 — defense in depth)
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -35,7 +35,6 @@ from ops import OP_REGISTRY, TargetProfileOp  # noqa: E402
 # Import concrete op modules so their @register_op decorators fire.
 # Required for dry_run dispatch to work correctly.
 import ops.ensure_claude_md_section  # noqa: F401, E402
-import ops.ensure_routing_rules_block  # noqa: F401, E402
 import ops.ensure_gitignore_entry  # noqa: F401, E402
 import ops.create_file_from_template  # noqa: F401, E402
 import ops.ensure_mcp_server  # noqa: F401, E402
@@ -108,8 +107,8 @@ def build_plan(
         Absolute path to the ark-skills plugin installation root.  Injected
         into each Phase-2 op's args dict as ``args["skills_root"]`` so ops
         that read templates (``ensure_claude_md_section``,
-        ``ensure_routing_rules_block``, ``create_file_from_template``) can
-        resolve ``<skills_root>/skills/ark-update/templates/<name>``.  This
+        ``create_file_from_template``) can resolve
+        ``<skills_root>/skills/ark-update/templates/<name>``.  This
         mirrors the injection performed by ``_run_phase_2`` in migrate.py so
         dry-run and apply paths see identical args.
 
@@ -159,9 +158,9 @@ def render_plan_report(plan: PlanReport) -> str:
         =======================
         Phase 1 (destructive migrations): 0 ops
         Phase 2 (target-profile convergence): 3 ops
-          [would_apply]           ensure_claude_md_section  (op_id=omc-routing-rules)
-          [would_skip_idempotent] ensure_gitignore_entry    (op_id=ark-workflow-gitignore)
-          [would_overwrite_drift] ensure_mcp_server         (op_id=mcp-server-tasknotes)
+          [would_apply]           create_file_from_template (op_id=setup-vault-symlink)
+          [would_skip_idempotent] ensure_gitignore_entry    (op_id=example-gitignore-entry)
+          [would_overwrite_drift] ensure_mcp_server         (op_id=example-mcp-server)
 
         Summary: apply=1  skip=1  overwrite=1  fail=0
     """
