@@ -19,6 +19,12 @@ brownfield builds" habit from a personal preference to a shipped, converged conv
 - **`/ark-onboard` seeds the block** — new Block C.1 runs the convergence to insert the
   vault-awareness region into a new project's `CLAUDE.md`, and mirrors it into `AGENTS.md`
   when that file already exists (never creates `AGENTS.md`).
+- **vault-reminder Stop hook** — `/ark-onboard` Block C.2 installs
+  `assets/ark-vault-reminder-hook.sh` into the project's `.claude/hooks/` and registers it
+  under `hooks.Stop`. It surfaces a once-per-session `systemMessage` nudge to run `/vault`.
+  Suggestion-only: never writes to the vault and never blocks the stop.
+- **`/ark-health` Check 20** — a warn-only invariant that the vault-awareness region is in
+  `CLAUDE.md` and the reminder hook is installed + registered. Never demotes the health tier.
 
 ## [2.1.1] - 2026-07-07
 

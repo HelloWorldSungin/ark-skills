@@ -197,6 +197,20 @@ notebooklm auth check --test >/dev/null 2>&1 && echo "PASS: authenticated" || ec
 ```
 - Fail action: `notebooklm auth login`, then rerun `/ark-health`
 
+### Vault-awareness Convention (Check 20)
+
+**Check 20 — vault-awareness region + reminder hook** | Tier: Standard | Warn-only | Requires Check 7
+```bash
+# (a) managed region present in CLAUDE.md
+grep -q 'ark:begin id=vault-awareness' CLAUDE.md 2>/dev/null && b=OK || b=MISSING
+# (b) reminder hook installed: script executable AND registered in settings.json Stop
+{ [ -x .claude/hooks/ark-vault-reminder-hook.sh ] \
+  && grep -q 'ark-vault-reminder-hook.sh' .claude/settings.json 2>/dev/null; } && h=OK || h=MISSING
+{ [ "$b" = OK ] && [ "$h" = OK ]; } && echo "PASS" || echo "WARN: block=$b hook=$h"
+```
+- Pass: the `vault-awareness` managed region is in `CLAUDE.md` **and** the reminder hook is executable + registered.
+- Warn action: run `/ark-update` (converges the block) and `/ark-onboard` Block C.2 (installs the hook). Warn-only — does not demote the health tier.
+
 ---
 
 ## Workflow
@@ -210,7 +224,7 @@ notebooklm auth check --test >/dev/null 2>&1 && echo "PASS: authenticated" || ec
 |--------|---------|-----------|
 | `OK` | Pass | Check passed |
 | `!!` | Fail | Check failed — has a fix instruction |
-| `~~` | Warning | Non-blocking (Check 6 manifest, Check 12 index staleness, Check 16 banner) |
+| `~~` | Warning | Non-blocking (Check 6 manifest, Check 12 index staleness, Check 16 banner, Check 20 vault-awareness) |
 | `--` | Available upgrade | Feature not installed, above current tier (Check 4 OMC, Check 17 NotebookLM CLI) |
 
 3. **Assign tier** from the highest level where no Critical or Standard check fails. Warn/skip/upgrade never demote tier.
