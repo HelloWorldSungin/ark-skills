@@ -86,36 +86,26 @@ def test_non_clean_summary_has_phase_lines(tmp_path: Path) -> None:
     assert "Phase 2 (convergence):" in result.stdout
 
 
-def test_drift_summary_has_drift_events_section(tmp_path: Path) -> None:
-    """Drift run prints 'Drift events:' section with backup paths."""
-    _copy_fixture_pre("drift-inside-markers", tmp_path)
-    result = _run_engine(tmp_path)
-    assert result.returncode == 0
-    assert "Drift events:" in result.stdout
-    assert "drift:" in result.stdout
-    assert "backup:" in result.stdout
-
-
 def test_apply_count_in_summary(tmp_path: Path) -> None:
     """Summary Phase 2 line reports correct applied count."""
     _copy_fixture_pre("pre-v1.11", tmp_path)
     result = _run_engine(tmp_path)
-    # pre-v1.11 applies 4 ops
-    assert "4 applied" in result.stdout
+    # v2.0.0: only ensured_files op (setup-vault-symlink) is active; pre-v1.11
+    # doesn't have the script yet, so exactly 1 op applies.
+    assert "1 applied" in result.stdout
 
 
-def test_skip_count_in_summary(tmp_path: Path) -> None:
-    """Summary Phase 2 line reports correct skipped count."""
-    _copy_fixture_pre("pre-v1.12", tmp_path)
-    result = _run_engine(tmp_path)
-    # pre-v1.12: 1 skipped (setup-vault-symlink.sh already present)
-    assert "1 skipped" in result.stdout
-
-
-def test_drift_overwrite_count_in_summary(tmp_path: Path) -> None:
-    """Drift run reports drift-overwritten count in Phase 2 summary line."""
-    _copy_fixture_pre("drift-inside-markers", tmp_path)
-    result = _run_engine(tmp_path)
-    assert "drift-overwritten" in result.stdout
-    # Both omc-routing (content) and routing-rules (stale version) drift.
-    assert "2 drift-overwritten" in result.stdout
+# v2.0.0 NOTE: test_drift_summary_has_drift_events_section,
+# test_skip_count_in_summary, and test_drift_overwrite_count_in_summary were
+# removed here. They asserted behavior of the retired v1 managed_regions ops
+# (omc-routing, routing-rules): drift/backup reporting, and a mixed
+# applied+skipped run (3 routing ops applying alongside 1 already-present
+# vault-symlink script skipping). target-profile.yaml v2 declares
+# ``managed_regions: []`` — the only remaining op (create_file_from_template,
+# used for setup-vault-symlink) never drifts by design (see its
+# ``_detect_drift_impl``, which always returns ``has_drift=False``), and with
+# a single gated op there is no longer a fixture that produces a genuine
+# mixed apply/skip run — it's binary skip-all-or-apply-all for that one op.
+# See the ark-update engine-v2 follow-up issue (docs/agents/issue-tracker.md
+# conventions) for restoring this coverage once the okf-conversion /
+# gh-issues-adoption migration ops are implemented.

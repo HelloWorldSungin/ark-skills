@@ -38,7 +38,6 @@ def real_paths():
         "profile_path": _SKILL_DIR / "target-profile.yaml",
         "templates_dir": _SKILL_DIR / "templates",
         "changelog_path": _REPO_ROOT / "CHANGELOG.md",
-        "ark_workflow_ref": _REPO_ROOT / "skills" / "ark-workflow" / "references" / "routing-template.md",
         "migrations_dir": _SKILL_DIR / "migrations",
     }
 
@@ -66,7 +65,6 @@ def broken_profile(tmp_path):
         "profile_path": profile,
         "templates_dir": _SKILL_DIR / "templates",
         "changelog_path": _REPO_ROOT / "CHANGELOG.md",
-        "ark_workflow_ref": _REPO_ROOT / "skills" / "ark-workflow" / "references" / "routing-template.md",
         "migrations_dir": _SKILL_DIR / "migrations",
     }
 
@@ -117,7 +115,6 @@ def test_missing_template_file_is_rejected(tmp_path):
         profile_path=profile,
         templates_dir=empty_templates,
         changelog_path=_REPO_ROOT / "CHANGELOG.md",
-        ark_workflow_ref=_REPO_ROOT / "skills" / "ark-workflow" / "references" / "routing-template.md",
         migrations_dir=_SKILL_DIR / "migrations",
     )
     template_errors = [e for e in errors if "nonexistent-template" in e or "template" in e.lower()]

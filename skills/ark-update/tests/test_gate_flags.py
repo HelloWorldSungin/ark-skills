@@ -313,46 +313,42 @@ def _run_with_gates(project_root: Path, omc: str | None, vault: str | None) -> s
     )
 
 
-@pytest.mark.parametrize("omc,vault,expect_omc_routing,expect_symlink", [
-    # (ARK_HAS_OMC, ARK_CENTRALIZED_VAULT, omc-routing created, setup-vault-symlink created)
-    (None, None, True,  True),   # unset/unset → backward-compat: all applied
-    ("1",  "1",  True,  True),   # both on → all applied
-    ("0",  "1",  False, True),   # omc off, vault on → omc-routing skipped
-    ("1",  "0",  True,  False),  # omc on, vault off → symlink skipped
-    ("0",  "0",  False, False),  # both off → both gated entries skipped
+# v2.0.0 NOTE: the Tier-B e2e tests below run migrate.py against the ACTUAL
+# production target-profile.yaml (not the synthetic profile above, which is
+# Tier-A-only). That real profile declares ``managed_regions: []`` in v2 — the
+# omc-routing region was retired in the v2.0.0 restructure, so ARK_HAS_OMC no
+# longer gates anything real-world; only ARK_CENTRALIZED_VAULT (gating the
+# surviving setup-vault-symlink ensured_files op) has an observable e2e effect.
+# These tests were simplified accordingly — dropped the omc_routing_present
+# assertions and the ARK_HAS_OMC parametrize dimension. Tier-A above still
+# exercises the generic (profile-agnostic) omc-gating logic via the synthetic
+# profile, so that coverage isn't lost, just no longer asserted against the
+# real profile's (now omc-free) content.
+
+@pytest.mark.parametrize("vault,expect_symlink", [
+    (None, True),   # unset → backward-compat: unconditional apply
+    ("1",  True),   # explicitly on → applied
+    ("0",  False),  # explicitly off → skipped_precondition
 ])
 def test_e2e_gate_flags_fresh_fixture(
-    omc: str | None,
     vault: str | None,
-    expect_omc_routing: bool,
     expect_symlink: bool,
     tmp_path: Path,
 ) -> None:
-    """E2E: fresh fixture with gate-flag overrides produces correct applied/skipped counts.
+    """E2E: fresh fixture with the vault gate overridden produces the correct file state.
 
     Does NOT diff against expected-post/ sidecar (that sidecar reflects unconditional
-    mode). Asserts the run summary text and file-system state inline.
+    mode). Asserts file-system state inline.
     """
     _copy_fixture_pre("fresh", tmp_path)
-    result = _run_with_gates(tmp_path, omc, vault)
+    result = _run_with_gates(tmp_path, None, vault)
 
     assert result.returncode == 0, (
-        f"Engine failed (omc={omc!r}, vault={vault!r}):\n"
+        f"Engine failed (vault={vault!r}):\n"
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
 
-    # --- file-system assertions ---
-    omc_routing_present = (tmp_path / "CLAUDE.md").exists() and "ark:begin id=omc-routing" in (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
     symlink_present = (tmp_path / "scripts" / "setup-vault-symlink.sh").exists()
-
-    if expect_omc_routing:
-        assert omc_routing_present, (
-            f"omc-routing region expected in CLAUDE.md (omc={omc!r})\nstdout: {result.stdout}"
-        )
-    else:
-        assert not omc_routing_present, (
-            f"omc-routing region must be ABSENT when ARK_HAS_OMC={omc!r}\nstdout: {result.stdout}"
-        )
 
     if expect_symlink:
         assert symlink_present, (
@@ -364,13 +360,13 @@ def test_e2e_gate_flags_fresh_fixture(
         )
 
 
-def test_e2e_both_gates_off_summary_counts(tmp_path: Path) -> None:
-    """E2E smoke: ARK_HAS_OMC=0 + ARK_CENTRALIZED_VAULT=0 → 2 ops applied (routing-rules + gitignore), 0 skipped_idempotent."""
+def test_e2e_vault_gate_off_summary_clean(tmp_path: Path) -> None:
+    """E2E smoke: ARK_CENTRALIZED_VAULT=0 → the sole ensured_files op is gated off,
+    leaving nothing to apply — engine reports a clean run."""
     _copy_fixture_pre("fresh", tmp_path)
-    result = _run_with_gates(tmp_path, "0", "0")
+    result = _run_with_gates(tmp_path, None, "0")
 
     assert result.returncode == 0, f"Unexpected failure:\n{result.stdout}\n{result.stderr}"
-    # routing-rules + gitignore entry → 2 applied; both gated entries → 0 (not counted as skipped_idempotent)
-    assert "2 applied" in result.stdout, (
-        f"Expected '2 applied' with both gates off:\n{result.stdout}"
+    assert "clean — nothing to do" in result.stdout, (
+        f"Expected a clean run with the vault gate off:\n{result.stdout}"
     )
