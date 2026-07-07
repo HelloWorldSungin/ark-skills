@@ -83,84 +83,43 @@ Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root, created lazi
 
 ## Available Skills
 
-### Workflow Orchestration
-- `/ark-workflow` — Task triage and skill chain orchestration (entry point for all non-trivial work)
-- `/ark-context-warmup` — Automatic context loader. Runs as step 0 of every /ark-workflow chain; queries NotebookLM + vault + TaskNotes for recent + relevant context. Also invokable standalone.
-- `/wiki-handoff` — Write a session bridge page to `.omc/wiki/` before `/compact` or `/clear`; invoked from `/ark-workflow` Step 6.5 action branch.
+ark-skills is two co-equal cores: a **workflow consultant** that plans and routes each task, and a **conventions layer** that converges projects onto shared OKF knowledge + GitHub-Issues conventions.
 
-### Core (generalized from existing)
-- `/ark-code-review` — Multi-agent code review with fan-out architecture
-- `/codebase-maintenance` — Repo cleanup, vault sync, skill health
-- `/notebooklm-vault` — NotebookLM vault context and sync (bootstrap, ask, session-continue, conflict-check). End-of-session handoff lives in `/wiki-update`.
+### Workflow consultant
+- `/ark-consult` — Stateless workflow consultant; the planning phase for any non-trivial task. Triages, asks ≤2 clarifying questions, recommends exactly ONE execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) from a routing matrix, files a GitHub epic as the plan of record, and hands off. Replaces the retired chain-orchestration skill and its chains. The epic is the only state; resume = `gh issue view <epic>`.
 
-### Code-Structural Retrieval
-- `/graph-map` — Install/drive graphify to map the repo into a knowledge graph, quarantine the Obsidian export in `vault/generated/graphify/`, and register a code-structural query backend. Modes: setup / update / status / query.
-
-### Task Automation
-- `/ark-tasknotes` — Agent-driven task creation and status via tasknotes MCP. Use `status` subcommand for task overview and triage recommendations.
-
-### Onboarding
-- `/ark-onboard` — Interactive setup wizard (greenfield, migration, repair). Absorbs `/wiki-setup`.
-- `/ark-health` — Diagnostic check for Ark ecosystem health (22 checks, scored scorecard)
-- `/ark-update` — Version-driven migration framework. Converges downstream projects to the current ark-skills target profile by replaying additive conventions and any pending destructive migrations. Distinct from `/ark-onboard` repair (failure-driven).
-
-### Vault Maintenance (adapted from obsidian-wiki)
-- `/wiki-query` — Query vault knowledge with tiered retrieval
-- `/wiki-lint` — Audit vault health (links, frontmatter, tags, index)
-- `/wiki-status` — Vault statistics and insights
-- `/wiki-update` — End-of-session workflow: create/update session log, update TaskNote epic/stories, extract compiled insights, regenerate index
-- `/wiki-setup` — Initialize new Ark vault with standard structure
-- `/wiki-ingest` — Distill documents into vault pages
-- `/tag-taxonomy` — Validate and normalize tags against taxonomy
-- `/cross-linker` — Discover and add missing wikilinks
-- `/claude-history-ingest` — Mine Claude conversations into compiled vault insights via MemPalace (requires `pip install mempalace`)
-- `/data-ingest` — Process logs, transcripts, exports into vault pages
+### Conventions layer
+- `/vault` — Write-side OKF knowledge ops for the bundle at `vault/`: end-of-session insight distillation, document ingestion, `log.md` append, index regen. Durable knowledge only — no session logs, no task tracking. Reading is script-based (`okf_cli.py`) or NotebookLM.
+- `/notebooklm-vault` — Synthesized-recall backend: syncs the OKF bundle to NotebookLM and answers factual/historical queries (bootstrap, ask, session-continue, conflict-check).
+- `/ark-onboard` — Interactive setup wizard: initializes the OKF bundle, bootstraps GitHub Issue labels, points at mattpocock setup, and writes CLAUDE.md rows.
+- `/ark-health` — Diagnostic check for the v2 invariants (OKF lint clean, `okf_version` present, labels present, `docs/agents/` config, mattpocock configured, exactly 6 skills, no frozen-tracker writes, NotebookLM reachable).
+- `/ark-update` — Version-driven migration framework: converges downstream projects onto the current target profile (OKF conversion + GitHub-Issues adoption). Execution is per-project and deferred.
 
 ## Vault Retrieval Defaults
 
-Four retrieval backends, ordered by richness. Check availability in order.
-Use the first available backend appropriate for the query type.
+Two read paths for the OKF bundle. Querying the vault is read-side only — no skill wraps it (write-side is `/vault`).
 
-| Tier | Backend | Best For | Token Cost |
-|------|---------|----------|------------|
-| T1 | NotebookLM | Factual lookups, pre-synthesized answers | ~500 |
-| T2 | MemPalace | Deep context, synthesis, experiential recall (MCP tools for reads; CLI for ingest) | ~2,500 |
-| T3 | Obsidian-CLI (via `obsidian:obsidian-cli` skill) | Full-text search, inline mentions | ~119 + reads |
-| T4 | index.md scan | Structured browse, page discovery, zero-dep fallback | ~2,100 |
+| Path | Backend | Best For |
+|------|---------|----------|
+| Synthesized recall | NotebookLM (`/notebooklm-vault`) | "What is X?", "What did we decide?", "Has this been tried?" — pre-synthesized answers over the OKF bundle |
+| Navigation / full-text | `python3 vault/_meta/okf/okf_cli.py {list,search,read}` | Page discovery, full-text search, reading specific pages |
 
-### Availability Checks
+### Availability
 
-- **T1:** `notebooklm` CLI authenticated + config exists at `{vault_path}/.notebooklm/config.json` OR `.notebooklm/config.json` in project root
-- **T2:** MemPalace MCP server reachable (`mcp__mempalace__*` tools available) for reads; `mempalace` CLI installed for ingest (`mempalace mine`, requires **v3.3.5+**; floor-pin **>=3.3.6** for the #1457 fix — PyPI latest 3.4.1, 2026-06-15). The HNSW-corruption crash class — `_query` ([#1132](https://github.com/MemPalace/mempalace/issues/1132)) and `_upsert` ([#976](https://github.com/MemPalace/mempalace/pull/976)) — is closed in v3.3.5 via [#1322](https://github.com/MemPalace/mempalace/pull/1322) (wires `quarantine_stale_hnsw` into the chromadb client open path). v3.3.5 also ships [`mempalace repair --mode from-sqlite`](https://github.com/MemPalace/mempalace/pull/1310) for recovering already-corrupt palaces (reads `(id, document, metadata)` directly from `chroma.sqlite3` without opening chromadb against the corrupt palace). **Resolved (v3.3.6):** the zero-byte `link_lists.bin` SIGSEGV gap ([#1457](https://github.com/MemPalace/mempalace/issues/1457)) — where the v3.3.5 quarantine gate treated a 0-byte `link_lists.bin` as benign — is **fixed in v3.3.6** (PR [#1461](https://github.com/MemPalace/mempalace/pull/1461), published to PyPI 2026-06-06; release notes: "#1452, #1461, fixes #1457"). On installs **>=3.3.6** the manual segment `mv` workaround is no longer needed; it remains a fallback only for installs still pinned below 3.3.6. `mempalace status` hits SQLite's 32k-variable limit on palaces past ~32k drawers ([#802](https://github.com/MemPalace/mempalace/issues/802), open). If MCP is unreachable, skip T2 entirely.
-- **T3:** Obsidian app running. Always invoke via `obsidian:obsidian-cli` skill.
-- **T4:** `{vault_path}/index.md` exists. Always available.
-
-### Failure Messaging
-
-When a preferred tier is unavailable, log before falling back:
-- "T1 not available — NotebookLM config not found at {vault_path}/.notebooklm/config.json or .notebooklm/config.json. Falling back to T4."
-- "T2 not available — MemPalace MCP server unreachable. CLI search/mine require v3.3.5+ (#1132/#976 closed via #1322); #1457 zero-byte link_lists SIGSEGV fix shipped in v3.3.6 (#1461; PyPI 2026-06-06) — manual segment `mv` repair only needed on installs pinned below 3.3.6 (floor-pin >=3.3.6; latest 3.4.1). Skipping T2. Falling back to T3/T4."
-- "T2 wing missing — MemPalace wing '{wing}' not indexed. Run `bash skills/shared/mine-vault.sh` via MCP (CLI mine still works). Falling back to T4."
-- "T3 not available — Obsidian not responsive. Falling back to T4."
+- **NotebookLM:** `notebooklm` CLI authenticated + config at `{vault_path}/.notebooklm/config.json` or `.notebooklm/config.json` in project root. If unavailable, fall back to `okf_cli.py`.
+- **okf_cli.py:** always available when the OKF bundle exists (`vault/_meta/okf/okf_cli.py`). Zero-dependency fallback.
 
 ### Query Routing
 
-- "What is X?" / "What did we decide?" → T1 → T4
-- "Why did we decide X?" / "Show the reasoning" → T2 → T4
-- "What did we try when debugging X?" → T2
-- "How does X relate to Y?" → T2 → T4
-- "What don't we know about X?" → T2 → T1 → T4
-- "Find all mentions of X" → T3 → T4
-- "What pages exist about X?" → T4
+- "What is X?" / "What did we decide?" / "Has this been tried?" → NotebookLM → `okf_cli.py search`
+- "Find all mentions of X" / "What pages exist about X?" → `okf_cli.py search` / `okf_cli.py list`
+- Write-side (distill, ingest, update the vault) → `/vault`
+
+Failure: "NotebookLM not available — config not found at {vault_path}/.notebooklm/config.json or .notebooklm/config.json. Falling back to okf_cli.py."
 
 ### Code-Structural Retrieval
 
-For code-structure questions, use the graphify graph (availability: `graphify-out/graph.json` exists):
-- "What calls X / what does X depend on?" → **Graph** (`graphify query`) → `rg`/LSP/source
-- "Show the structure/flow of X" → **Graph** → source
-- "Why was X built this way?" → **T2** (MemPalace), not the graph
-
-Failure: "Code-structural graph not available — run /graph-map setup. Falling back to rg/LSP/source."
+For code-structure questions (what calls X, dependencies/impact, the shape of a flow), use the graphify graph directly — see the **graphify** section below. No ark skill wraps it.
 
 ## graphify
 

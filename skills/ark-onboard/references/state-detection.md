@@ -33,13 +33,13 @@ grep -i "vault" CLAUDE.md 2>/dev/null | grep -oE '`[^`]+/`' | tr -d '`' | head -
 ## Step 3: Classify project state (bash)
 
 ```bash
-# Count Ark artifacts to distinguish Non-Ark from Partial
+# Count OKF artifacts to distinguish Non-OKF from Partial
 ARK_ARTIFACTS=0
 [ -f "${VAULT_DIR}_meta/vault-schema.md" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
-[ -f "${VAULT_DIR}_meta/taxonomy.md" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
+[ -f "${VAULT_DIR}_meta/okf/okf_lint.py" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
 [ -f "${VAULT_DIR}index.md" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
-[ -d "${VAULT_DIR}TaskNotes/meta" ] && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
-echo "Ark artifacts found: $ARK_ARTIFACTS / 4"
+grep -q 'okf_version' "${VAULT_DIR}index.md" 2>/dev/null && ARK_ARTIFACTS=$((ARK_ARTIFACTS + 1))
+echo "OKF artifacts found: $ARK_ARTIFACTS / 4"
 
 # Centralized-vault detection (independent of artifact count)
 IS_SYMLINK=false
@@ -113,7 +113,7 @@ fi
 | State | Condition | Wizard path |
 |-------|-----------|-------------|
 | `no_vault` | CLAUDE.md missing AND no vault directory found, OR CLAUDE.md present but vault root field missing/path doesn't exist | Greenfield (full setup) |
-| `non_ark_vault` | Vault directory exists but missing 3+ of: `_meta/vault-schema.md`, `_meta/taxonomy.md`, `index.md`, `TaskNotes/meta/` | Migration (add Ark scaffolding) |
+| `non_ark_vault` | Vault directory exists but missing 3+ of: `_meta/vault-schema.md`, `_meta/okf/okf_lint.py`, `index.md`, `okf_version` in `index.md` | Migration (OKF-convert) |
 | `partial_ark` | Has Ark structure (3+ artifacts) but some diagnostic checks fail. Also: vault exists but CLAUDE.md missing. | Repair (fix what's broken) |
 | `healthy` | All Critical + Standard checks pass | Report (show status, surface upgrades) |
 

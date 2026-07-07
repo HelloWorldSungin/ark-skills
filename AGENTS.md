@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Claude Code plugin that centralizes 18 shared skills for ArkNode projects (Obsidian vault management, NotebookLM integration, TaskNotes, code review, codebase maintenance, onboarding, health diagnostics). Installed user-scoped via `/plugin install ark-skills@ark-skills`, so every skill in `skills/` is available in every project on the machine.
+Claude Code plugin that centralizes 6 shared skills for ArkNode projects across two co-equal cores: a workflow consultant (`/ark-consult`) and a conventions layer (`/vault`, `/notebooklm-vault`, `/ark-onboard`, `/ark-health`, `/ark-update`) for OKF knowledge bundles + GitHub-Issues task management. Installed user-scoped via `/plugin install ark-skills@ark-skills`, so every skill in `skills/` is available in every project on the machine.
 
 The distinguishing design choice is **context-discovery**: no skill hardcodes project names, vault paths, or task prefixes. Each skill reads the active project's `CLAUDE.md` at runtime to find those values. See the top-level `CLAUDE.md` in this repo for the full pattern.
 
@@ -13,7 +13,7 @@ The distinguishing design choice is **context-discovery**: no skill hardcodes pr
 | File | Description |
 |------|-------------|
 | `CLAUDE.md` | Project instructions + context-discovery pattern. Authoritative source — read this first. |
-| `README.md` | Install instructions, optional dependencies (MemPalace, NotebookLM CLI, Obsidian CLI), full skill catalog. |
+| `README.md` | Install instructions, optional dependencies (`gh` CLI, mattpocock/skills, NotebookLM CLI), full skill catalog. |
 | `CHANGELOG.md` | Release history. Keep-a-Changelog format, bumped every push to master. |
 | `TODO.md` | Open work items. |
 | `VERSION` | Plain semver string. Must stay in sync with `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`. |
@@ -23,7 +23,7 @@ The distinguishing design choice is **context-discovery**: no skill hardcodes pr
 
 | Directory | Purpose |
 |-----------|---------|
-| `skills/` | The 18 skills published by this plugin. Each subdirectory has its own `SKILL.md`. See `skills/AGENTS.md`. |
+| `skills/` | The 6 skills published by this plugin. Each subdirectory has its own `SKILL.md`. See `skills/AGENTS.md`. |
 | `docs/` | Plugin documentation (onboarding guide, vault audit, superpowers plans/specs). See `docs/AGENTS.md`. |
 | `vault/` | **Obsidian vault — user content, not code.** Do not modify programmatically except through the plugin's own vault skills. |
 | `.claude-plugin/` | Plugin manifest (`plugin.json`) and marketplace descriptor (`marketplace.json`). Bump version here on every release. |
@@ -38,7 +38,7 @@ The distinguishing design choice is **context-discovery**: no skill hardcodes pr
 - **Never invent a project name, vault path, or task prefix inside a skill.** All such values come from context-discovery against the consuming project's `CLAUDE.md`. If you need a value a CLAUDE.md doesn't provide, the skill should fail loudly with a message telling the user what field to add.
 - **Version bumps are non-negotiable on every push to master.** Update all four in one commit: `VERSION`, `.claude-plugin/plugin.json` (`version` field), `.claude-plugin/marketplace.json` (`plugins[0].version`), and add a `CHANGELOG.md` entry.
 - **Do not programmatically modify `vault/`.** That is user-authored content; the plugin's vault skills operate on the consuming project's vault, not this repo's vault.
-- The top-level `CLAUDE.md` defines a four-tier vault retrieval order (T1 NotebookLM → T2 MemPalace → T3 Obsidian-CLI → T4 index.md scan). New vault-reading skills must follow this order and log fallbacks.
+- The top-level `CLAUDE.md` defines vault retrieval: NotebookLM (synthesized recall) → `okf_cli.py` (navigation/full-text). New vault-reading skills must follow this order and log fallbacks.
 - `/ark-onboard` and `/ark-health` are explicitly exempt from context-discovery — they must work when `CLAUDE.md` is missing or broken. Preserve that exemption.
 
 ### Testing Requirements
@@ -61,9 +61,8 @@ There is no programmatic test suite for this plugin — skills are instruction f
 
 The plugin itself has no hard runtime dependencies. Individual skills optionally use:
 
-- **MemPalace** (`pipx install 'mempalace>=3.0.0,<4.0.0'`) — T2 vault retrieval, `/claude-history-ingest`.
-- **NotebookLM CLI** (`pipx install notebooklm-cli`) — T1 vault retrieval, `/notebooklm-vault`.
-- **Obsidian CLI** via the `obsidian:obsidian-cli` Claude skill — T3 vault retrieval.
-- **tasknotes MCP** — `/ark-tasknotes` task creation.
+- **`gh` CLI** — GitHub-Issues task management (`/ark-consult`, `/ark-onboard`).
+- **mattpocock/skills** — issue machinery (`/to-issues`, `/triage`) and a routing destination for `/ark-consult`.
+- **NotebookLM CLI** (`pipx install notebooklm-cli`) — synthesized recall, `/notebooklm-vault`.
 
 <!-- MANUAL: Manually added notes below this line are preserved on regeneration. -->

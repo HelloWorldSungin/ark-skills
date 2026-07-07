@@ -1,11 +1,11 @@
 ---
 name: notebooklm-vault
-description: Persistent context and memory layer backed by the Obsidian vault synced to Google NotebookLM. Use this skill whenever starting a fresh session and needing project history, when asking "what happened in session X", "what's the current project state", "has this been tried before", or when generating audio/reports from vault content. Triggers on bootstrap, vault context, session history, conflict check, or any question about past decisions/experiments. Warm-start triggers for session-continue: "resume from last session", "continue where I left off", "warm start", "pick up where I left off". Do NOT trigger on phrases containing "session log", "wrap up", "hand off", or "end session" — those belong to /wiki-update. Do NOT use for general NotebookLM operations unrelated to the vault — use the global notebooklm skill for those.
+description: Synthesized-recall backend for the OKF knowledge bundle at vault/, synced to Google NotebookLM. Use this skill whenever starting a fresh session and needing project history, when asking "what's the current project state", "has this been tried before", "why did we decide X", or when generating audio/reports from vault content. Triggers on bootstrap, vault context, conflict check, or any question about past decisions/research. Warm-start triggers for session-continue: "resume from last session", "continue where I left off", "warm start", "pick up where I left off". Do NOT use for writing to the vault — that is the /vault skill. Do NOT use for general NotebookLM operations unrelated to the vault — use the global notebooklm skill for those.
 ---
 
-# NotebookLM Vault — Persistent Project Memory
+# NotebookLM Vault — Synthesized Project Recall
 
-This skill bridges the Obsidian vault with Google NotebookLM to give Claude Code persistent memory across sessions. The vault contains session logs, architecture decisions, research notes, and strategy documentation — the project's institutional memory.
+This skill bridges the OKF knowledge bundle at `vault/` with Google NotebookLM to give Claude Code synthesized recall over the project's institutional memory. The bundle contains durable knowledge only — research notes, architecture decisions, and reference pages. The active work record lives in GitHub issues and the bundle's `log.md` (session logs are retired). Reads are synthesized here; writes go through the `/vault` skill.
 
 ## Project Discovery
 
@@ -13,7 +13,7 @@ Before running this skill, discover project context per the plugin CLAUDE.md:
 1. Read the project's CLAUDE.md to find: project name, vault root, project docs path
 2. Read the notebook configuration from `.notebooklm/config.json`. Lookup order: project root first, then vault root (`vault/.notebooklm/config.json`). Monorepo layouts use the project-root config as the authoritative tracked source; standalone layouts use the vault-root config exclusively. Sync-state (`.notebooklm/sync-state.json`) lives inside the vault repo regardless of layout.
 3. Determine notebook structure: single notebook (one key) or multi-notebook (trading + infra)
-4. For tiered retrieval: read vault's `index.md` and use `summary:` fields to scan before reading full pages
+4. For navigation: use `python3 vault/_meta/okf/okf_cli.py {list,search}` to scan the OKF bundle by `description:` before reading full pages
 
 ## Architecture
 
@@ -21,9 +21,9 @@ A single NotebookLM notebook holds the vault content:
 
 | Notebook | Vault Path | Content |
 |----------|-----------|---------|
-| **the notebook name from `.notebooklm/config.json`** | `{project_docs_path}/` | Session logs, strategies, models, research, operations |
+| **the notebook name from `.notebooklm/config.json`** | `{project_docs_path}/` | OKF knowledge bundle: research, decisions, reference pages, `log.md` |
 
-**Note:** TaskNotes (`{tasknotes_path}/`) are NOT synced to NotebookLM. They are managed locally in Obsidian only.
+**Note:** the frozen `TaskNotes/` and `Session-Logs/` legacy trees are NOT synced to NotebookLM — the active work record is GitHub issues + the bundle's `log.md`.
 
 Config layout depends on whether the vault is monorepo or standalone:
 
@@ -46,41 +46,18 @@ Detect via `test -L vault`. When vault is NOT a symlink (embedded layout), sync-
 - `notebooklm` CLI installed globally via pipx (v0.3.3+)
 - Authenticated: `notebooklm auth check --test`
 - Google AI Pro plan (300 source limit per notebook)
-- Obsidian running locally (required for `obsidian` CLI commands)
 
-## Vault Access — Use `obsidian` CLI
+## Vault Access — Use `okf_cli.py`
 
-When reading or searching vault files, prefer the `obsidian` CLI (from the `obsidian:obsidian-cli` skill) over raw `Read`/`Glob`/`Grep` tools. The CLI returns only the content you need and costs significantly fewer tokens on large files like session logs.
+When reading or searching the bundle locally (outside NotebookLM), use the in-bundle OKF CLI over raw `Read`/`Glob`/`Grep`. It returns only the content you need and scans by `description:` cheaply.
 
-**Reading notes** — use wikilink-style name resolution (no path or extension needed):
 ```bash
-obsidian read file="Session-001"                    # Read a session log
-obsidian read file="{task_prefix}001-research-pipeline"  # Read a TaskNote epic
+python3 vault/_meta/okf/okf_cli.py list                 # Catalog all pages with descriptions
+python3 vault/_meta/okf/okf_cli.py search "ensemble forecasting"   # Full-text search
+python3 vault/_meta/okf/okf_cli.py read <page-path>     # Read a specific page
 ```
 
-**Searching the vault** — much cheaper than Grep across hundreds of files:
-```bash
-obsidian search query="ensemble forecasting" limit=10     # Full-text search
-```
-Note: `obsidian search` is plain-text only — it does NOT support property-based operators like `task-type:epic`. To find epics, search for keywords that appear in epic files.
-
-**Reading/setting frontmatter properties** — avoids parsing YAML manually:
-```bash
-obsidian property:read name="epic" file="Session-001"
-obsidian property:set name="status" value="in-progress" file="{task_prefix}001-research-pipeline" silent
-```
-
-**Finding backlinks** — discover what references a note:
-```bash
-obsidian backlinks file="{task_prefix}001-research-pipeline"  # Find stories linking to epic
-```
-
-**Listing tasks** — find TaskNotes by status:
-```bash
-obsidian tasks query="status:in-progress project:{project_name}"
-```
-
-Fall back to raw `Read`/`Glob` only when Obsidian is not running or when you need to write/create files (use the `obsidian:obsidian-markdown` skill for creating vault files).
+Fall back to raw `Read`/`Glob` only when you need to inspect non-markdown assets. Writing to the bundle is never this skill's job — use the `/vault` skill.
 
 ## Sub-Commands
 
@@ -100,7 +77,7 @@ Creates the notebook, configures persona, bulk imports all vault .md files, and 
    Parse the `id` from JSON output.
 3. Configure the notebook:
    ```bash
-   PERSONA='You are a senior engineer reviewing the {project_name} project. Answer questions with specific session numbers, dates, experiment results, and code references. When tracing decisions, cite the session logs where they were made. Be thorough and precise.'
+   PERSONA='You are a senior engineer reviewing the {project_name} project. Answer questions with specific dates, experiment results, and code references. When tracing decisions, cite the knowledge pages where they were recorded. Be thorough and precise.'
    notebooklm configure --notebook <notebook_id> --mode detailed --persona "$PERSONA" --response-length longer
    ```
 4. Persist the notebook config. Detect layout first:
@@ -151,84 +128,77 @@ Queries the notebook and returns answers with source citations.
 
 ---
 
-### `session-continue` — Resume From Last Session
+### `session-continue` — Resume From Last Work
 
-Targeted warm start that reads the most recent session log and its linked epic to pick up where the previous session left off.
+Targeted warm start that reads the most recent work record — the bundle's `log.md` tail plus the referenced GitHub epic — to pick up where the previous session left off. The GitHub epic is the plan and resume state (there are no session logs).
 
-1. Find the most recent session log. Use Glob on `{project_docs_path}/Session-Logs/S*.md` (Ark convention: files are named `S{NNN}-{slug}.md`, not `Session-{NNN}.md`), then sort results by the numeric session number (not by mtime). Read the highest-numbered session via `obsidian` CLI:
+1. Read the tail of the OKF bundle's `log.md` for the most recent work-record lines. Each line carries an issue number, a one-line summary, and a link back to the GitHub comment permalink:
    ```bash
-   obsidian read file="S<NNN>-<slug>"
+   tail -n 30 vault/log.md
    ```
-2. Extract the `epic` frontmatter field efficiently:
+2. Identify the active epic/issue from those lines (the most recent issue number, or the epic it references).
+3. Read that GitHub issue and its comments — this is the authoritative record of progress, decisions, and next steps:
    ```bash
-   obsidian property:read name="epic" file="S<NNN>-<slug>"
+   gh issue view <n> --comments
    ```
-   Also extract the following sections from the content returned by the read: **Next Steps**, **Open Questions**, **Decisions Made**, and **Work Done**. These are the sections written by `/wiki-update` 1.8.0+. For older logs (pre-1.8.0) that use **Results** / **Issues & Discoveries** section names, fall back to those.
-3. Identify the related epic:
-   - If the session log has an `epic` frontmatter field, use that directly.
-   - **Fallback for older session logs without `epic` field:** Infer the epic from the session's tags and content.
-4. If an epic is identified, read it and find related stories using `obsidian` CLI:
+   If it is a child issue, follow its "Part of #NNN" reference to the epic and read the epic body (its task-list children show what is done vs. remaining).
+4. Query NotebookLM for related durable context (research, prior decisions):
    ```bash
-   obsidian read file="<epic-id>-<slug>"
-   obsidian backlinks file="<epic-id>-<slug>"   # finds stories that link to the epic
+   notebooklm ask "What prior work or decisions relate to: <summary of the epic's open items>? Include outcomes and any gotchas." --notebook <id> --json
    ```
-5. Query NotebookLM for related context:
-   ```bash
-   notebooklm ask "What sessions are related to: <summary of next steps from session log>? Include session numbers, outcomes, and any gotchas." --notebook <id> --json
-   ```
-6. Present a structured resume brief (all sections are required):
+5. Present a structured resume brief (all sections are required):
 
 ```markdown
-## Resuming from Session <NNN>
+## Resuming — Epic #<n> <Epic Title>
 
 ### Where We Left Off
-[Status from session log — what was accomplished, current state]
+[Latest progress from the issue comments + log.md tail — what was accomplished, current state]
 
-### Epic Progress — <Epic Title> (<epic-id>)
-[Stories completed vs. remaining, overall epic status]
+### Epic Progress
+[Children completed vs. remaining from the epic task-list, overall status]
 
 ### Immediate Next Steps
-[Next steps from session log + outstanding stories, ordered by priority]
+[Next steps from the latest issue comments + open children, ordered by priority]
 
 ### Critical Context
-[Issues/discoveries from session log, blockers from stories]
+[Blockers, discovered-work issues, open questions from the issue thread]
 
 ### Related Prior Work
-[Any relevant sessions from NotebookLM query]
+[Any relevant durable knowledge from the NotebookLM query]
 ```
 
-7. If no session log exists, or no epic can be identified, fall back to `bootstrap`.
+6. If `log.md` is empty or no epic can be identified, fall back to `bootstrap`.
 
 ---
 
 ### `bootstrap` — Fresh Session Context Loader
 
-Broad project overview for cold starts when no recent session log has a linked epic or when starting entirely new work.
+Broad project overview for cold starts when `log.md` has no resolvable epic or when starting entirely new work.
 
 1. Read `.notebooklm/config.json` for notebook ID.
 2. Query the notebook with these questions (run in sequence):
    ```bash
-   notebooklm ask "List the 5 most recent session logs with: session number, date, objective, key outcomes, and unresolved items" --notebook <id> --json
+   notebooklm ask "Summarize the most recent research findings and decisions, with dates and outcomes" --notebook <id> --json
    ```
    ```bash
    notebooklm ask "What is the current project state? What has been built so far and what is planned next?" --notebook <id> --json
    ```
    ```bash
-   notebooklm ask "What are the top open issues, ongoing experiments, or blocked work items?" --notebook <id> --json
+   notebooklm ask "What are the top open questions, ongoing experiments, or unresolved decisions?" --notebook <id> --json
    ```
 3. Format all answers into a structured context brief:
 
 ```markdown
-## Session Context Brief
+## Project Context Brief
 
-### Recent Sessions
-[5 most recent sessions with numbers, dates, objectives, outcomes, unresolved items]
+### Recent Findings & Decisions
+[Most recent research findings and decisions with dates and outcomes]
 
 ### Current Project State
 [What's built, what's planned, current development phase]
 
-### Open Issues & Experiments
-[Active work items, blocked items, experiments in progress]
+### Open Questions & Experiments
+[Unresolved decisions, experiments in progress, open questions]
 ```
 
 ---
@@ -275,14 +245,14 @@ Checks if a proposed approach contradicts past decisions recorded in the vault.
 1. Read config for notebook ID.
 2. Formulate the query:
    ```
-   Has this approach been tried before or does it contradict previous decisions: [user's approach]. Search all session logs for related experiments, failures, or architectural decisions. Be specific about session numbers and outcomes.
+   Has this approach been tried before or does it contradict previous decisions: [user's approach]. Search the knowledge bundle for related experiments, failures, or architectural decisions. Be specific about outcomes and cite the pages.
    ```
 3. Query the notebook:
    ```bash
    notebooklm ask "<query>" --notebook <id> --json
    ```
 4. Present findings:
-   - **Conflicts found** — with session references and what happened
+   - **Conflicts found** — with page references and what happened
    - **Related history** — similar experiments or decisions
    - **Recommendation** — proceed, modify approach, or reconsider
 
@@ -307,115 +277,19 @@ Displays notebook ID, source count, and last sync timestamp.
 
 ---
 
-## Tiered Retrieval (Post-Restructuring)
+## Local Retrieval (when not querying NotebookLM)
 
-When querying vault knowledge:
-1. **Tier 1 — Index scan:** Read `index.md` to find relevant pages by category and summary
-2. **Tier 2 — Summary scan:** Read `summary:` frontmatter of candidate pages (cheap, <=200 chars each)
-3. **Tier 3 — Full read:** Only open full page content for the top 3-5 most relevant candidates
-4. **Navigation context:** Read `_meta/vault-schema.md` to understand folder structure before exploring
+When reading the bundle directly:
+1. **Catalog scan:** `python3 vault/_meta/okf/okf_cli.py list` to find relevant pages by `description:`
+2. **Search:** `python3 vault/_meta/okf/okf_cli.py search "<terms>"` for full-text matches
+3. **Full read:** `python3 vault/_meta/okf/okf_cli.py read <page-path>` for the top 3-5 candidates only
+4. **Navigation context:** read `vault/_meta/vault-schema.md` to understand folder structure before exploring
 
 ## Notebook Querying
 
 Read `.notebooklm/config.json` to determine notebook structure:
 - **Single notebook:** Query the one configured notebook
 - **Multiple notebooks:** Query each notebook, merge results, note which notebook each answer came from
-
-## Warmup Contract
-
-Machine-readable subcontract consumed by `/ark-context-warmup`. Spec: `docs/superpowers/specs/2026-04-12-ark-context-warmup-design.md`. Calling convention: `docs/superpowers/plans/2026-04-12-ark-context-warmup-implementation.md` D6.
-
-```yaml
-warmup_contract:
-  version: 1
-  commands:
-    - id: session-continue
-      shell: 'notebooklm ask {{prompt}} --notebook {{notebook_id}} --json'
-      inputs:
-        notebook_id:
-          from: config
-          config_path: '.notebooklm/config.json'
-          config_lookup_order: ['vault_root/.notebooklm/config.json', '.notebooklm/config.json']
-          # Per D5 (plan §Decisions Pinned): if config.notebooks has exactly one entry,
-          # use it. If it has >1 entry, config.default_for_warmup MUST be set —
-          # otherwise the availability probe skips the lane with a remediation hint.
-          # No silent fallback to "main". The executor resolves this via the lookup
-          # rule, not a json_path fallback syntax.
-          lookup: single_or_default_for_warmup
-          json_path_template: 'notebooks.{key}.id'
-          required: true
-        prompt:
-          from: template
-          template_id: session_continue_prompt
-      preconditions:
-        - id: recent_session_with_shape
-          script: scripts/session_shape_check.sh
-          description: 'Exits 0 if latest session log <7 days old AND has Next Steps section AND resolvable epic link'
-      output:
-        format: json
-        extract:
-          where_we_left_off: '$.answer.sections.where_we_left_off'
-          epic_progress: '$.answer.sections.epic_progress'
-          immediate_next_steps: '$.answer.sections.immediate_next_steps'
-          critical_context: '$.answer.sections.critical_context'
-          citations: '$.citations'
-        required_fields: [where_we_left_off, immediate_next_steps]
-    - id: bootstrap
-      shell: 'notebooklm ask {{prompt}} --notebook {{notebook_id}} --json'
-      inputs:
-        notebook_id:
-          from: config
-          config_path: '.notebooklm/config.json'
-          config_lookup_order: ['vault_root/.notebooklm/config.json', '.notebooklm/config.json']
-          # Per D5 (plan §Decisions Pinned): if config.notebooks has exactly one entry,
-          # use it. If it has >1 entry, config.default_for_warmup MUST be set —
-          # otherwise the availability probe skips the lane with a remediation hint.
-          # No silent fallback to "main". The executor resolves this via the lookup
-          # rule, not a json_path fallback syntax.
-          lookup: single_or_default_for_warmup
-          json_path_template: 'notebooks.{key}.id'
-          required: true
-        prompt:
-          from: template
-          template_id: bootstrap_prompt
-      output:
-        format: json
-        extract:
-          recent_sessions: '$.answer.sections.recent_sessions'
-          current_state: '$.answer.sections.current_state'
-          open_issues: '$.answer.sections.open_issues'
-          citations: '$.citations'
-        required_fields: [recent_sessions, current_state]
-  prompt_templates:
-    # Single-brace placeholders like {WARMUP_TASK_TEXT} and {WARMUP_PROJECT_NAME}
-    # are interpolated by the executor from the environment at resolve time
-    # (see executor._interpolate_template). Unknown placeholders pass through
-    # literally so a typo surfaces as garbage in the backend response rather
-    # than crashing the lane. Double-brace (`{{prompt}}`, `{{notebook_id}}`)
-    # is a separate, later substitution applied against the `shell:` template
-    # by substitute_shell_template — do not mix the two forms.
-    session_continue_prompt: |
-      What sessions are related to: {WARMUP_TASK_TEXT}? Include session numbers,
-      outcomes, and any gotchas. Structure the answer with these exact headings:
-      "Where We Left Off", "Epic Progress", "Immediate Next Steps", "Critical Context".
-    bootstrap_prompt: |
-      For the {WARMUP_PROJECT_NAME} project, provide: (1) the 5 most recent session
-      logs with session number, date, objective, key outcomes, unresolved items;
-      (2) the current project state — what is built, what is planned; (3) the top
-      open issues, ongoing experiments, or blocked work items. Structure the answer
-      with these exact headings: "Recent Sessions", "Current State", "Open Issues".
-  selection_rules:
-    # Per spec decision D5: no silent first-pick on multi-notebook configs.
-    - rule: single_notebook
-      when: 'config.notebooks has exactly one entry'
-      action: 'use that notebook'
-    - rule: explicit_default
-      when: 'config.notebooks has >1 entry AND config.default_for_warmup is set'
-      action: 'use config.notebooks[config.default_for_warmup]'
-    - rule: ambiguous_multi_notebook
-      when: 'config.notebooks has >1 entry AND config.default_for_warmup is NOT set'
-      action: 'skip entire lane; log: "Multi-notebook NotebookLM config without default_for_warmup — lane skipped. Add default_for_warmup to .notebooklm/config.json pointing at the notebook key to use."'
-```
 
 ## Important Notes
 
@@ -431,8 +305,7 @@ The sync script (`scripts/notebooklm-vault-sync.sh`) has three operational modes
 
 | Mode | When to use | What it does |
 |------|-------------|--------------|
-| Incremental (default) | Normal runs, end-of-session, `/wiki-update` | Lists remote sources → dedupes & prunes orphans → uploads new/changed files. Self-heals any accumulated drift on every run. |
-| `--sessions-only` | Quick refresh of just session logs | Same as incremental, scoped to `Session-Logs/` only. |
+| Incremental (default) | Normal runs, end-of-session, after `/vault` writes | Lists remote sources → dedupes & prunes orphans → uploads new/changed files. Self-heals any accumulated drift on every run. |
 | `--file PATH` | Single-file sync (fast path) | Fetches target notebook's sources, syncs just that file. Skips dedupe/heal for speed. |
 | `--full` | **Emergency recovery only** | Nukes all sources in the notebook and re-uploads. Use only if a notebook hits the 300-source cap or state has drifted beyond what incremental can heal. |
 

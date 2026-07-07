@@ -4,14 +4,21 @@ Deferred work items. Add new entries at the top.
 
 ---
 
-## Session log frontmatter backfill + S002 collision
+## Downstream v2.0.0 convergence
 
 **Priority:** P2
-**Deferred from:** 1.8.0 (session log consolidation into /wiki-update)
-**Why:** existing session logs in `vault/Session-Logs/` (S001, S002×2, S003, S004) lack the new `date:` and `status:` fields added in 1.8.0. They still parse cleanly against `_meta/generate-index.py` via `.get()` defaults, so no hard break. `/wiki-update` Step 2's skip-detection falls back through `date → last-updated → created → mtime` to handle them.
+**Context:** the v2.0.0 restructure ships only the ark-skills plugin repo. Downstream
+projects (ArkNode-AI — already converged, ArkNode-Poly, trading-signal-ai, …) still run
+v1.x conventions until each is converged per-project via `/ark-update` (target profile
+`pending_migrations`: `okf-conversion`, `gh-issues-adoption`). File one GitHub epic per
+downstream project when convergence begins.
 
-**Two tasks, one PR:**
-1. Backfill `date:` and `status: complete` frontmatter into the 5 existing session logs.
-2. Resolve the pre-existing `S002` numbering collision: `S002-Ark-Workflow-Skill.md` and `S002-Vault-Retrieval-Tiers-Phase1.md` both claim session number 2. Pick whichever is canonically S002 (probably the earlier-created one by `created:` date) and renumber the other. Update filename, `session:` frontmatter, any `prev:` references in later logs, re-run the index generator.
+## ark-update engine v2 conversion
 
-**Scope:** ~10 minutes of edits + verify `python3 vault/_meta/generate-index.py` still green.
+**Priority:** P2
+**Context:** the ark-update Python engine (`scripts/ops/ensure_routing_rules_block.py`,
+its migrate.py registration, the CLAUDE.md-routing-block tests, and the fixtures under
+`tests/fixtures/`) still implements the retired v1 routing-injection. The v2 target
+profile no longer invokes it. A follow-up should retire the routing op + its tests and
+regenerate the fixtures against the v2 profile so `pytest skills/ark-update/tests/` is
+green under the new profile.

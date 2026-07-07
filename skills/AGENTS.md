@@ -13,7 +13,7 @@ The Claude Code skills published by this plugin. Each subdirectory is one skill;
 
 | Directory | Purpose |
 |-----------|---------|
-| `ark-consult/` | Stateless workflow consultant — the planning phase for any non-trivial task. Recommends exactly one execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) and hands off. Replaces the retired `ark-workflow`. |
+| `ark-consult/` | Stateless workflow consultant — the planning phase for any non-trivial task. Recommends exactly one execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) and hands off. Replaces the retired chain-orchestrator skill. |
 | `vault/` | Write-side knowledge operations for the OKF vault bundle at `vault/` — durable insights, research, decisions, reference pages. Not session logs, not task tracking. |
 | `notebooklm-vault/` | NotebookLM-backed persistent context (bootstrap, ask, session-continue, conflict-check). |
 
@@ -24,12 +24,6 @@ The Claude Code skills published by this plugin. Each subdirectory is one skill;
 | `ark-onboard/` | Interactive setup wizard — greenfield, vault migration, partial repair. **Exempt from context-discovery.** |
 | `ark-health/` | Diagnostic scorecard for the Ark ecosystem. **Exempt from context-discovery.** |
 | `ark-update/` | Version-driven migration framework. Converges downstream projects to the current ark-skills target profile via additive replays + pending destructive migrations. Distinct from `/ark-onboard` repair (failure-driven). |
-
-### Shared
-
-| Directory | Purpose |
-|-----------|---------|
-| `shared/` | Cross-skill utilities. Currently: `mine-vault.sh` (first-time MemPalace vault index). |
 
 ## For AI Agents
 
@@ -97,10 +91,9 @@ Top-level orchestrators may sequence other orchestrating skills only through exp
 ### Internal
 
 - All skills read the top-level `CLAUDE.md` for the context-discovery pattern and vault retrieval definitions.
-- `ark-onboard` and `ark-health` reference `skills/shared/mine-vault.sh` for MemPalace initialization.
 
 ### External
 
-See the parent `AGENTS.md` for the optional external dependency matrix (MemPalace, NotebookLM CLI, Obsidian CLI, tasknotes MCP).
+Optional integrations: the `gh` CLI (GitHub Issues task management), the `notebooklm` CLI (synthesized recall), and mattpocock/skills (`/to-issues`, `/triage`). See the parent `AGENTS.md` for details.
 
 <!-- MANUAL: -->

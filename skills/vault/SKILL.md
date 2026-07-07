@@ -53,7 +53,7 @@ decisions and why, research conclusions, reusable reference facts.
 ### 2 — Document ingestion
 
 Distill an external document, transcript, or export into vault pages. (Absorbs the
-retired `wiki-ingest` rules, rewritten for OKF.)
+retired document-ingestion rules, rewritten for OKF.)
 
 1. Read the source. Determine whether it is one page or several distinct topics —
    split by topic, one topic per page.
