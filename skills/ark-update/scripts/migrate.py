@@ -14,8 +14,8 @@ Exit codes
 4  Malformed state refusal — .ark/migrations-applied.jsonl is unparseable;
    run /ark-onboard repair to fix.
 
-ARK_SKILLS_ROOT resolution (three-case pattern from ark-context-warmup)
------------------------------------------------------------------------
+ARK_SKILLS_ROOT resolution (three-case pattern)
+-------------------------------------------------
 1. ``--skills-root <path>`` CLI flag (highest priority).
 2. ``ARK_SKILLS_ROOT`` environment variable.
 3. If neither is set, fail loud with a user-facing message.
@@ -79,7 +79,6 @@ from ops import OP_REGISTRY  # noqa: E402
 # populate OP_REGISTRY before any phase runs.  Order matches declaration
 # order in target-profile.yaml.
 import ops.ensure_claude_md_section  # noqa: F401, E402
-import ops.ensure_routing_rules_block  # noqa: F401, E402
 import ops.ensure_gitignore_entry  # noqa: F401, E402
 import ops.create_file_from_template  # noqa: F401, E402
 import ops.ensure_mcp_server  # noqa: F401, E402

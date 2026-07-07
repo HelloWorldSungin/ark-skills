@@ -3,9 +3,9 @@
 Target-profile YAML shape::
 
     ensured_mcp_servers:
-      - id: tasknotes-mcp
+      - id: example-mcp-server
         file: .mcp.json              # path under project_root (default)
-        key: mcpServers.tasknotes-mcp   # dot-path into the JSON to the entry
+        key: mcpServers.example-mcp-server   # dot-path into the JSON to the entry
         entry:
           type: http
           url: http://localhost:3000/mcp

@@ -3,7 +3,7 @@
 Target-profile YAML shape::
 
     ensured_gitignore:
-      - entry: .ark-workflow/       # the exact line to append if absent
+      - entry: .example-state/      # the exact line to append if absent
         since: 1.13.0               # first plugin version that introduced this
         # optional file: override; default is "project_root/.gitignore"
 

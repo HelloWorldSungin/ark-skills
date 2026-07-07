@@ -13,12 +13,13 @@ Checks:
   6. Schema acceptance for failed_ops[] and depends_on_op in migrations/*.yaml (codex P2-4).
   7. _ark_managed sentinel documentation check for ensure_mcp_server entries.
 
-v2.0.0 NOTE: the former Check 5 (byte-equality between templates/routing-template.md
-and skills/ark-workflow/references/routing-template.md) was removed. Both sides of
-that comparison were retired in the v2.0.0 restructure — target-profile.yaml no
-longer declares a routing-template managed region (see its v2.0.0 NOTE), and
-skills/ark-workflow/ (the reference copy this check drifted against) was deleted
-outright. The remaining checks were renumbered.
+v2.0.0 NOTE: the former Check 5 (a byte-equality check between
+templates/routing-template.md and an external reference copy of the same
+template maintained by the retired routing-orchestrator skill) was removed.
+Both sides of that comparison were retired in the v2.0.0 restructure —
+target-profile.yaml no longer declares a routing-template managed region
+(see its v2.0.0 NOTE), and the skill that held the reference copy this check
+drifted against was deleted outright. The remaining checks were renumbered.
 
 Exit 0 on success, non-zero on failure with clear error messages on stderr.
 ~200 LOC.
@@ -47,7 +48,6 @@ OP_REGISTRY = {
     "ensure_gitignore_entry",
     "ensure_mcp_server",
     "create_file_from_template",
-    "ensure_routing_rules_block",
 }
 
 # Required fields per entry type.
@@ -56,9 +56,11 @@ _ENSURED_FILE_REQUIRED = {"op", "target", "template", "since", "version"}
 _ENSURED_GITIGNORE_REQUIRED = {"entry", "since"}
 _ENSURED_MCP_REQUIRED = {"id", "name", "since"}
 
-# ensure_routing_rules_block does not require a template: field (it embeds
-# the routing template content via the op's own logic).
-_NO_TEMPLATE_OPS = {"ensure_routing_rules_block"}
+# v2.0.0: no registered op currently embeds its own template content, so this
+# set is empty. Kept as an extension point — a future op that doesn't take a
+# template: field (the way the retired v1 routing op didn't) would list its
+# id here.
+_NO_TEMPLATE_OPS: set[str] = set()
 
 # Fields whose values are file paths (must pass path-safety check).
 _PATH_FIELDS = ("file", "target")
