@@ -17,26 +17,24 @@ When a skill says "Run Project Discovery," follow this procedure:
 | Field | Where to Find | Example |
 |-------|--------------|---------|
 | Project name | Header or table | `trading-signal-ai` |
-| Task prefix | "Task Management" row, includes trailing dash | `ArkSignal-` |
-| Vault root | Parent of project docs and TaskNotes | `vault/` |
+| Vault root | Parent of the OKF knowledge bundle | `vault/` |
 | Project docs path | "Obsidian Vault" row — project-specific content | `vault/Trading-Signal-AI/` |
 | Deployment targets | Infrastructure section | CT100, CT110, CT120 (if defined) |
 | NotebookLM config | `.notebooklm/config.json` in **project repo** (tracked config) | notebook keys, persona |
 
-**Path layout:** `vault/` is the root containing BOTH `vault/{ProjectDocs}/` and `vault/TaskNotes/` as siblings:
-```
-vault/                          # {vault_root}
-├── Trading-Signal-AI/          # {project_docs_path} — project knowledge
-│   ├── Session-Logs/
-│   ├── Research/
-│   └── ...
-└── TaskNotes/                  # {tasknotes_path} — task tracking (sibling, NOT nested)
-    ├── Tasks/
-    ├── Archive/
-    └── meta/ArkSignal-counter
-```
+Task tracking is GitHub Issues (no task-prefix / counter fields — those were retired with TaskNotes).
 
-**Counter file convention:** Task prefix always includes the trailing dash (e.g., `ArkSignal-`). Counter filename is `{task_prefix}counter` → `ArkSignal-counter`. No double dash.
+**Path layout:** `vault/` is the OKF knowledge bundle root:
+```
+vault/                          # {vault_root} — OKF v0.1 bundle
+├── index.md                    # machine index (declares okf_version)
+├── log.md                      # in-bundle work-record mirror
+├── _meta/okf/                  # OKF tooling (okf_lint.py, okf_cli.py, …)
+├── Research/                   # durable knowledge pages
+└── Compiled-Insights/
+```
+`Session-Logs/` and `TaskNotes/` may still exist on disk as **frozen legacy** trees
+(FROZEN banners; read-only history) — the active work record is GitHub Issues + `log.md`.
 
 4. If a required field is missing, tell the user: "CLAUDE.md is missing [field]. Add it before running this skill."
 
