@@ -19,6 +19,15 @@ along with the local skill, hooks, and doc references that assumed graphify was 
 - **graphify doc sections** — the `## graphify` + "Code-Structural Retrieval" blocks in
   `CLAUDE.md`, the graphify-only `.claude/CLAUDE.md`, `.graphifyignore`, and the
   graphify opt-in/upgrade lines in `skills/ark-onboard/SKILL.md`.
+- **graphify upstream-dep inventory** — the `graphify` record in `ark-skill-healer`'s
+  `collect_inventory.sh` + `source-map.md`, plus the stale `deps_total: 8` example in
+  `collector-contract.md` — returning the inventory to the canonical 7 deps.
+
+### Fixed
+
+- **`ark-skill-healer` inventory-count test** — removing the graphify record restores
+  `test_collect_inventory.bats` "EXACTLY the 7 allowlisted dep names", which had been
+  failing since graphify was added as an 8th dep (commit 9441123) without updating the test.
 
 ## [2.1.0] - 2026-07-06
 

@@ -115,7 +115,7 @@ Stored at `.omc/skill-healer/state/last-seen/<dep>.json`, keyed **per tier**:
 Advanced after each dep is processed, for resumability:
 
 ```json
-{ "run_id": "<iso>", "deps_total": 8, "deps_done": ["gstack", "superpowers"], "status": "in_progress | complete" }
+{ "run_id": "<iso>", "deps_total": 7, "deps_done": ["gstack", "superpowers"], "status": "in_progress | complete" }
 ```
 
 A re-run that finds `status: in_progress` resumes the remaining deps rather than

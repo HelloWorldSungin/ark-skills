@@ -18,7 +18,6 @@ transitive-pin annotation on `mempalace-cli`, not an independent cascade target.
 | oh-my-claudecode | plugin | Yeachan-Heo/oh-my-claudecode | `~/.claude/plugins/marketplaces/omc` | true | changelog, release, commit |
 | karpathy-skills | plugin | forrestchang/andrej-karpathy-skills | `~/.claude/plugins/marketplaces/karpathy-skills` | true | changelog, release, commit |
 | obsidian-skills | plugin | kepano/obsidian-skills | `~/.claude/plugins/marketplaces/obsidian-skills` | true | changelog, release, commit |
-| graphify | python | safishamsi/graphify | _(PyPI — `command -v graphify`)_ | false | changelog, release |
 
 ## Probe notes (2026-06-05)
 
