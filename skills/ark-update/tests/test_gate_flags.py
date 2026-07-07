@@ -360,13 +360,17 @@ def test_e2e_gate_flags_fresh_fixture(
         )
 
 
-def test_e2e_vault_gate_off_summary_clean(tmp_path: Path) -> None:
-    """E2E smoke: ARK_CENTRALIZED_VAULT=0 → the sole ensured_files op is gated off,
-    leaving nothing to apply — engine reports a clean run."""
+def test_e2e_vault_gate_off_symlink_gated_vault_awareness_applies(tmp_path: Path) -> None:
+    """E2E smoke: ARK_CENTRALIZED_VAULT=0 gates off the setup-vault-symlink ensured_files
+    op, but the ungated vault-awareness managed region (epic #41) still converges — so the
+    run is NOT clean and no symlink script is written."""
     _copy_fixture_pre("fresh", tmp_path)
     result = _run_with_gates(tmp_path, None, "0")
 
     assert result.returncode == 0, f"Unexpected failure:\n{result.stdout}\n{result.stderr}"
-    assert "clean — nothing to do" in result.stdout, (
-        f"Expected a clean run with the vault gate off:\n{result.stdout}"
+    assert not (tmp_path / "scripts" / "setup-vault-symlink.sh").exists(), (
+        f"setup-vault-symlink.sh must be gated off with ARK_CENTRALIZED_VAULT=0:\n{result.stdout}"
+    )
+    assert "1 applied" in result.stdout, (
+        f"vault-awareness is ungated and must still apply:\n{result.stdout}"
     )

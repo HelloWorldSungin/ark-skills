@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-07-07
+
+Add the **vault-awareness convention** (epic #41): downstream projects are now told, in
+their own `CLAUDE.md`, to consult the OKF vault before non-trivial work and to distill
+durable insights via `/vault` at session end. Promotes the "query the vault before
+brownfield builds" habit from a personal preference to a shipped, converged convention.
+
+### Added
+
+- **`vault-awareness` managed region** — a new `managed_regions` entry in
+  `skills/ark-update/target-profile.yaml` (op `ensure_claude_md_section`, template
+  `templates/vault-awareness-block.md`). `/ark-update` now idempotently inserts/updates the
+  block in a downstream project's `CLAUDE.md` (insert-if-missing, skip-if-idempotent,
+  backup-and-restamp on drift). No new engine code — reuses the surviving managed-region op.
+
 ## [2.1.1] - 2026-07-07
 
 Retired the **graphify** code-graph integration — the tool is no longer used in this

@@ -90,9 +90,9 @@ def test_apply_count_in_summary(tmp_path: Path) -> None:
     """Summary Phase 2 line reports correct applied count."""
     _copy_fixture_pre("pre-v1.11", tmp_path)
     result = _run_engine(tmp_path)
-    # v2.0.0: only ensured_files op (setup-vault-symlink) is active; pre-v1.11
-    # doesn't have the script yet, so exactly 1 op applies.
-    assert "1 applied" in result.stdout
+    # v2.2.0: two convergence ops apply on pre-v1.11 — setup-vault-symlink
+    # (ensured_files) and the vault-awareness managed region (epic #41).
+    assert "2 applied" in result.stdout
 
 
 # v2.0.0 NOTE: test_drift_summary_has_drift_events_section,
