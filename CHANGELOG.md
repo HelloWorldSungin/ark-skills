@@ -2,6 +2,112 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-07-06
+
+Big-bang restructure to two co-equal cores: a stateless workflow consultant
+(`ark-consult`) that routes each task to exactly one execution ecosystem and
+files a GitHub epic as the plan of record, and a conventions layer (OKF v0.1
+knowledge bundles, GitHub Issues task management, NotebookLM sync). 21 skills
+→ 6. Executed as two dependency-ordered commit trains on branch
+`ark-skill-audit` per `.omc/plans/2026-07-06-ark-skills-v2-restructure.md`.
+
+### Removed — 17 skill surfaces
+
+14 deleted outright, 2 folded into `vault`, 1 replaced by `ark-consult`:
+
+- `wiki-lint` — deleted. OKF conformance is now `vault/_meta/okf/okf_lint.py`, run as
+  part of the `vault` skill's mandatory finish-gate and the pre-push hook.
+- `wiki-query` — deleted. Reading the vault now goes through NotebookLM
+  (synthesized recall) or `vault/_meta/okf/okf_cli.py {list,search,read}`.
+- `wiki-status` — deleted. `okf_cli.py list` + the generated `index.md` cover
+  page/type counts; no dedicated stats skill.
+- `tag-taxonomy` — deleted. `vault/_meta/taxonomy.md` is read directly by
+  writers (the `vault` skill's schema-first rule); no separate validator skill.
+- `cross-linker` — deleted. `vault/_meta/okf/convert_links.py` + `okf_lint.py`
+  warnings cover link health; no automated cross-linking skill.
+- `wiki-setup` — deleted. Vault bootstrap (OKF `_meta` tooling + templates)
+  is now part of `ark-onboard`.
+- `wiki-handoff` — deleted. Session-bridge state is out of scope for the v2
+  conventions layer (no `.omc` state per `ark-consult`'s no-orchestration rule).
+- `wiki-update` — **folded into `vault`** (Operation 1, end-of-session
+  distillation) — durable-knowledge-only, no session-log narrative.
+- `wiki-ingest` — **folded into `vault`** (Operation 2, document ingestion),
+  rewritten for OKF frontmatter/links.
+- `ark-context-warmup` — deleted. Context loading is now ecosystem-native
+  (gstack/superpowers/mattpocock/OMC each have their own); no ark-specific
+  warmup chain step.
+- `ark-code-review` — deleted. Code review is delegated to the chosen
+  ecosystem (e.g. gstack `/review`, OMC `code-reviewer`), not re-implemented.
+- `ark-tasknotes` — deleted. Task management is GitHub Issues; TaskNotes is
+  frozen read-only (see `vault/TaskNotes/00-Project-Management-Guide.md`).
+- `graph-map` — deleted. Code-structural retrieval is out of scope for the
+  two-core model; the graphify integration and its CLAUDE.md routing section
+  were removed (folded into a plain note where still relevant).
+- `codebase-maintenance` — deleted. Its constituent concerns (vault sync,
+  skill health) are covered by `vault` + `ark-health` individually; no
+  orchestrating maintenance skill.
+- `claude-history-ingest` — deleted. MemPalace-backed history mining is
+  dropped; NotebookLM is the single synthesized-recall backend.
+- `data-ingest` — deleted. Generic ingestion is covered by `vault`'s document
+  ingestion operation.
+- `ark-workflow` — **replaced by `ark-consult`**. The 8-chain orchestrator is
+  gone; `ark-consult` is a stateless triage-and-handoff consultant with no
+  chains and no post-handoff steps.
+
+### Added
+
+- **`ark-consult`** — stateless workflow consultant. Triages a task, asks at
+  most 2 clarifying questions, recommends exactly one of
+  gstack/superpowers/mattpocock/OMC, files a GitHub epic, hands off, and stops.
+  No post-handoff orchestration, no cross-ecosystem chaining, no `.omc` state.
+- **`vault`** — write-side OKF knowledge ops: end-of-session distillation,
+  document ingestion, `generate-index.py` regen, schema-first rule, `log.md`
+  append convention. Absorbs `wiki-update` and `wiki-ingest`.
+
+### Changed — 4 adapted survivors + CLAUDE.md
+
+- **`notebooklm-vault`** — sync source is now the OKF bundle; `session-continue`
+  re-pointed at the GitHub epic + `log.md`; removed `/ark-context-warmup` and
+  `/wiki-update` cross-references.
+- **`ark-health`** — rewritten (730→283 lines) to the v2 invariants: okf_lint
+  clean, `okf_version` present, GitHub labels exist, `docs/agents/` present,
+  mattpocock installed, no automation writing to frozen trackers, plugin
+  manifest lists exactly 6 skills, NotebookLM config reachable.
+- **`ark-onboard`** — rewritten (1361→194 lines): OKF vault init (copy `_meta`
+  tooling + templates) + label bootstrap + mattpocock setup pointer + CLAUDE.md
+  rows. Removed TaskNotes-MCP install, wiki-setup absorption, MemPalace shims.
+- **`ark-update`** — v2.0.0 target-profile authored: `okf-conversion` (wraps the
+  playbook recipe) and `gh-issues-adoption` (labels + freeze + CLAUDE.md
+  rewrite) migrations, pending for downstream projects. Retired v1 routing/omc
+  ops.
+- **`CLAUDE.md`** — "Available Skills" rewritten to the 6-skill two-core
+  framing; the 4-tier retrieval table replaced by NotebookLM + `okf_cli.py`
+  routing; MemPalace/obsidian-cli availability blocks and failure messages
+  removed; Code-Structural (graph-map) section folded into a plain note.
+
+### OKF conversion
+
+`vault/` converted to Open Knowledge Format v0.1: 71 pages normalized
+(`type`/`timestamp`/`description` frontmatter — the legacy `summary:` key
+renamed to `description:`), 168 wikilinks converted to relative markdown
+links, root `vault/index.md` declares `okf_version: "0.1"`, `okf_lint.py`
+clean. Legacy trackers (`TaskNotes/`, `Session-Logs/`) frozen with banners
+pointing at GitHub Issues. Pre-push lint hook wired
+(`vault/_meta/githooks/pre-push`, `core.hooksPath=vault/_meta/githooks`).
+
+### GitHub Issues adoption
+
+Label families bootstrapped (triage, type, priority, plus components
+`consultant`/`conventions`/`vault`/`onboarding`); `docs/agents/{issue-tracker,
+triage-labels,domain}.md` written via `/setup-matt-pocock-skills`; CLAUDE.md
+Task Management row points at GitHub Issues.
+
+### Retrieval simplification
+
+NotebookLM is now the single synthesized-recall backend. MemPalace and
+Obsidian-CLI retrieval tiers are no longer routed by ark-skills (the
+underlying tools remain installed but unreferenced by the plugin).
+
 ## [1.29.1] - 2026-06-15
 
 ### Changed
