@@ -153,8 +153,7 @@ Confirm the vault path, then run **Block A** (OKF init) → **Block B** (GitHub 
 1. Verify Python 3.10+ (`python3 -c "import sys;sys.exit(sys.version_info<(3,10))"`).
 2. Offer to externalize the vault (symlink to a centralized location) — see `references/externalize-vault-plan.md`. Optional; skip for a simple embedded vault.
 3. `git init` (if needed) + initial commit of the bundle skeleton + CLAUDE.md + `docs/agents/`.
-4. Opt-in: graphify code-graph indexing (run `graphify .` if the user wants code-structural retrieval).
-5. Run the final `/ark-health` diagnostic and show the scorecard.
+4. Run the final `/ark-health` diagnostic and show the scorecard.
 
 ## Path: Non-OKF Vault (Migration)
 
@@ -181,7 +180,7 @@ An existing vault that is not yet an OKF bundle.
 
 ## Path: Healthy
 
-Run `/ark-health`, show the scorecard, and surface upgrade opportunities (NotebookLM recall if not configured; graphify if the user wants code-structural retrieval).
+Run `/ark-health`, show the scorecard, and surface upgrade opportunities (NotebookLM recall if not configured).
 
 ---
 

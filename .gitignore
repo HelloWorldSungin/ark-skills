@@ -19,12 +19,5 @@
 # Python bytecode cache
 **/__pycache__/
 
-# graphify — track graph.json + manifest.json; ignore regenerable/local output
-graphify-out/cache/
-graphify-out/cost.json
-graphify-out/GRAPH_REPORT.md
-graphify-out/graph.html
-graphify-out/.graphify_root
-graphify-out/.graphify_labels.json
-# dated per-run snapshot dirs (e.g. graphify-out/2026-06-16/)
-graphify-out/????-??-??/
+# graphify — retired; ignore all output if the tool is ever run again
+graphify-out/
