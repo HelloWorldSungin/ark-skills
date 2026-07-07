@@ -45,9 +45,6 @@ overwrites on downstream projects. Be deliberate.
 1. Every `template:` reference in `target-profile.yaml` resolves to a real file in this directory.
 2. Every file in this directory (except `README.md`) has a corresponding `template:` reference
    in `target-profile.yaml`.
-3. `templates/routing-template.md` is byte-equal to
-   `skills/ark-workflow/references/routing-template.md` (drift guard — the routing template
-   is a canonical copy and must not diverge).
 
 Run the validator before committing template changes:
 
@@ -59,10 +56,11 @@ python3 skills/ark-update/scripts/check_target_profile_valid.py
 
 | File | Type | Managed by |
 |------|------|------------|
-| `omc-routing-block.md` | Managed CLAUDE.md region | `managed_regions[id=omc-routing]` |
-| `routing-template.md` | Routing rules block (byte-copy) | `managed_regions[id=routing-rules]` |
 | `setup-vault-symlink.sh` | Ensured file | `ensured_files[id=setup-vault-symlink]` |
 | `README.md` | Documentation | (exempt from template-reference enforcement) |
+
+The v1 routing templates (`omc-routing-block.md`, `routing-template.md`) were retired in
+v2.0.0 — v2 has no CLAUDE.md routing block (the `/ark-consult` consultant is the router).
 
 ## Adding a new template
 

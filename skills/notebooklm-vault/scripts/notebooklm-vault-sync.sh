@@ -175,7 +175,7 @@ init_sync_state() {
 
 # --- Concurrency: per-vault lock (portable, mkdir-based) ---
 # Multiple invocations for the same vault must serialize. A manual run and a
-# /wiki-update triggered run can overlap; without this lock two concurrent
+# /vault-triggered run can overlap; without this lock two concurrent
 # sync_file() calls could race and produce fresh duplicates.
 #
 # Uses `mkdir` (atomic on POSIX filesystems) instead of `flock`, which is not

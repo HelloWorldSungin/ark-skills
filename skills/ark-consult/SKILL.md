@@ -1,6 +1,6 @@
 ---
 name: ark-consult
-description: Stateless workflow consultant — the planning phase for any non-trivial task. Recommends exactly ONE execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) and hands off. Triggers on "what workflow should I use", "route this task", "plan this work", "start a task", "new feature", "fix bug", "consult", "which ecosystem", "how should I approach this". Replaces the retired /ark-workflow. Do NOT use for trivial single-file edits with no ambiguity — just do them.
+description: Stateless workflow consultant — the planning phase for any non-trivial task. Recommends exactly ONE execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) and hands off. Triggers on "what workflow should I use", "route this task", "plan this work", "start a task", "new feature", "fix bug", "consult", "which ecosystem", "how should I approach this". Replaces the retired chain-orchestration skill. Do NOT use for trivial single-file edits with no ambiguity — just do them.
 ---
 
 # ark-consult — Workflow Consultant
@@ -11,8 +11,8 @@ execution ecosystem, file the plan as a GitHub epic, hand off to that ecosystem'
 entry skill, and STOP. You never execute the work yourself and you never orchestrate
 after handoff.
 
-This skill replaces the retired `/ark-workflow` and its 8 chains. There are no
-chains anymore. There is one decision (which ecosystem) and one handoff.
+This skill replaces the retired chain-orchestration skill and its 8 chains. There are
+no chains anymore. There is one decision (which ecosystem) and one handoff.
 
 ## The four ecosystems
 

@@ -190,7 +190,7 @@ ln -s "<VAULT_REPO_PATH_EXPANDED>" "<SIBLING>/vault"
 ### Step 3.1: Reopen vault in Obsidian desktop app
 - [ ] Close the old `vault/` in Obsidian (if open).
 - [ ] Open `<VAULT_REPO_PATH_EXPANDED>/` as the new vault.
-- [ ] Verify `obsidian-cli` now points at the same directory the agents use.
+- [ ] Verify the vault symlink now points at the same directory the agents use.
 
 ### Step 3.2: Re-run /ark-health
 - [ ] `cd <MAIN> && /ark-health`

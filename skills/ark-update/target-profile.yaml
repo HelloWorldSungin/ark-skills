@@ -2,55 +2,27 @@
 # See spec (.omc/specs/deep-interview-ark-update-framework.md) and plan (.omc/plans/ralplan-ark-update.md)
 # for schema documentation.
 #
-# Populated in Step 4. Each entry carries:
+# v2.0.0 NOTE — the v1 managed regions (omc-routing, routing-rules) and the retired
+# chain-router state-dir gitignore entry were RETIRED in the v2.0.0 restructure. v2 has
+# no CLAUDE.md routing block: the `/ark-consult` workflow consultant IS the router, and it
+# holds no downstream-project state. The two v2 conventions (OKF knowledge bundles +
+# GitHub-Issues task management) are procedural migrations, declared under
+# `pending_migrations` below and executed per-project later (deferred; not run by this
+# effort). Each managed/ensured entry carries:
 #   since:    the plugin version that introduced this convention (matches CHANGELOG.md)
-#   version:  the template version currently emitted by the marker. Bump this field when
-#             the template content changes structurally. The validator in Step 5 enforces that
-#             every managed_regions[].template reference resolves to a real file under templates/.
-#
-# Gate-flag resolution is a Step 7 follow-up.
-#   - only_if_has_omc: true  — SKILL.md wrapper resolves HAS_OMC and passes via env.
-#                               In v1.0, migrate.py applies this entry on every run.
-#   - only_if_centralized_vault: true — SKILL.md wrapper resolves the vault-layout from
-#                               CLAUDE.md (looks for the opt-out row). In v1.0, migrate.py
-#                               applies this entry on every run.
-# Both gates documented here as Step 7 follow-up so SKILL.md knows what to wire.
+#   version:  the template version currently emitted by the marker.
 schema_version: 1
 
-managed_regions:
-  # v1.13.0 — OMC routing block (Path A + Path B) in CLAUDE.md.
-  # Gated: only applies when OMC is installed (HAS_OMC probe). Step 7 resolves the flag.
-  - id: omc-routing
-    op: ensure_claude_md_section
-    file: CLAUDE.md
-    template: omc-routing-block.md
-    since: 1.13.0
-    version: 1.13.0
-    only_if_has_omc: true
+# No CLAUDE.md managed regions in v2. Routing is the consultant's job, not a template.
+managed_regions: []
 
-  # v1.3.0 baseline routing rules block; version bumped to 1.12.0 because v1.12 changed
-  # the chain files to prepend /ark-context-warmup as step 0, which the routing rules
-  # reference indirectly (warmup runs as step 0 of every chain, not as a standalone
-  # routing rule). A dedicated warmup entry is NOT added — it is covered by the general
-  # routing-rules block. The routing-rules template is managed here; any structural change
-  # to routing-template.md triggers a version bump on this entry.
-  - id: routing-rules
-    op: ensure_routing_rules_block
-    file: CLAUDE.md
-    since: 1.3.0
-    version: 1.17.0
-
-ensured_gitignore:
-  # v1.13.0 — .ark-workflow/ state dir (telemetry.log, current-chain.md, archive/).
-  # The router writes telemetry + chain state here; it must not be committed.
-  - entry: .ark-workflow/
-    since: 1.13.0
+# No ark-managed gitignore entries in v2 (the chain-router state dir retired with it).
+ensured_gitignore: []
 
 ensured_files:
-  # v1.11.0 — centralized-vault setup script.
-  # Gated: only applies when the project chose centralized vault layout (no opt-out row
-  # in CLAUDE.md). Step 7 resolves the flag. The script is idempotent (6-case logic) and
-  # tracked in the project repo so collaborators' clones get the correct VAULT_TARGET.
+  # v1.11.0 — centralized-vault setup script. Retained: vault externalization is
+  # orthogonal to the v2 restructure (not a deleted skill). Gated: only applies when the
+  # project chose centralized vault layout (no opt-out row in CLAUDE.md).
   - id: setup-vault-symlink
     op: create_file_from_template
     target: scripts/setup-vault-symlink.sh
@@ -61,36 +33,37 @@ ensured_files:
     mode: "0o755"
 
 ensured_mcp_servers: []
-# No MCP servers are mandatory across all downstream projects at this time.
-# TaskNotes MCP (v1.4.2) is project-specific — depends on whether the downstream
-# project uses TaskNotes/Obsidian. Leave empty; add a concrete entry when a
-# mandatory-MCP-server requirement emerges.
-#
-# Backfill decisions (v1.11 / v1.12 / v1.13):
-#
-# v1.11:
-#   INCLUDED:  centralized-vault setup script (ensured_files, gated only_if_centralized_vault)
-#   EXCLUDED:  vault-layout CLAUDE.md row — this is a per-project choice made interactively
-#              by /ark-onboard; /ark-update should not force a layout. The check #20 is
-#              warn-only in /ark-health. The embedded-vault escape hatch row is also excluded —
-#              it is a user opt-out, not a convention the engine should apply.
-#   EXCLUDED:  post-checkout hook — the hook is installed by /ark-onboard during setup and
-#              points to scripts/setup-vault-symlink.sh; re-applying it on every /ark-update
-#              run risks overwriting user customization. Repair via /ark-onboard repair.
-#
-# v1.12:
-#   INCLUDED (implicitly): routing-rules block version bumped to 1.12.0 to reflect that
-#              /ark-context-warmup now runs as step 0 of every chain. The routing-rules
-#              template already covers chain resume + new-task triage; no dedicated warmup
-#              entry is needed.
-#   EXCLUDED:  warmup_contract YAML blocks in other skills — these are plugin-side changes,
-#              not downstream-project-side conventions.
-#   EXCLUDED:  chain frontmatter fields (chain_id, task_hash, etc.) — these are written by
-#              /ark-workflow itself, not by the downstream project's CLAUDE.md.
-#
-# v1.13:
-#   INCLUDED:  OMC routing block as managed CLAUDE.md region (gated only_if_has_omc).
-#   INCLUDED:  .ark-workflow/ as ensured_gitignore entry.
-#   EXCLUDED:  references/omc-integration.md — plugin-side reference file, not a
-#              downstream project convention.
-#   EXCLUDED:  telemetry.log rotation — v1.13.0 explicitly deferred this as a follow-up.
+# No MCP servers are mandatory across all downstream projects.
+
+# ---------------------------------------------------------------------------
+# pending_migrations — the v2.0.0 conventions. AUTHORED here; execution is deferred
+# and runs per-project (ArkNode-AI is already converged). These are procedural
+# (Phase-1-style) migrations, not declarative managed regions: they rewrite vault
+# format and task-tracking wholesale, so they are authored as runbooks the operator
+# drives via /ark-onboard blocks, not auto-applied on every /ark-update run.
+# ---------------------------------------------------------------------------
+pending_migrations:
+  - id: okf-conversion
+    since: 2.0.0
+    status: pending
+    description: >-
+      Convert the project's vault to an OKF v0.1 knowledge bundle. Wraps the OKF
+      playbook's 7-step recipe: copy _meta/okf tooling → normalize_frontmatter.py
+      --apply → convert_links.py --apply (wikilinks → relative markdown) → hand-write
+      missing description: values → generate-index.py → okf_lint.py to 0 errors →
+      declare okf_version "0.1" in index.md. Freezes any Session-Logs/ and TaskNotes/
+      trees with banners.
+    runbook: /ark-onboard Block A (OKF bundle init) + Migration path
+    verify: python3 vault/_meta/okf/okf_lint.py --quiet  # exit 0
+
+  - id: gh-issues-adoption
+    since: 2.0.0
+    status: pending
+    description: >-
+      Adopt GitHub Issues task management. Bootstraps the label taxonomy (triage +
+      type + priority + component families), runs /setup-matt-pocock-skills (writes
+      docs/agents/{issue-tracker,triage-labels,domain}.md + the CLAUDE.md Agent-skills
+      block), merges the ark proactive-behavior conventions, freezes legacy trackers,
+      and rewrites the CLAUDE.md Task Management row to point at GitHub Issues.
+    runbook: /ark-onboard Block B (GitHub Issues conventions) + Block C (CLAUDE.md rows)
+    verify: gh label list  # triage+type+priority+component families present

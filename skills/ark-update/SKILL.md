@@ -109,26 +109,24 @@ to `migrate.py` as environment variables so the engine can skip inapplicable ops
 
 #### HAS_OMC Probe
 
-Mirrors the probe in `skills/ark-workflow/SKILL.md` (canonical constants in
-`skills/ark-workflow/references/omc-integration.md` § Section 0).
+Detects oh-my-claudecode (one of the consultant's routing destinations).
 
 ```bash
 # Has OMC? (oh-my-claudecode — autonomous execution framework)
 # OMC_CACHE_DIR canonical: ~/.claude/plugins/cache/omc
-# (see skills/ark-workflow/references/omc-integration.md § Section 0)
 if command -v omc >/dev/null 2>&1 || [ -d "$HOME/.claude/plugins/cache/omc" ]; then
     ARK_HAS_OMC=1
 else
     ARK_HAS_OMC=0
 fi
-# ARK_SKIP_OMC=true forces HAS_OMC=false regardless of detection
-# (emergency rollback — see references/omc-integration.md § Section 3)
+# ARK_SKIP_OMC=true forces HAS_OMC=false regardless of detection (emergency rollback)
 [ "${ARK_SKIP_OMC:-}" = "true" ] && ARK_HAS_OMC=0
 export ARK_HAS_OMC
 ```
 
-When `ARK_HAS_OMC=0`, the engine skips target-profile entries with
-`only_if_has_omc: true` (currently: the `omc-routing` managed region in CLAUDE.md).
+When `ARK_HAS_OMC=0`, the engine skips target-profile entries gated with
+`only_if_has_omc: true`. In v2.0.0 the profile has no such entries (the OMC routing
+block was retired); the gate is kept wired for forward compatibility.
 
 #### Centralized-Vault Detection
 
@@ -228,8 +226,7 @@ Dry-run plan for /ark-update
 =============================
 Phase 1 — Destructive migrations: none pending
 Phase 2 — Target-profile convergence:
-  [would apply]  ensure_routing_rules_block (routing-rules) → CLAUDE.md
-  [would apply]  ensure_gitignore_entry (.ark-workflow/) → .gitignore
+  [would apply]  create_file_from_template (setup-vault-symlink) → scripts/
   [would skip]   create_file_from_template (setup-vault-symlink) — already present
 ```
 
@@ -248,11 +245,10 @@ When one or more ops report `drifted_overwritten`, list each with backup path:
 
 ```
 Drift events (managed content overwritten from canonical template):
-  • omc-routing → backed up to .ark/backups/2026-04-14T10:23:11Z-omc-routing.bak
-  • routing-rules → backed up to .ark/backups/2026-04-14T10:23:11Z-routing-rules.bak
+  • setup-vault-symlink → backed up to .ark/backups/2026-04-14T10:23:11Z-setup-vault-symlink.bak
 
 Review the backups before committing. To see what changed:
-  diff .ark/backups/2026-04-14T10:23:11Z-omc-routing.bak CLAUDE.md
+  diff .ark/backups/2026-04-14T10:23:11Z-setup-vault-symlink.bak scripts/setup-vault-symlink.sh
 ```
 
 #### Failures Section
@@ -328,6 +324,5 @@ the appropriate handoff message:
 
 - Spec: `.omc/specs/deep-interview-ark-update-framework.md`
 - Plan: `.omc/plans/ralplan-ark-update.md`
-- Stream B handoff: `.ark-workflow/handoffs/stream-b-ark-update-framework.md`
-- OMC integration constants: `skills/ark-workflow/references/omc-integration.md` § Section 0
-- Target ship: v1.14.0 (combined with Stream A — OMC detection in `/ark-onboard` + `/ark-health`)
+- v2.0.0 target profile: `target-profile.yaml` (`pending_migrations`: okf-conversion, gh-issues-adoption)
+- Convergence runbooks: `/ark-onboard` Blocks A–C (OKF init, GitHub Issues conventions, CLAUDE.md rows)

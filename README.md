@@ -1,6 +1,6 @@
 # Ark Skills Plugin
 
-Claude Code plugin providing 20 shared skills to all ArkNode projects. Eliminates skill duplication across repos by centralizing skills with a context-discovery pattern that adapts to each project at runtime.
+Claude Code plugin providing 6 shared skills to all ArkNode projects, built around two co-equal cores: a **workflow consultant** that plans and routes each task to one execution ecosystem, and a **conventions layer** that converges projects onto shared OKF knowledge bundles + GitHub-Issues task management. A context-discovery pattern adapts every skill to the active project at runtime.
 
 ## Installation
 
@@ -12,192 +12,103 @@ Claude Code plugin providing 20 shared skills to all ArkNode projects. Eliminate
 /plugin install ark-skills@ark-skills
 
 # Verify skills are available
-/wiki-status
+/ark-health
 ```
 
 ### Prerequisites
 
-**Required for all skills:** None — skills are instruction-only with no external dependencies by default.
+**Required for all skills:** None — skills are instruction-only.
 
-**Optional — enhances vault retrieval (see Vault Retrieval Defaults in CLAUDE.md):**
+**Optional — enhances task tracking, retrieval, and routing:**
 
 | Dependency | Skills Enhanced | Install |
 |------------|----------------|---------|
-| [MemPalace](https://github.com/milla-jovovich/mempalace) | `/wiki-query` (T2), `/claude-history-ingest` | `pipx install "mempalace>=3.0.0,<4.0.0"` |
-| [NotebookLM CLI](https://github.com/nichochar/notebooklm-cli) | `/wiki-query` (T1), `/notebooklm-vault` | `pipx install notebooklm-cli` + `notebooklm login` |
-| [Obsidian CLI](https://help.obsidian.md/cli) | `/wiki-query` (T3), `/cross-linker` (Phase 2) | Requires Obsidian app running. Uses `obsidian:obsidian-cli` skill. |
+| [`gh` CLI](https://cli.github.com) | `/ark-consult`, `/ark-onboard` (GitHub-Issues task management) | `brew install gh` + `gh auth login` |
+| [mattpocock/skills](https://github.com/mattpocock/skills) | `/ark-consult` (issue machinery + a routing destination) | `npx skills@latest add mattpocock/skills` + `/setup-matt-pocock-skills` |
+| [NotebookLM CLI](https://github.com/nichochar/notebooklm-cli) | `/notebooklm-vault` (synthesized recall) | `pipx install notebooklm-cli` + `notebooklm login` |
 
-**First-time MemPalace vault setup:**
-
-```bash
-# Index vault markdown files into MemPalace (one-time)
-bash skills/shared/mine-vault.sh
-
-# Install the conversation auto-indexing hook (per-project)
-bash skills/claude-history-ingest/hooks/install-hook.sh
-```
-
-### Development Setup
-
-```bash
-# Clone with submodules (for contributing)
-git clone --recurse-submodules git@github.com:HelloWorldSungin/ark-skills.git
-```
+Routing destinations for `/ark-consult` (install per your workflow): superpowers, gstack, oh-my-claudecode.
 
 ## Available Skills
 
-| Skill | Category | Description | Source |
-|-------|----------|-------------|--------|
-| `/ark-workflow` | Workflow Orchestration | Task triage and skill chain orchestration | New |
-| `/ark-context-warmup` | Workflow Orchestration | Automatic context loader; runs as step 0 of every chain | New |
-| `/wiki-handoff` | Workflow Orchestration | Write a session bridge to `.omc/wiki/` before `/compact` or `/clear`; invoked from `/ark-workflow` Step 6.5 | New |
-| `/ark-code-review` | Core | Multi-agent code review with fan-out architecture | Generalized |
-| `/codebase-maintenance` | Core | Repo cleanup, vault sync, skill health | Generalized |
-| `/notebooklm-vault` | Core | NotebookLM vault context and sync | Generalized |
-| `/ark-tasknotes` | Task Automation | Agent-driven task creation via tasknotes MCP | New |
-| `/wiki-query` | Vault Maintenance | Query vault knowledge with tiered retrieval | Adapted from obsidian-wiki |
-| `/wiki-status` | Vault Maintenance | Vault statistics and insights | Adapted from obsidian-wiki |
-| `/wiki-update` | Vault Maintenance | Sync project knowledge into vault | Adapted from obsidian-wiki |
-| `/wiki-lint` | Vault Maintenance | Audit vault health (links, frontmatter, tags) | Adapted from obsidian-wiki |
-| `/wiki-setup` | Vault Maintenance | Initialize new Ark vault with standard structure | Adapted from obsidian-wiki |
-| `/wiki-ingest` | Vault Maintenance | Distill documents into vault pages | Adapted from obsidian-wiki |
-| `/tag-taxonomy` | Vault Maintenance | Validate and normalize tags against taxonomy | Adapted from obsidian-wiki |
-| `/cross-linker` | Vault Maintenance | Discover and add missing wikilinks | Adapted from obsidian-wiki |
-| `/claude-history-ingest` | Vault Maintenance | Mine Claude conversations into compiled vault insights via MemPalace | Adapted from obsidian-wiki |
-| `/data-ingest` | Vault Maintenance | Process logs, transcripts, exports into vault pages | Adapted from obsidian-wiki |
-| `/ark-onboard` | Onboarding | Interactive setup wizard — greenfield, migration, repair | New |
-| `/ark-health` | Onboarding | Diagnostic check for Ark ecosystem health | New |
-| `/ark-update` | Onboarding | Version-driven migration framework; converges downstream projects to the current ark-skills target profile; replays pending destructive migrations. Distinct from /ark-onboard repair (failure-driven). | New |
-| `/graph-map` | Code-Structural Retrieval | Map the repo into a graphify knowledge graph; quarantine Obsidian pages in the vault; register a code-structural query backend | New |
+| Skill | Core | Description |
+|-------|------|-------------|
+| `/ark-consult` | Workflow consultant | Stateless planning phase for any non-trivial task: triages, recommends exactly ONE execution ecosystem from a routing matrix, files a GitHub epic as the plan of record, and hands off. |
+| `/vault` | Conventions | Write-side OKF knowledge ops for the bundle at `vault/`: end-of-session distillation, document ingestion, `log.md` append, index regen. |
+| `/notebooklm-vault` | Conventions | Synthesized-recall backend: syncs the OKF bundle to NotebookLM and answers factual/historical queries. |
+| `/ark-onboard` | Conventions | Interactive setup wizard: OKF bundle init, label bootstrap, mattpocock setup, CLAUDE.md rows. |
+| `/ark-health` | Conventions | Diagnostic scorecard for the v2 invariants. |
+| `/ark-update` | Conventions | Version-driven migration framework; converges downstream projects onto the current target profile (execution deferred per-project). |
 
 ## Skill Documentation
 
-### Workflow Orchestration
+**`/ark-consult`** — Given a non-trivial task, triages it, asks at most two clarifying questions, and recommends exactly ONE execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) from a 12-archetype routing matrix with reasoning. Files a GitHub epic (epic + component + priority labels; children as task-list checkboxes, optionally cut via mattpocock `/to-issues`), then invokes the chosen ecosystem's entry skill and stops. Never chains two ecosystems, never orchestrates post-handoff, never writes local state — the GitHub epic is the only state (resume = `gh issue view <epic>`).
 
-**`/ark-workflow`** — Task triage and skill chain orchestration. Detects scenario across 7 types (greenfield, bugfix, ship, knowledge capture, hygiene, migration, performance), classifies weight (light/medium/heavy) via risk-primary triage with decision-density escalation, and outputs an ordered skill chain with project-specific conditions resolved. Handles multi-item batches with per-item classification, root cause consolidation, and dependency grouping. Includes cross-session continuity via `.ark-workflow/current-chain.md` state file and TodoWrite rehydration. Entry point for all non-trivial work. **As of v1.13.0, every chain variant also emits a `### Path B (OMC-powered)` block when `HAS_OMC=true`** — front-loads judgment via `/deep-interview` → `/omc-plan --consensus`, delegates execution to `/autopilot` / `/ralph` / `/ultrawork` / `/team`, then hands control back to Ark at `<<HANDBACK>>` for closeout. OMC is optional; `ARK_SKIP_OMC=true` is an emergency rollback that forces Path A only. See `skills/ark-workflow/references/omc-integration.md` for the full contract.
+**`/vault`** — Write-side knowledge operations for the OKF bundle: distills durable insights from a session (knowledge only — no session logs, no task tracking), ingests external documents, appends work-record lines to `log.md`, and always finishes by regenerating the index and passing `okf_lint.py`. Reading the vault is script-based (`okf_cli.py`) or via NotebookLM.
 
-**`/ark-context-warmup`** — Automatic context loader; runs as step 0 of every `/ark-workflow` chain. Queries `/notebooklm-vault`, `/wiki-query`, and `/ark-tasknotes` backends in a partial-parallel fan-out, synthesizes a single Context Brief, and surfaces possible duplicates, prior rejections, and in-flight collisions as Evidence candidates. Cache keyed on `chain_id + task_hash`, 2-hour TTL, 24-hour pruning. Backends participate via a `warmup_contract` YAML block in their SKILL.md (see `skills/notebooklm-vault/SKILL.md`, `skills/wiki-query/SKILL.md`, `skills/ark-tasknotes/SKILL.md`). v1.13.0 adds an `has_omc` probe in `scripts/availability.py` (OR of `command -v omc` / `~/.claude/plugins/cache/omc` / `ARK_SKIP_OMC=true` override); the Context Brief now renders an `**OMC detected:** yes/no` line at the top.
+**`/notebooklm-vault`** — Bridges the OKF bundle with Google NotebookLM for synthesized cross-session recall. Sub-commands: `setup`, `ask`, `session-continue` (resumes from the `log.md` tail + the referenced GitHub epic), `bootstrap`, `audio`, `report`, `conflict-check`, `status`.
 
-### Core Skills
+**`/ark-onboard`** — Interactive setup wizard converging a project onto the v2 conventions: OKF bundle init, GitHub-Issues label taxonomy + `docs/agents/` conventions, mattpocock setup, and CLAUDE.md rows. Handles greenfield, migration, repair, and healthy states. Exempt from context-discovery.
 
-**`/ark-code-review`** — Fans out to parallel agents (code-reviewer, code-architect, test-coverage-checker, silent-failure-hunter, test-analyzer) and aggregates findings. Modes: `--quick`, `--thorough`, `--full`, `--epic TASK-ID`, `--plan SLUG`, `--pr N`. Requires: project name, task prefix, vault path, TaskNotes path from CLAUDE.md.
+**`/ark-health`** — Runs the v2 invariant checks across five areas (routing-destination ecosystems, the 6-skill roster, OKF conventions, GitHub-Issues conventions, NotebookLM recall) and produces a scored scorecard with fixes. No auto-fix — points to `/ark-onboard` for remediation. Exempt from context-discovery.
 
-**`/codebase-maintenance`** — Three workflows: code cleanup (dead code, stale scripts), vault sync (map code changes to vault docs), and skill sync (heal drifted skill references). Routes via argument: `code`, `vault`, `skills`, `full`.
-
-**`/notebooklm-vault`** — Bridges the Obsidian vault with Google NotebookLM for persistent cross-session memory. Sub-commands: `setup`, `ask`, `session-continue`, `bootstrap`, `audio`, `report`, `conflict-check`, `status`. End-of-session workflows (session log, TaskNote updates) are handled by `/wiki-update`.
-
-### Task Automation
-
-**`/ark-tasknotes`** — Creates TaskNote tickets during development workflows. Uses tasknotes MCP when Obsidian is running, falls back to direct markdown write. Manages task IDs via counter file, syncs to Linear via linear-updater.
-
-### Vault Maintenance
-
-`/wiki-query` supports **multi-backend retrieval** (Phase 1) via the Vault Retrieval Defaults in CLAUDE.md:
-- **T1 (NotebookLM):** Pre-synthesized answers for factual lookups (~500 tokens)
-- **T2 (MemPalace):** Deep context and synthesis from vault pages + conversation history (~2,500 tokens)
-- **T3 (Obsidian-CLI):** Full-text search across all vault files (~119 tokens + selective reads)
-- **T4 (index.md scan):** Zero-dependency fallback using the existing 3-step index/summary/full-read pattern (~2,100 tokens)
-
-Other vault skills continue to use the T4 (index.md scan) pattern. Multi-backend support for additional skills is planned for Phase 2.
-
-Key operations: `/wiki-lint` audits vault health (broken links, missing frontmatter, stale index, tag violations). `/wiki-update` is the end-of-session workflow — creates/updates the session log, updates linked TaskNote epic/stories, extracts compiled insights, and regenerates `index.md`. `/tag-taxonomy` enforces consistent tagging against `_meta/taxonomy.md`. `/cross-linker` discovers and adds missing wikilinks.
-
-**`/claude-history-ingest`** — Mines Claude Code conversation history into compiled vault insights using MemPalace (ChromaDB). Two-layer pipeline: a Stop hook auto-indexes sessions (zero LLM tokens), and a compile pass synthesizes insights via semantic search (~10K tokens vs 100-200K previously). Three modes: `index`, `compile`, `full` (default). Requires `pip install mempalace`.
-
-### Onboarding
-
-**`/ark-onboard`** — Interactive setup wizard and single entry point for new Ark projects. Detects project state (greenfield, non-Ark vault, partial Ark, healthy) and guides setup through Quick, Standard, or Full tiers. Absorbs `/wiki-setup` functionality. Handles vault creation, CLAUDE.md configuration, Obsidian plugin setup, TaskNotes MCP, MemPalace, history hook, and NotebookLM.
-
-**`/ark-health`** — Diagnostic check that runs 22 checks across plugins, project configuration, vault structure, integrations, and plugin versioning. Produces a scored scorecard with actionable fix and upgrade instructions. No auto-fix — always points to `/ark-onboard` for remediation.
-
-**`/ark-update`** — Version-driven migration framework. Converges downstream projects to the current ark-skills target profile: replays additive conventions (managed CLAUDE.md regions, gitignore entries, MCP server rows, templated files) via HTML-comment-marker idempotency, then replays any pending destructive migrations declared in `skills/ark-update/migrations/*.yaml`. State is tracked in `.ark/plugin-version` and `.ark/migrations-applied.jsonl`. Drift inside managed regions is backed up with a `.bak.meta.json` provenance sidecar. POSIX-only. Refuses on malformed CLAUDE.md / `.mcp.json` / `.ark/migrations-applied.jsonl` and hands off to `/ark-onboard` repair. Distinct from `/ark-onboard` repair (which is failure-driven); `/ark-update` is version-driven.
+**`/ark-update`** — Version-driven migration framework. Converges downstream projects onto the current target profile; its v2.0.0 profile declares two pending migrations (OKF conversion + GitHub-Issues adoption), executed per-project later. Distinct from `/ark-onboard` repair (failure-driven).
 
 ## Context-Discovery Pattern
 
-Every skill uses **context-discovery** — no skill contains hardcoded project names, vault paths, or task prefixes. When invoked, each skill:
+Every skill uses **context-discovery** — no skill contains hardcoded project names or vault paths. When invoked, each skill reads the project's `CLAUDE.md`, follows the monorepo hub link if present, and extracts the project name, vault root, and project docs path. See `CLAUDE.md` in this repo for the full procedure.
 
-1. Reads the project's `CLAUDE.md` in the current working directory
-2. If it's a monorepo hub, follows the link to the active sub-project's CLAUDE.md
-3. Extracts: project name, task prefix, vault root, project docs path, TaskNotes path, deployment targets, NotebookLM config
-
-See `CLAUDE.md` in this repo for the full discovery procedure and field reference.
-
-**Exemption:** `/ark-onboard` and `/ark-health` are exempt from context-discovery — they must work when CLAUDE.md is missing, broken, or incomplete.
+**Exemption:** `/ark-onboard` and `/ark-health` are exempt — they must work when CLAUDE.md is missing, broken, or incomplete.
 
 ## Architecture
 
 ```
 ark-skills (Claude Code plugin)
 ├── .claude-plugin/
-│   ├── plugin.json           # Plugin metadata (ark-skills v1.13.0)
+│   ├── plugin.json           # Plugin metadata
 │   └── marketplace.json      # Repo-level plugin registry
-└── skills/                   # 20 shared skills
-      ↓ context-discovery
-Project CLAUDE.md → vault path, task prefix, deployment targets
-      ↓
-Obsidian Vault → TaskNotes → linear-updater → Linear
-               → NotebookLM sync
+├── skills/                   # 6 shared skills
+│   ↓ context-discovery
+│   Project CLAUDE.md → vault root, project docs path
+├── docs/agents/              # GitHub-Issues conventions (issue-tracker, triage-labels, domain)
+└── vault/                    # OKF v0.1 knowledge bundle (_meta/okf tooling, index.md, log.md)
+        ↓
+   NotebookLM sync (synthesized recall)
+   GitHub Issues (work record)
 ```
 
 ## New Project Onboarding
 
-Run `/ark-onboard` for interactive guided setup. It detects your project state and walks you through the appropriate setup path.
-
-For manual setup, see [docs/onboarding-guide.md](docs/onboarding-guide.md).
+Run `/ark-onboard` for interactive guided setup. It detects your project state and walks you through the appropriate path (greenfield / migration / repair / healthy).
 
 ## Repository Structure
 
 | Directory | Purpose |
 |-----------|---------|
 | `.claude-plugin/` | Plugin manifest (plugin.json, marketplace.json) |
-| `skills/` | 20 shared skill definitions (SKILL.md files) |
-| `docs/` | Design specs, plans, onboarding guide |
-| `ArkNode-AI/` | Submodule: AI trading project (skill source for generalization) |
-| `ArkNode-Poly/` | Submodule: Polymarket project (skill source for generalization) |
-| `Arknode-AI-Obsidian-Vault/` | Submodule: AI vault repo |
-| `Arknode-Poly-Obsidian-Vault/` | Submodule: Poly vault repo |
-| `obsidian-wiki/` | Submodule: upstream wiki skill reference |
-| `tasknotes/` | Submodule: Obsidian tasknotes plugin (MCP server) |
-| `linear-updater/` | Submodule: TaskNotes-to-Linear sync service |
+| `skills/` | 6 shared skill definitions (SKILL.md files) |
+| `docs/agents/` | GitHub-Issues conventions (issue-tracker, triage-labels, domain) |
+| `docs/` | Design specs, plans, historical archives |
+| `vault/` | The plugin's own OKF v0.1 knowledge bundle |
 
 ## Development
 
 ### Modifying Skills
 
-1. Edit `skills/<skill-name>/SKILL.md`
-2. Test by invoking the skill from a project
-3. Verify no hardcoded references:
-   ```bash
-   grep -rn "ArkPoly\|ArkSignal\|trading-signal-ai\|CT100\|CT110\|CT120\|192\.168" skills/
-   ```
-4. Commit and push
+1. Edit `skills/<skill-name>/SKILL.md`.
+2. Test by invoking the skill from a project.
+3. Verify no hardcoded references: `rg -n "ArkPoly|ArkSignal|trading-signal-ai|CT100|192\.168" skills/`.
+4. Commit and push (bump `VERSION`, `plugin.json`, `marketplace.json`, `CHANGELOG.md` in the same commit).
 
 ### Verification Checks
 
 ```bash
-# All 20 skills exist
-find skills -name SKILL.md | wc -l  # → 20
+# Exactly 6 skills
+find skills -mindepth 1 -maxdepth 1 -type d ! -name shared | wc -l  # → 6
 
-# Zero hardcoded project references
-grep -rn "ArkPoly\|ArkSignal\|trading-signal-ai\|arknode-poly" skills/
+# OKF bundle lints clean
+python3 vault/_meta/okf/okf_lint.py --quiet; echo $?  # → 0
 
-# Zero upstream wiki dependencies
-grep -rn "\.env\|OBSIDIAN_VAULT_PATH\|manifest\.json" skills/
-
-# All skills reference context-discovery
-grep -rL "Project Discovery\|CLAUDE.md" skills/*/SKILL.md  # → empty
+# Every skill references context-discovery (except the two exempt onboarding skills)
+rg -L "Project Discovery|CLAUDE.md|Context-Discovery" skills/*/SKILL.md
 ```
-
-## Vault Artifacts
-
-All Ark vaults include standard artifacts from the vault restructuring:
-
-| Artifact | Path | Purpose |
-|----------|------|---------|
-| Vault schema | `_meta/vault-schema.md` | Self-documenting vault structure |
-| Tag taxonomy | `_meta/taxonomy.md` | Canonical tag vocabulary |
-| Index generator | `_meta/generate-index.py` | Regenerates `index.md` |
-| Machine index | `index.md` | Flat catalog of all pages with summaries |
-| Summaries | `summary:` frontmatter | <=200 char description on every page |
-
-Skills leverage these artifacts for tiered retrieval, tag validation, and index management.
