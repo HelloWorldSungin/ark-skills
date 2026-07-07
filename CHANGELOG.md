@@ -16,6 +16,9 @@ brownfield builds" habit from a personal preference to a shipped, converged conv
   `templates/vault-awareness-block.md`). `/ark-update` now idempotently inserts/updates the
   block in a downstream project's `CLAUDE.md` (insert-if-missing, skip-if-idempotent,
   backup-and-restamp on drift). No new engine code — reuses the surviving managed-region op.
+- **`/ark-onboard` seeds the block** — new Block C.1 runs the convergence to insert the
+  vault-awareness region into a new project's `CLAUDE.md`, and mirrors it into `AGENTS.md`
+  when that file already exists (never creates `AGENTS.md`).
 
 ## [2.1.1] - 2026-07-07
 
