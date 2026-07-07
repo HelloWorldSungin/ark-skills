@@ -86,7 +86,17 @@ Every progress comment posted under behavior (1) is also appended to the
 relevant OKF bundle's `log.md` (see `skills/vault/SKILL.md`) in the same
 turn — the GitHub comment is the durable, queryable record; the `log.md`
 entry keeps the vault's session-adjacent log continuous for NotebookLM
-sync. Format: a short line with the issue number, a one-line summary, and
-a link back to the GitHub comment permalink (`gh issue view <n> --json url
---jq .url`). This is a dual-write, not a migration — the GitHub comment is
+sync. This is a dual-write, not a migration — the GitHub comment is
 authoritative; `log.md` is a synced mirror.
+
+**Keep the mirror terse.** One line per entry, and let the link carry the
+detail — do NOT duplicate the comment's content into `log.md`. Format:
+
+```
+- YYYY-MM-DD — #<issue> — <short hook> — <link>
+```
+
+The link is a GitHub issue/comment/PR permalink
+(`gh issue view <n> --json url --jq .url`, or a comment permalink). The
+`<short hook>` is a handful of words for scanning/recall, not a summary of
+the work — the linked issue is where the detail lives.

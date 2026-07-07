@@ -36,34 +36,49 @@ ensured_mcp_servers: []
 # No MCP servers are mandatory across all downstream projects.
 
 # ---------------------------------------------------------------------------
-# pending_migrations — the v2.0.0 conventions. AUTHORED here; execution is deferred
-# and runs per-project (ArkNode-AI is already converged). These are procedural
-# (Phase-1-style) migrations, not declarative managed regions: they rewrite vault
-# format and task-tracking wholesale, so they are authored as runbooks the operator
-# drives via /ark-onboard blocks, not auto-applied on every /ark-update run.
+# pending_migrations — the v2.0.0 conventions. These are procedural (Phase-1-style)
+# destructive migrations, not declarative managed regions: they rewrite vault format
+# and task-tracking wholesale.
+#
+# schema (issue #34):
+#   id:      stable migration id (also the per-project marker key)
+#   op:      registered DestructiveOp type (DESTRUCTIVE_OP_REGISTRY)
+#   since:   plugin version that introduced the convention
+#   status:  plugin-side IMPLEMENTATION lifecycle — `pending` (declared, no engine
+#            impl) | `active` (engine-implemented, available to run) | `retired`.
+#            This is NOT per-project state: this file is shared by every downstream
+#            project. The per-project terminal state ("has THIS project run it?")
+#            lives in `.ark/pending-migrations.json`, written by the engine on success.
+#
+# Execution stays deferred + opt-in: the engine only dispatches these under
+# `--run-pending-migrations` (env ARK_RUN_PENDING_MIGRATIONS=1). A default
+# `/ark-update` run ignores them, so downstream convergence is a deliberate step.
 # ---------------------------------------------------------------------------
 pending_migrations:
   - id: okf-conversion
+    op: okf_conversion
     since: 2.0.0
-    status: pending
+    status: active
+    vault: vault
     description: >-
       Convert the project's vault to an OKF v0.1 knowledge bundle. Wraps the OKF
       playbook's 7-step recipe: copy _meta/okf tooling → normalize_frontmatter.py
-      --apply → convert_links.py --apply (wikilinks → relative markdown) → hand-write
-      missing description: values → generate-index.py → okf_lint.py to 0 errors →
-      declare okf_version "0.1" in index.md. Freezes any Session-Logs/ and TaskNotes/
-      trees with banners.
+      --apply → convert_links.py --apply (wikilinks → relative markdown) →
+      generate-index.py → okf_lint.py to 0 errors → declare okf_version "0.1" in
+      index.md. Freezes any Session-Logs/ and TaskNotes/ trees with banners.
     runbook: /ark-onboard Block A (OKF bundle init) + Migration path
     verify: python3 vault/_meta/okf/okf_lint.py --quiet  # exit 0
 
   - id: gh-issues-adoption
+    op: gh_issues_adoption
     since: 2.0.0
-    status: pending
+    status: active
+    component_labels: [consultant, conventions, vault, onboarding]
     description: >-
       Adopt GitHub Issues task management. Bootstraps the label taxonomy (triage +
-      type + priority + component families), runs /setup-matt-pocock-skills (writes
-      docs/agents/{issue-tracker,triage-labels,domain}.md + the CLAUDE.md Agent-skills
-      block), merges the ark proactive-behavior conventions, freezes legacy trackers,
-      and rewrites the CLAUDE.md Task Management row to point at GitHub Issues.
+      type + priority + component families), writes
+      docs/agents/{issue-tracker,triage-labels,domain}.md with the ark
+      proactive-behavior conventions, freezes legacy trackers, and rewrites the
+      CLAUDE.md Task Management row to point at GitHub Issues.
     runbook: /ark-onboard Block B (GitHub Issues conventions) + Block C (CLAUDE.md rows)
     verify: gh label list  # triage+type+priority+component families present

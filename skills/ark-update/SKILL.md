@@ -25,10 +25,18 @@ Never abort because CLAUDE.md is missing. That is one of the states this skill i
 ## Command Surface
 
 ```bash
-/ark-update              # full run: replay pending destructive + converge to target profile
-/ark-update --dry-run    # plan report only; no writes
-/ark-update --force      # skip dirty-tree refusal (use at your own risk)
+/ark-update                          # full run: replay pending destructive + converge to target profile
+/ark-update --dry-run                # plan report only; no writes
+/ark-update --force                  # skip dirty-tree refusal (use at your own risk)
+/ark-update --run-pending-migrations # ALSO run the v2.0.0 pending_migrations (okf-conversion, gh-issues-adoption)
 ```
+
+The two v2.0.0 conventions (OKF bundle conversion + GitHub-Issues adoption) are
+`pending_migrations` in `target-profile.yaml`. They are **opt-in** — a default
+`/ark-update` never runs them, so converging a downstream project's vault format
+and task-tracking is always a deliberate step. Pass `--run-pending-migrations`
+(or set `ARK_RUN_PENDING_MIGRATIONS=1`) to dispatch them. See
+[Step 4b](#step-4b-pending-migrations-opt-in).
 
 ## Boundary with Sibling Skills
 
@@ -199,6 +207,29 @@ python3 "$ARK_SKILLS_ROOT/skills/ark-update/scripts/migrate.py" \
 
 Where `ARK_UPDATE_DRY_RUN=1` and `ARK_UPDATE_FORCE=1` are set when the user passes
 `--dry-run` or `--force` respectively to `/ark-update`.
+
+### Step 4b: Pending Migrations (opt-in)
+
+Only when the user passes `--run-pending-migrations` (or `ARK_RUN_PENDING_MIGRATIONS=1`
+is set), add `--run-pending-migrations` to the `migrate.py` invocation above. This
+dispatches the `status: active` entries under `target-profile.yaml`'s
+`pending_migrations` as Phase-1-style destructive migrations:
+
+| id | op | What it does |
+|----|----|--------------|
+| `okf-conversion` | `okf_conversion` | Converts the project's vault to an OKF v0.1 bundle (seed tooling → normalize frontmatter → convert wikilinks → regenerate index → freeze legacy trackers → `okf_lint` to 0 errors). Follows `docs/playbooks/okf-knowledge-base.md`. |
+| `gh-issues-adoption` | `gh_issues_adoption` | Bootstraps the GitHub-Issues label taxonomy, writes `docs/agents/{issue-tracker,triage-labels,domain}.md`, rewrites the CLAUDE.md Task Management row, freezes legacy trackers. Requires `gh auth`. Follows `docs/playbooks/github-issues-task-management.md`. |
+
+Each op is **idempotent** (already-converged / already-adopted → skipped, zero
+writes) and **dry-run-first** (`--dry-run --run-pending-migrations` previews without
+writing). Files that are overwritten (plugin-owned OKF tooling, a stale CLAUDE.md
+row) are backed up to `.ark/backups/<name>.<ts>.bak` with a `.meta.json` provenance
+sidecar recording a `pre_hash`.
+
+The **per-project terminal state** is recorded in `.ark/pending-migrations.json`
+(the plugin-shared `target-profile.yaml` cannot hold per-project state — its
+`status:` field is the plugin-side implementation lifecycle). A migration recorded
+`applied` there is skipped on subsequent runs.
 
 Capture the exit code:
 

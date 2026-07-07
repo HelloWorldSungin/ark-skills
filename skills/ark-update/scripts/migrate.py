@@ -73,7 +73,11 @@ from state import (  # noqa: E402
     utc_now_iso,
 )
 from plan import build_plan, render_plan_report  # noqa: E402
-from ops import OP_REGISTRY  # noqa: E402
+from ops import OP_REGISTRY, DESTRUCTIVE_OP_REGISTRY  # noqa: E402
+from state import (  # noqa: E402
+    is_pending_applied,
+    record_pending_applied,
+)
 
 # Import concrete op modules so their @register_op decorators fire and
 # populate OP_REGISTRY before any phase runs.  Order matches declaration
@@ -82,6 +86,10 @@ import ops.ensure_claude_md_section  # noqa: F401, E402
 import ops.ensure_gitignore_entry  # noqa: F401, E402
 import ops.create_file_from_template  # noqa: F401, E402
 import ops.ensure_mcp_server  # noqa: F401, E402
+
+# Destructive migration ops (issue #34) — populate DESTRUCTIVE_OP_REGISTRY.
+import ops.okf_conversion  # noqa: F401, E402
+import ops.gh_issues_adoption  # noqa: F401, E402
 
 
 # ---------------------------------------------------------------------------
@@ -577,6 +585,160 @@ def _plugin_version(skills_root: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Pending migrations (issue #34) — target-profile pending_migrations dispatch.
+#
+# These are Phase-1-style destructive migrations declared in target-profile.yaml
+# (okf-conversion, gh-issues-adoption). They run ONLY under the opt-in
+# --run-pending-migrations flag, and their per-project terminal state lives in
+# .ark/pending-migrations.json (NOT in the plugin-shared target-profile.yaml).
+# ---------------------------------------------------------------------------
+
+def _load_active_pending_migrations(target_profile: dict) -> list[dict]:
+    """Return pending_migrations entries with status 'active' and a registered op."""
+    active: list[dict] = []
+    for entry in target_profile.get("pending_migrations", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("status") != "active":
+            continue
+        if entry.get("op") not in DESTRUCTIVE_OP_REGISTRY:
+            continue
+        active.append(entry)
+    return active
+
+
+def _pending_args(entry: dict, skills_root: Path) -> dict:
+    args = dict(entry)
+    args["skills_root"] = str(skills_root)
+    return args
+
+
+def _dry_run_pending_migrations(
+    target_profile: dict, project_root: Path, skills_root: Path, ark_dir: Path
+) -> list[dict]:
+    """Compute dry-run reports for the active pending migrations (writes nothing)."""
+    reports: list[dict] = []
+    for entry in _load_active_pending_migrations(target_profile):
+        mig_id = entry.get("id", entry.get("op"))
+        op_cls = DESTRUCTIVE_OP_REGISTRY[entry["op"]]
+        if is_pending_applied(ark_dir, mig_id):
+            reports.append({
+                "op_id": mig_id, "op_type": entry["op"],
+                "would_apply": False, "would_skip_idempotent": True,
+                "would_overwrite_drift": False, "would_fail_precondition": False,
+                "drift_summary": None,
+                "_note": "already recorded applied in .ark/pending-migrations.json",
+            })
+            continue
+        try:
+            rep = dict(op_cls().dry_run(project_root, _pending_args(entry, skills_root)))
+        except Exception as exc:  # noqa: BLE001
+            rep = {
+                "op_id": mig_id, "op_type": entry["op"], "would_apply": False,
+                "would_skip_idempotent": False, "would_overwrite_drift": False,
+                "would_fail_precondition": True, "drift_summary": None, "error": str(exc),
+            }
+        reports.append(rep)
+    return reports
+
+
+def _render_pending_plan(reports: list[dict]) -> str:
+    lines = ["", "Pending migrations (--run-pending-migrations):"]
+    if not reports:
+        lines.append("  (none active)")
+        return "\n".join(lines)
+    for r in reports:
+        if r.get("would_skip_idempotent"):
+            tag = "would_skip_idempotent"
+        elif r.get("would_fail_precondition"):
+            tag = "would_fail_precondition"
+        elif r.get("would_apply"):
+            tag = "would_apply"
+        else:
+            tag = "?"
+        lines.append(f"  [{tag:<24}] {r.get('op_type')} (id={r.get('op_id')})")
+    return "\n".join(lines)
+
+
+def _run_pending_migrations(
+    target_profile: dict,
+    project_root: Path,
+    skills_root: Path,
+    ark_dir: Path,
+    log_path: Path,
+    pointer_path: Path,
+    plugin_ver: str,
+) -> tuple[list[dict], list[dict]]:
+    """Dispatch active pending migrations; record per-project marker + log.
+
+    Returns (results, failed_ops).
+    """
+    results: list[dict] = []
+    failed: list[dict] = []
+
+    for entry in _load_active_pending_migrations(target_profile):
+        mig_id = entry.get("id", entry.get("op"))
+        op_cls = DESTRUCTIVE_OP_REGISTRY[entry["op"]]
+
+        # Version-gate: skip migrations already recorded terminal for this project.
+        if is_pending_applied(ark_dir, mig_id):
+            results.append({
+                "op_id": mig_id, "op_type": entry["op"],
+                "status": "skipped_idempotent",
+                "_note": "already recorded in .ark/pending-migrations.json",
+            })
+            continue
+
+        try:
+            res = dict(op_cls().apply(project_root, _pending_args(entry, skills_root)))
+        except Exception as exc:  # noqa: BLE001
+            res = {"op_id": mig_id, "op_type": entry["op"], "status": "failed",
+                   "error": str(exc)}
+
+        results.append(res)
+        status = res.get("status")
+        if status in ("applied", "skipped_idempotent"):
+            # Both mean the project is now converged for this migration.
+            record_pending_applied(
+                ark_dir, mig_id, entry.get("since", ""), plugin_ver, status="applied"
+            )
+        elif status == "failed":
+            failed.append({"op_id": mig_id, "op_type": entry["op"],
+                           "error": res.get("error", "unknown error")})
+
+    ran = len([r for r in results if r.get("status") == "applied"])
+    if ran or failed:
+        log_entry = {
+            "version": plugin_ver,
+            "applied_at": utc_now_iso(),
+            "ops_ran": ran,
+            "ops_skipped": len([r for r in results if r.get("status") == "skipped_idempotent"]),
+            "failed_ops": failed,
+            "result": "partial" if failed else "clean",
+            "phase": "pending-migration",
+        }
+        maybe_append_log_and_pointer(log_path, pointer_path, log_entry, plugin_ver)
+
+    return results, failed
+
+
+def _render_pending_summary(results: list[dict], failed: list[dict]) -> str:
+    ran = len([r for r in results if r.get("status") == "applied"])
+    skipped = len([r for r in results if r.get("status") == "skipped_idempotent"])
+    precond = len([r for r in results if r.get("status") == "skipped_precondition"])
+    lines = [
+        "",
+        f"Pending migrations: {ran} applied, {skipped} skipped (idempotent), "
+        f"{precond} skipped (precondition), {len(failed)} failed",
+    ]
+    for r in results:
+        lines.append(f"  {r.get('status')}: {r.get('op_id')} ({r.get('op_type')})")
+    for f in failed:
+        lines.append(f"  FAIL: {f.get('op_id')} ({f.get('op_type')}): {f.get('error')}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -605,6 +767,17 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Path to the ark-skills plugin root. Falls back to ARK_SKILLS_ROOT env var.",
     )
+    parser.add_argument(
+        "--run-pending-migrations",
+        action="store_true",
+        default=None,
+        help=(
+            "Opt in to running the target-profile pending_migrations "
+            "(okf-conversion, gh-issues-adoption). Off by default — downstream "
+            "convergence is a deliberate, per-project step. Also enabled by "
+            "ARK_RUN_PENDING_MIGRATIONS=1."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -632,8 +805,13 @@ def main(argv: list[str] | None = None) -> None:
     except RuntimeError as exc:
         _die(1, str(exc))
 
+    # Resolve the pending-migrations opt-in: CLI flag OR env var.
+    run_pending = bool(args.run_pending_migrations)
+    if args.run_pending_migrations is None:
+        run_pending = os.environ.get("ARK_RUN_PENDING_MIGRATIONS", "").strip() == "1"
+
     try:
-        _run(project_root, skills_root, args.dry_run, args.force, ark_dir)
+        _run(project_root, skills_root, args.dry_run, args.force, ark_dir, run_pending)
     finally:
         release_lock(lock_path)
 
@@ -644,6 +822,7 @@ def _run(
     dry_run: bool,
     force: bool,
     ark_dir: Path,
+    run_pending: bool = False,
 ) -> None:
     log_path = ark_dir / "migrations-applied.jsonl"
     pointer_path = ark_dir / "plugin-version"
@@ -674,6 +853,11 @@ def _run(
     if dry_run:
         plan = build_plan(target_profile, pending_migrations, project_root, skills_root)
         print(render_plan_report(plan))
+        if run_pending:
+            pending_reports = _dry_run_pending_migrations(
+                target_profile, project_root, skills_root, ark_dir
+            )
+            print(_render_pending_plan(pending_reports))
         print()
         print(json.dumps(plan, sort_keys=True, indent=2))
         sys.exit(0)
@@ -723,9 +907,20 @@ def _run(
         }
         maybe_append_log_and_pointer(log_path, pointer_path, p2_entry, plugin_ver)
 
+    # 10b. Pending migrations (issue #34) — opt-in, per-project, after convergence.
+    pending_results: list[dict] = []
+    pending_failed: list[dict] = []
+    if run_pending:
+        pending_results, pending_failed = _run_pending_migrations(
+            target_profile, project_root, skills_root, ark_dir,
+            log_path, pointer_path, plugin_ver,
+        )
+
     # 11. Print summary.
     summary = _render_summary(p1_results, p1_failed, p2_results, p2_failed, was_clean)
     print(summary)
+    if run_pending:
+        print(_render_pending_summary(pending_results, pending_failed))
 
 
 if __name__ == "__main__":
