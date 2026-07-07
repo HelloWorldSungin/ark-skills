@@ -125,6 +125,13 @@ class DriftReport(TypedDict):
 
 OP_REGISTRY: dict[str, type["TargetProfileOp"]] = {}
 
+# Destructive-migration op registry (issue #34).  Populated by
+# ``@register_destructive_op``.  Kept separate from ``OP_REGISTRY`` because
+# destructive ops answer a version-gate question ("has this one-shot transform
+# already been applied?"), not the per-run idempotency question target-profile
+# ops answer — see the ``DestructiveOp`` docstring below.
+DESTRUCTIVE_OP_REGISTRY: dict[str, type["DestructiveOp"]] = {}
+
 
 def register_op(op_type: str):
     """Class decorator — inserts the decorated class into ``OP_REGISTRY``.
@@ -141,6 +148,24 @@ def register_op(op_type: str):
     """
     def decorator(cls: type) -> type:
         OP_REGISTRY[op_type] = cls
+        return cls
+    return decorator
+
+
+def register_destructive_op(op_type: str):
+    """Class decorator — inserts the decorated class into ``DESTRUCTIVE_OP_REGISTRY``.
+
+    Usage::
+
+        @register_destructive_op("okf_conversion")
+        class OKFConversionOp(DestructiveOp):
+            ...
+
+    Fires on import; ``migrate.py`` imports each destructive op module so the
+    registry is populated before the Phase-1 / pending-migration dispatch runs.
+    """
+    def decorator(cls: type) -> type:
+        DESTRUCTIVE_OP_REGISTRY[op_type] = cls
         return cls
     return decorator
 
@@ -298,6 +323,20 @@ class DestructiveOp(ABC):
         Returns a dict with at minimum: ``{op_id, op_type, would_apply}``.
         """
         ...
+
+    # ------------------------------------------------------------------
+    # Shared helper — path-safety (destructive ops resolve their own paths)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def safe_path(project_root: Path, rel: "str | Path") -> Path:
+        """Resolve *rel* under *project_root*, refusing traversal.
+
+        Thin wrapper over ``paths.safe_resolve`` so destructive ops get the
+        same root-scoping guarantee the target-profile ops get from their base
+        class.
+        """
+        return safe_resolve(project_root, rel)
 
     # Note: NO detect_drift here.  Version-gate detection for destructive ops
     # is handled by the engine before dispatching the op (comparing pending

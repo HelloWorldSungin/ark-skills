@@ -36,8 +36,10 @@ Advisory lockfile:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shutil
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -399,3 +401,116 @@ def backup_path(backups_dir: Path, target_file: Path) -> Path:
 def utc_now_iso() -> str:
     """Return the current UTC time as an ISO-8601 string with 'Z' suffix."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# ---------------------------------------------------------------------------
+# Backup provenance (issue #34)
+# ---------------------------------------------------------------------------
+
+def write_backup_with_sidecar(backups_dir: Path, target_file: Path) -> dict:
+    """Copy *target_file* to a timestamped ``.bak`` plus a ``.meta.json`` sidecar.
+
+    Used by destructive migration ops (``okf_conversion``, ``gh_issues_adoption``)
+    before they overwrite a pre-existing file that differs from the target. The
+    sidecar records a ``pre_hash`` (sha256 of the pre-overwrite bytes) so an
+    operator can verify integrity and roll back — the same backup-provenance
+    guarantee the retired v1 marker-drift ops carried.
+
+    Returns a dict::
+
+        {"bak_path": Path, "meta_path": Path, "pre_hash": str}
+
+    The sidecar lives at ``<bak_path>.meta.json`` so it always travels with its
+    backup.
+    """
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    original_bytes = target_file.read_bytes()
+    pre_hash = hashlib.sha256(original_bytes).hexdigest()
+
+    bak = backup_path(backups_dir, target_file)
+    shutil.copy2(target_file, bak)
+
+    meta_path = bak.parent / (bak.name + ".meta.json")
+    meta = {
+        "original_path": str(target_file),
+        "bak_path": str(bak),
+        "pre_hash": pre_hash,
+        "backed_up_at": utc_now_iso(),
+    }
+    meta_path.write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    return {"bak_path": bak, "meta_path": meta_path, "pre_hash": pre_hash}
+
+
+def verify_backup(meta_path: Path) -> bool:
+    """Return True if the ``.bak`` referenced by *meta_path* still hashes to ``pre_hash``.
+
+    A ``.bak`` is a byte-exact copy of the pre-overwrite file, so its sha256 must
+    equal the recorded ``pre_hash``.  Returns False on any mismatch, a missing
+    backup, or an unreadable sidecar.
+    """
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    bak = Path(meta.get("bak_path", ""))
+    if not bak.exists():
+        return False
+    actual = hashlib.sha256(bak.read_bytes()).hexdigest()
+    return actual == meta.get("pre_hash")
+
+
+# ---------------------------------------------------------------------------
+# Per-project pending-migration marker (issue #34)
+# ---------------------------------------------------------------------------
+#
+# The plugin-shared target-profile.yaml cannot hold per-project state — its
+# ``status:`` field is the plugin-side implementation lifecycle (pending ->
+# active), identical for every downstream project.  The per-project terminal
+# state ("has THIS project run okf-conversion yet?") lives here in
+# ``.ark/pending-migrations.json``.
+
+_PENDING_MARKER_NAME = "pending-migrations.json"
+
+
+def _pending_marker_path(ark_dir: Path) -> Path:
+    return ark_dir / _PENDING_MARKER_NAME
+
+
+def read_pending_marker(ark_dir: Path) -> dict:
+    """Return the parsed ``.ark/pending-migrations.json`` map (empty if absent)."""
+    path = _pending_marker_path(ark_dir)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def is_pending_applied(ark_dir: Path, migration_id: str) -> bool:
+    """True if *migration_id* has a terminal ``applied`` record for this project."""
+    entry = read_pending_marker(ark_dir).get(migration_id)
+    return bool(entry) and entry.get("status") == "applied"
+
+
+def record_pending_applied(
+    ark_dir: Path,
+    migration_id: str,
+    since: str,
+    plugin_version: str,
+    status: str = "applied",
+) -> None:
+    """Record a terminal state for *migration_id* in ``.ark/pending-migrations.json``."""
+    ark_dir.mkdir(parents=True, exist_ok=True)
+    data = read_pending_marker(ark_dir)
+    data[migration_id] = {
+        "status": status,
+        "since": since,
+        "plugin_version": plugin_version,
+        "applied_at": utc_now_iso(),
+    }
+    _pending_marker_path(ark_dir).write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )

@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-07-06
+
+`ark-update` engine now implements the two v2.0.0 `pending_migrations` as real,
+idempotent, dry-run-first destructive migration ops (issue #34). Previously both
+were declared in `target-profile.yaml` but had no engine implementation — they were
+driven manually via `/ark-onboard` runbooks. Downstream projects (ArkNode-Poly,
+trading-signal-ai, …) can now converge to the v2.0.0 profile with one opt-in run.
+
+### Added
+
+- **`okf_conversion` op** (`scripts/ops/okf_conversion.py`) — converts a project's
+  vault to an OKF v0.1 bundle following `docs/playbooks/okf-knowledge-base.md`: seeds
+  the bundle tooling into `vault/_meta/okf/`, runs `normalize_frontmatter.py --apply`
+  → `convert_links.py --apply` → `generate-index.py`, ensures `log.md`, freezes
+  `Session-Logs/` + `TaskNotes/`, and verifies `okf_lint.py --quiet` exits 0.
+- **`gh_issues_adoption` op** (`scripts/ops/gh_issues_adoption.py`) — adopts GitHub
+  Issues per `docs/playbooks/github-issues-task-management.md`: bootstraps the label
+  taxonomy, writes `docs/agents/{issue-tracker,triage-labels,domain}.md`, rewrites the
+  CLAUDE.md Task Management row, freezes legacy trackers. Requires `gh auth`.
+- **`DESTRUCTIVE_OP_REGISTRY` + `register_destructive_op`** in `scripts/ops/__init__.py`
+  — a registry for destructive migration ops, separate from the target-profile
+  `OP_REGISTRY`.
+- **`--run-pending-migrations` flag** (env `ARK_RUN_PENDING_MIGRATIONS=1`) on
+  `migrate.py` — opt-in dispatch of `status: active` `pending_migrations`. Default OFF:
+  a normal `/ark-update` run is byte-identical to before, so downstream vault/task
+  convergence stays a deliberate per-project step.
+- **Backup provenance** (`state.write_backup_with_sidecar` / `verify_backup`) — files an
+  op overwrites get a `.bak` copy plus a `.meta.json` sidecar recording a `pre_hash`
+  (sha256), reintroducing the backup-provenance coverage retired in the v2.0.0 green-up.
+- **Per-project marker** `.ark/pending-migrations.json` (`state.py` helpers) — records
+  each migration's terminal state per project (the plugin-shared `target-profile.yaml`
+  cannot hold per-project state).
+- 24 new tests: per-op unit tests (fresh / partially-converged / already-converged
+  idempotent re-run), backup-provenance, engine e2e (`--run-pending-migrations`), and
+  pending-migrations schema validation. Full suite: 244 passed (was 220).
+
+### Changed
+
+- `target-profile.yaml` `pending_migrations` entries gain an `op:` field and their
+  `status:` flips `pending` → `active` (plugin-side implementation lifecycle).
+- `check_target_profile_valid.py` validates the `pending_migrations` schema (Check 8).
+
 ## [2.0.0] - 2026-07-06
 
 Big-bang restructure to two co-equal cores: a stateless workflow consultant
