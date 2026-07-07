@@ -144,26 +144,29 @@ def test_convergence_byte_exact(fixture_name: str, tmp_path: Path) -> None:
     _assert_convergence(fixture_name, tmp_path)
 
 
-def test_convergence_pre_v1_11_applies_one_op(tmp_path: Path) -> None:
-    """pre-v1.11: engine must apply exactly 1 op (setup-vault-symlink; the only
-    surviving convergence entry in v2 — see module docstring's v2.0.0 NOTE)."""
+def test_convergence_pre_v1_11_applies_two_ops(tmp_path: Path) -> None:
+    """pre-v1.11: engine must apply exactly 2 ops — setup-vault-symlink (ensured_files)
+    and the vault-awareness managed region (v2.2.0, epic #41). Neither is present in a
+    pre-v1.11 project."""
     _copy_fixture_pre("pre-v1.11", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
-    # Summary line: "1 applied"
-    assert "1 applied" in result.stdout, f"Expected 1 applied, got:\n{result.stdout}"
+    # Summary line: "2 applied"
+    assert "2 applied" in result.stdout, f"Expected 2 applied, got:\n{result.stdout}"
 
 
 def test_convergence_pre_v1_12_skips_existing_script(tmp_path: Path) -> None:
-    """pre-v1.12: setup-vault-symlink.sh already present → all ops idempotent → clean run."""
+    """pre-v1.12: setup-vault-symlink.sh already present → that op is idempotent-skipped,
+    but the vault-awareness managed region is missing → exactly 1 op applies."""
     _copy_fixture_pre("pre-v1.12", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
-    assert "clean" in result.stdout.lower(), f"Expected a clean run:\n{result.stdout}"
+    assert "1 applied" in result.stdout, f"Expected 1 applied (vault-awareness):\n{result.stdout}"
 
 
 def test_convergence_pre_v1_13_converges_existing(tmp_path: Path) -> None:
-    """pre-v1.13: setup-vault-symlink.sh already present → all ops idempotent → clean run.
+    """pre-v1.13: setup-vault-symlink.sh already present → idempotent-skipped, but the
+    vault-awareness managed region is missing → exactly 1 op applies.
 
     (In v1 this fixture also exercised omc-routing/routing-rules convergence;
     those managed regions are retired in v2 — see module docstring's v2.0.0 NOTE.)
@@ -171,15 +174,16 @@ def test_convergence_pre_v1_13_converges_existing(tmp_path: Path) -> None:
     _copy_fixture_pre("pre-v1.13", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
-    assert "clean" in result.stdout.lower(), f"Expected a clean run:\n{result.stdout}"
+    assert "1 applied" in result.stdout, f"Expected 1 applied (vault-awareness):\n{result.stdout}"
 
 
 def test_convergence_fresh_creates_symlink_script(tmp_path: Path) -> None:
-    """fresh: empty project; engine must create the one surviving managed artifact."""
+    """fresh: empty project; engine applies both convergence ops — creates the
+    setup-vault-symlink script and inserts the vault-awareness managed region."""
     _copy_fixture_pre("fresh", tmp_path)
     result = _run_engine(tmp_path)
     assert result.returncode == 0
-    assert "1 applied" in result.stdout, f"Expected 1 applied:\n{result.stdout}"
+    assert "2 applied" in result.stdout, f"Expected 2 applied:\n{result.stdout}"
     assert (tmp_path / "scripts" / "setup-vault-symlink.sh").exists()
 
 

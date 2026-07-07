@@ -1,21 +1,3 @@
-# My Test Project
-
-## Overview
-
-A minimal project at pre-v1.12 state. Has v1.11 conventions (setup-vault-symlink.sh
-exists). Missing routing-rules block, OMC block, and .ark-workflow/ gitignore entry.
-
-## Project Configuration
-
-| Topic | Location |
-|-------|----------|
-| **Task Management** | `vault/TaskNotes/` — prefix: `Test-` |
-| **Vault layout** | centralized |
-
-## Notes
-
-Some user-authored content that must not be touched by ark-update.
-<!-- ark:begin id=vault-awareness version=2.2.0 -->
 ## Vault Awareness
 
 This project's durable knowledge lives in an OKF vault. Treat it as both an input and an
@@ -30,4 +12,3 @@ output of your work — not an afterthought.
 
 Neither step is automatic; they are your responsibility. Skipping the pre-work read risks
 rebuilding something that already exists; skipping the distill loses what you learned.
-<!-- ark:end id=vault-awareness -->

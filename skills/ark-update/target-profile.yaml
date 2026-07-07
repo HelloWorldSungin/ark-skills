@@ -13,8 +13,17 @@
 #   version:  the template version currently emitted by the marker.
 schema_version: 1
 
-# No CLAUDE.md managed regions in v2. Routing is the consultant's job, not a template.
-managed_regions: []
+# v2.2.0 — the vault-awareness convention (epic #41): an ark-marked CLAUDE.md region that
+# tells downstream agents to consult the vault before non-trivial work and distill via
+# /vault at session end. Converged idempotently by the existing ensure_claude_md_section op
+# (no new engine code). Routing is still the consultant's job, not a managed region.
+managed_regions:
+  - id: vault-awareness
+    op: ensure_claude_md_section
+    file: CLAUDE.md
+    template: vault-awareness-block.md
+    since: 2.2.0
+    version: 2.2.0
 
 # No ark-managed gitignore entries in v2 (the chain-router state dir retired with it).
 ensured_gitignore: []
