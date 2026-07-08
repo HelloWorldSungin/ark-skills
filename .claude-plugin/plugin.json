@@ -1,6 +1,6 @@
 {
   "name": "ark-skills",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Shared skills for ArkNode projects built around two co-equal cores: a stateless workflow consultant that routes each task to exactly one execution ecosystem and files a GitHub epic as the plan of record, and a conventions layer (OKF v0.1 knowledge bundles, GitHub Issues task management, NotebookLM sync) applied via onboarding, health diagnostics, and version-driven migration.",
   "author": {
     "name": "HelloWorldSungin",

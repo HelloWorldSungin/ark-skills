@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.1] - 2026-07-07
+
+Re-ground `/ark-onboard`'s greenfield vault seeding in the **OKF v0.1 SPEC** instead of the
+ArkNode-AI vault's folder taxonomy. ark-skills is a general convergence layer for many
+projects, so cloning one project's directory layout onto every onboarded repo was a leak.
+
+### Changed
+
+- **`/ark-onboard` Block A** (`skills/ark-onboard/SKILL.md`) — the OKF bundle-init recipe now
+  cites the pinned OKF SPEC
+  (`github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md`) as its reference
+  and is split into two tiers: an **OKF-conformant core** (tooling + `index.md` with
+  `okf_version: "0.1"` + `log.md` + lint hook) that is a valid bundle on its own, and an
+  **Ark recommended layer** (`_Templates/`, `_Attachments/`, `Research/`, `Compiled-Insights/`,
+  `00-Home.md`) explicitly labeled "convention, not OKF-required" and offered with a skip
+  option for a minimal bundle. Removes the "ArkNode-AI reference bundle" language and the
+  reference to the nonexistent `docs/playbooks/okf-knowledge-base.md`. Verified by dry-run:
+  the core alone lints clean (`okf_lint --quiet`, exit 0), and adding the Ark layer keeps it
+  clean. Structure-only doc change — no engine code, and `/vault`'s write targets
+  (`Research/`, `Compiled-Insights/`, `_Templates/`) remain seeded by default.
+
 ## [2.2.0] - 2026-07-07
 
 Add the **vault-awareness convention** (epic #41): downstream projects are now told, in
