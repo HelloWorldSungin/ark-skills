@@ -100,15 +100,22 @@ The greenfield, migration, and repair paths all reuse these three blocks.
 
 ### Block A — OKF bundle init
 
-Source of the OKF tooling: the ark-skills plugin's own bundle (`<plugin>/vault/_meta/okf/`) or the ArkNode-AI reference bundle. Follow the OKF playbook (`docs/playbooks/okf-knowledge-base.md` in a converged project) for the authoritative recipe.
+Reference: the **OKF v0.1 SPEC** — https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md. OKF is deliberately domain-agnostic: the only hard requirement is a non-empty `type:` on every non-reserved `.md`; `index.md` and `log.md` are optional reserved files; concept files and subdirectories are arbitrary ("the directory structure is independent of the domain"). Seed the OKF-conformant **core** first, then add the Ark **recommended layer** (house style — convention, not OKF-required). The OKF tooling *scripts* are copied from the ark-skills plugin's own bundle (`<plugin>/vault/`) — that is tooling, not structure.
 
-1. Create the bundle skeleton: `vault/{_meta/okf,_Templates,_Attachments}` and `vault/Compiled-Insights`, `vault/Research`.
-2. Copy the OKF tooling into `vault/_meta/okf/`: `okf_lint.py`, `okf_cli.py`, `convert_links.py`, `normalize_frontmatter.py`; and `vault/_meta/generate-index.py`.
-3. Copy the OKF page templates into `vault/_Templates/` (Research, Compiled-Insight, Service, etc.) and write `vault/_meta/vault-schema.md` + `vault/_meta/taxonomy.md`.
-4. Create `vault/index.md` declaring `okf_version: "0.1"` in its frontmatter, and `vault/00-Home.md` (navigation MOC).
-5. Create an empty `vault/log.md` (the in-bundle work-record mirror; see `/vault`).
-6. Wire the pre-push lint hook (`vault/_meta/githooks/pre-push` + `git config core.hooksPath`) per the playbook.
-7. Finish: `python3 vault/_meta/generate-index.py` then `python3 vault/_meta/okf/okf_lint.py --quiet` (must exit 0).
+**Core (OKF-conformant — always):**
+
+1. Copy the OKF tooling into `vault/_meta/okf/`: `okf_lint.py`, `okf_cli.py`, `convert_links.py`, `normalize_frontmatter.py`; and `vault/_meta/generate-index.py` (from `<plugin>/vault/`).
+2. Create `vault/index.md` declaring `okf_version: "0.1"` in its frontmatter (the SPEC marks this optional; ark tooling + `/ark-health` Check 11 require it — stricter than spec, intentionally).
+3. Create an empty `vault/log.md` (the in-bundle work-record mirror; see `/vault`).
+4. Wire the pre-push lint hook (`vault/_meta/githooks/pre-push` + `git config core.hooksPath`).
+
+**Ark recommended layer (convention, not OKF-required — default on; offer to skip for a minimal bundle):**
+
+5. Create the Ark starter folders: `vault/{_Templates,_Attachments}`, `vault/Research`, `vault/Compiled-Insights`.
+6. Copy the OKF page templates into `vault/_Templates/` (Research, Compiled-Insight, Service, etc.) and write `vault/_meta/vault-schema.md` + `vault/_meta/taxonomy.md`.
+7. Create `vault/00-Home.md` (navigation MOC). These folders are the Ark house style and the write targets `/vault` expects (`Research/`, `Compiled-Insights/`, `_Templates/`); an OKF consumer does not require them.
+
+**Finish (both tiers):** `python3 vault/_meta/generate-index.py` then `python3 vault/_meta/okf/okf_lint.py --quiet` (must exit 0). The core alone is already conformant; adding the layer keeps it conformant.
 
 ### Block B — GitHub Issues conventions
 
