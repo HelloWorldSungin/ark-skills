@@ -42,7 +42,7 @@ Routing destinations for `/ark-consult` (install per your workflow): superpowers
 
 ## Skill Documentation
 
-**`/ark-consult`** — Given a non-trivial task, triages it, asks at most two clarifying questions, and recommends exactly ONE execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) from a 12-archetype routing matrix with reasoning. Files a GitHub epic (epic + component + priority labels; children as task-list checkboxes, optionally cut via mattpocock `/to-issues`), then invokes the chosen ecosystem's entry skill and stops. Never chains two ecosystems, never orchestrates post-handoff, never writes local state — the GitHub epic is the only state (resume = `gh issue view <epic>`).
+**`/ark-consult`** — Given a non-trivial task, triages it, asks at most two clarifying questions, and recommends exactly ONE execution ecosystem (gstack / superpowers / mattpocock / oh-my-claudecode) from a 12-archetype routing matrix with reasoning. Files a GitHub epic (epic + component + priority labels; children as task-list checkboxes, optionally cut via mattpocock `/to-tickets`), then invokes the chosen ecosystem's entry skill and stops. Never chains two ecosystems, never orchestrates post-handoff, never writes local state — the GitHub epic is the only state (resume = `gh issue view <epic>`).
 
 **`/vault`** — Write-side knowledge operations for the OKF bundle: distills durable insights from a session (knowledge only — no session logs, no task tracking), ingests external documents, appends work-record lines to `log.md`, and always finishes by regenerating the index and passing `okf_lint.py`. Reading the vault is script-based (`okf_cli.py`) or via NotebookLM.
 

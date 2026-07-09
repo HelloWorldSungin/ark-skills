@@ -47,13 +47,12 @@ Detection is session-capability: read the `system-reminder` skill list in the cu
 
 **Check 3 — mattpocock skills installed** | Tier: Standard
 - Detect (filesystem — these skills declare `disable-model-invocation: true`, so they never appear as ambient session triggers):
-  ```bash
-  n=0; for s in to-issues triage to-prd setup-matt-pocock-skills; do [ -d "$HOME/.claude/skills/$s" ] && n=$((n+1)); done
-  [ "$n" -ge 3 ] && echo "PASS: $n/4 mattpocock skills present" || echo "FAIL: only $n/4 present"
-  ```
-- Pass: ≥3 of the 4 skill dirs present
+  req=0; for s in to-tickets setup-matt-pocock-skills; do [ -d "$HOME/.claude/skills/$s" ] && req=$((req+1)); done
+  opt=0; for s in to-spec triage implement; do [ -d "$HOME/.claude/skills/$s" ] && opt=$((opt+1)); done
+  { [ "$req" -eq 2 ] && [ "$opt" -ge 2 ]; } && echo "PASS: to-tickets+setup present, $opt/3 optional" || echo "FAIL: req=$req/2 opt=$opt/3"
+- Pass: `to-tickets` + `setup-matt-pocock-skills` present, plus ≥2 of `to-spec`/`triage`/`implement`
 - Fail action: `npx skills@latest add mattpocock/skills`, then `/setup-matt-pocock-skills`
-- Unlocks: `/to-issues` + `/triage` issue machinery and mattpocock as a routing destination
+- Unlocks: `/to-tickets` + `/triage` issue machinery and mattpocock as a routing destination
 
 **Check 4 — oh-my-claudecode (OMC)** | Tier: Standard | Upgrade-style (never fails)
 - Detect: `command -v omc` OR `~/.claude/plugins/cache/omc` exists; `ARK_SKIP_OMC=true` overrides to skip
@@ -245,7 +244,7 @@ Ark Health Check -- {project_name}
 Ecosystems (consultant routing destinations)
   OK  superpowers detected
   OK  gstack detected
-  !!  mattpocock skills -- only 1/4 present
+  !!  mattpocock skills -- only 1/5 present
       Fix: npx skills@latest add mattpocock/skills && /setup-matt-pocock-skills
   --  OMC -- not installed
       Unlock: autopilot / ultrawork / team routing

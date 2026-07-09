@@ -9,7 +9,7 @@ Interactive setup wizard that converges a project onto the ark-skills **v2 conve
 
 1. an **OKF v0.1 knowledge bundle** at `vault/` (in-bundle tooling under `_meta/okf/`, `index.md` declaring `okf_version`, relative-markdown links),
 2. **GitHub Issues** task management (label taxonomy + `docs/agents/` conventions + frozen legacy trackers), and
-3. **mattpocock/skills** as the issue machinery (`/to-issues`, `/triage`) and the consultant's routing destinations (superpowers, gstack, OMC).
+3. **mattpocock/skills** as the issue machinery (`/to-tickets`, `/triage`) and the consultant's routing destinations (superpowers, gstack, OMC).
 
 This skill diagnoses via `/ark-health` and applies fixes. `/ark-health` is the source of truth for the invariant definitions — this skill executes the remediations.
 

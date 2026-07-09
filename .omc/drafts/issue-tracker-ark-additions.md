@@ -21,7 +21,7 @@ any other content:
 
 This applies uniformly across all four proactive behaviors below and to any
 other automated issue interaction (consultant epic filing, mattpocock
-`/to-issues` / `/triage` output where it posts comments).
+`/to-tickets` / `/triage` output where it posts comments).
 
 ## The four proactive behaviors
 
@@ -43,7 +43,7 @@ other automated issue interaction (consultant epic filing, mattpocock
    4) files an epic from a triage conversation, it creates the parent issue
    with label `epic` plus a component label, and either files children
    directly (`gh issue create` with `story`/`task` labels, "Part of #NNN" in
-   the body) or delegates child-cutting to mattpocock `/to-issues` per the
+   the body) or delegates child-cutting to mattpocock `/to-tickets` per the
    Phase-3.4 validated contract. The consultant itself never does
    post-handoff orchestration — filing the epic/children is the last step
    before handoff.

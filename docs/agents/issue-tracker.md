@@ -10,6 +10,7 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
+- **Attach a child as a native sub-issue** (epic owner only — `/ark-consult`): `child_id=$(gh api repos/OWNER/REPO/issues/<child#> --jq .id) && gh api --method POST repos/OWNER/REPO/issues/<epic#>/sub_issues -F sub_issue_id="$child_id" --silent 2>/dev/null || true`. The `sub_issue_id` is the child's REST integer id (not its number); the trailing `|| true` makes it non-fatal — an already-attached child (HTTP 422) or a tracker without sub-issue support falls back to the markdown checkboxes.
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone. This repo: `HelloWorldSungin/ark-skills`.
 
@@ -28,7 +29,7 @@ Run `gh issue view <number> --comments`.
 ## ark-skills additions
 
 The base conventions above are mattpocock's engineering-skills contract
-(`to-issues`, `triage`, `to-prd`, `qa`). This repo layers four additional
+(`to-tickets`, `triage`, `to-spec`, `code-review`). This repo layers four additional
 proactive behaviors on top, plus an AI-disclaimer convention and a
 dual-write rule into the OKF vault bundle's `log.md`. See
 `skills/ark-consult/SKILL.md` and `skills/vault/SKILL.md` for where these
@@ -45,7 +46,7 @@ before any other content:
 ```
 
 This applies uniformly to every automated issue interaction: the four
-behaviors below, and any comments posted by mattpocock's `/to-issues` or
+behaviors below, and any comments posted by mattpocock's `/to-tickets` or
 `/triage` skills when invoked on this repo.
 
 ### The four proactive behaviors
@@ -69,7 +70,7 @@ behaviors below, and any comments posted by mattpocock's `/to-issues` or
    `epic` plus a component label (`consultant`, `conventions`, `vault`,
    `onboarding`), and either files children directly (`gh issue create`
    with `story`/`task` labels, "Part of #NNN" in the body) or delegates
-   child-cutting to mattpocock `/to-issues` per the validated contract in
+   child-cutting to mattpocock `/to-tickets` per the validated contract in
    `.omc/drafts/mattpocock-contract.md`. The consultant never does
    post-handoff orchestration — filing the epic/children is the last step
    before handoff.
@@ -100,3 +101,9 @@ The link is a GitHub issue/comment/PR permalink
 (`gh issue view <n> --json url --jq .url`, or a comment permalink). The
 `<short hook>` is a handful of words for scanning/recall, not a summary of
 the work — the linked issue is where the detail lives.
+
+### Research output landing
+
+mattpocock's `/research` skill writes cited-Markdown findings to the path declared in
+`CLAUDE.md` → Project Configuration → **Research notes** (`vault/Research/`). `/vault`
+then distills those files into OKF-conformant pages. See `skills/vault/SKILL.md` §2.

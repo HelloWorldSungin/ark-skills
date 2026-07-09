@@ -63,6 +63,12 @@ retired document-ingestion rules, rewritten for OKF.)
 3. Cross-link related pages with relative markdown links.
 4. Finish with the index + lint step (below).
 
+**`/research` output is a first-class ingest source.** mattpocock's `/research` skill
+writes cited-Markdown findings to `vault/Research/` (declared in `CLAUDE.md` → Project
+Configuration → Research notes). Ingesting them is the same distillation as above:
+give each an OKF `type:`, a ≤200-char `description:`, and populate `source-tasks:` with
+the originating GitHub issue number(s). Distill — do not paste the raw research file.
+
 ### 3 — log.md append (work-record mirror)
 
 The bundle's `log.md` is a synced mirror of GitHub progress comments (dual-write; the

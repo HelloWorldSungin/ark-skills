@@ -62,7 +62,7 @@ There is no programmatic test suite for this plugin — skills are instruction f
 The plugin itself has no hard runtime dependencies. Individual skills optionally use:
 
 - **`gh` CLI** — GitHub-Issues task management (`/ark-consult`, `/ark-onboard`).
-- **mattpocock/skills** — issue machinery (`/to-issues`, `/triage`) and a routing destination for `/ark-consult`.
+- **mattpocock/skills** — issue machinery (`/to-tickets`, `/triage`) and a routing destination for `/ark-consult`.
 - **NotebookLM CLI** (`pipx install notebooklm-cli`) — synthesized recall, `/notebooklm-vault`.
 
 <!-- MANUAL: Manually added notes below this line are preserved on regeneration. -->
