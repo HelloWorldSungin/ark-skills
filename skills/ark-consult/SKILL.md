@@ -58,6 +58,13 @@ not pick an overlapping alternative. One ecosystem per task — never chain two.
 | Research / investigation | OMC | `autoresearch` / `ccg` | Fan-out research + multi-model synthesis |
 | Tracker-driven implementation | mattpocock | `/implement` per issue | Drives TDD + review from a filed issue |
 
+**mattpocock lane entry point depends on task phase:** a build you can hold in one
+session → `/to-spec` → `/to-tickets`; an already-filed issue → `/implement`. Foggy,
+multi-session efforts route to the **OMC lane** (`ralplan`/`autopilot`), not
+mattpocock — mattpocock's `/wayfinder` remains a manual, off-profile choice under the
+current Minimal label model (it applies its own `wayfinder:*` labels that ark-skills
+does not adopt).
+
 #### Known-overlap rules (pick one, NEVER chain)
 
 Several ecosystems cover the same ground. When a task could take two paths, pick a
@@ -67,7 +74,7 @@ single one — do not run both:
   `finishing-a-development-branch`. Pick by where the work was done: gstack if it
   is a gstack web project, superpowers otherwise.
 - **Planning a build** — OMC `ralplan` OR superpowers `brainstorming` OR gstack
-  `/spec` OR mattpocock `grill-with-docs` → `to-prd`. Pick by the downstream
+  `/spec` OR mattpocock `grill-with-docs` → `to-spec` → `to-tickets`. Pick by the downstream
   executor: use the planning skill from the ecosystem that will build it.
 - **Code review** — four flows exist (gstack `/review`, superpowers
   `requesting-code-review`, mattpocock's `/implement` inner review, OMC reviewers).
@@ -106,19 +113,24 @@ Labels:
 
 Component labels are ark-skills-specific and are **your** responsibility — mattpocock
 never applies them (see `.omc/drafts/mattpocock-contract.md`). Epic creation and
-child-checklist maintenance are also yours: mattpocock's `/to-issues` explicitly
+child-checklist maintenance are also yours: mattpocock's `/to-tickets` explicitly
 never touches parent issues.
 
 **Children** go into the epic body as task-list checkboxes (`- [ ] #NNN` once cut).
 You may cut child issues one of two ways:
 - **`gh` directly** (always works): `gh issue create` per child, `story`/`task`
   label, "Part of #<epic>" in the body.
-- **Delegate to mattpocock `/to-issues`** (enhancement): explicitly invoke the
+- **Delegate to mattpocock `/to-tickets`** (enhancement): explicitly invoke the
   slash command with the plan in context. mattpocock skills declare
   `disable-model-invocation: true` — they NEVER auto-trigger, so delegation means
-  literally invoking `/to-issues`. It files children in dependency order with
-  `ready-for-agent` and wires sub-issue edges, but never edits the epic — you check
-  the boxes yourself. The `gh` fallback is always available if you don't delegate.
+  literally invoking `/to-tickets`. It files children in dependency order with
+  `ready-for-agent` and wires **native blocking edges** between children, but never
+  edits the epic — the native epic→child sub-issue attach is `/ark-consult`'s job (see
+  the sub-issue step below). You check the boxes yourself. **Wide refactors** are
+  sequenced as **expand–contract** (add-new-beside-old → migrate call sites in
+  blast-radius batches → delete old) rather than forced into one tracer-bullet slice.
+  `/ark-consult` still owns the epic + `component` + `P1`/`P2`/`P3` labels. The `gh`
+  fallback is always available if you don't delegate.
 
 ### 4 — Hand off
 
