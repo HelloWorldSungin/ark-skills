@@ -29,13 +29,13 @@
 | `AGENTS.md` | 1 | rename (L65) |
 | `skills/AGENTS.md` | 1 | rename (L97) |
 | `skills/ark-health/SKILL.md` | 2 | harden Check 3 + rename Unlocks (L48–56) |
-| `skills/ark-consult/SKILL.md` | 3 | rename + `to-tickets` engine note + entry-point sharpening + wayfinder escape hatch |
-| `.omc/drafts/mattpocock-contract.md` | 4 | full rewrite against v1.1.0 skills |
+| `skills/ark-consult/SKILL.md` | 3, 8 | rename + `to-tickets` engine + wayfinder escape hatch (T3); native sub-issue attach step (T8) |
+| `.omc/drafts/mattpocock-contract.md` | 4 | full rewrite against v1.1.0 skills (incl. native-sub-issues ownership note) |
 | `.omc/drafts/issue-tracker-ark-additions.md` | 5 | stale-draft rename (L24, L46) |
-| `docs/agents/issue-tracker.md` | 6 | rename (L31/L48/L72) + research-landing cross-ref |
+| `docs/agents/issue-tracker.md` | 6, 8 | rename + research-landing cross-ref (T6); sub-issue `gh` crib line (T8) |
 | `CLAUDE.md` | 7 | add `Research notes → vault/Research/` config row |
 | `skills/vault/SKILL.md` | 7 | name `research` output as an ingest source (§2) |
-| `VERSION`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `CHANGELOG.md` | 8 | bump 2.2.1 → 2.3.0 |
+| `VERSION`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `CHANGELOG.md` | 9 | bump 2.2.1 → 2.3.0 |
 
 ---
 
@@ -99,7 +99,7 @@ Check 3 currently greps for `to-issues`/`to-prd` (retired) and passes on `≥3-o
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: the hardened Check 3 that Task 9 / spec verification relies on.
+- Produces: the hardened Check 3 that Task 10 / spec verification relies on.
 
 - [ ] **Step 1: Replace the Check 3 detect block (lines 50–53)**
 
@@ -202,8 +202,9 @@ with:
   slash command with the plan in context. mattpocock skills declare
   `disable-model-invocation: true` — they NEVER auto-trigger, so delegation means
   literally invoking `/to-tickets`. It files children in dependency order with
-  `ready-for-agent` and wires **native blocking edges + sub-issue relationships**,
-  but never edits the epic — you check the boxes yourself. **Wide refactors** are
+  `ready-for-agent` and wires **native blocking edges** between children, but never
+  edits the epic — the native epic→child sub-issue attach is `/ark-consult`'s job (see
+  the sub-issue step below). You check the boxes yourself. **Wide refactors** are
   sequenced as **expand–contract** (add-new-beside-old → migrate call sites in
   blast-radius batches → delete old) rather than forced into one tracer-bullet slice.
   `/ark-consult` still owns the epic + `component` + `P1`/`P2`/`P3` labels. The `gh`
@@ -288,8 +289,8 @@ those handoffs explicit invocations.
 - **`/to-tickets`** — takes a plan/spec/conversation (in context, or a spec path /
   issue reference passed as an argument) and breaks it into **tracer-bullet vertical
   slices**, each declaring its **blocking edges**, filed after a quiz-the-user loop.
-  On a real tracker it uses **native blocking links + sub-issue relationships** and
-  publishes in dependency order; **wide refactors** are sequenced as **expand–contract**
+  On a real tracker it uses **native blocking links** between children and publishes in
+  dependency order; **wide refactors** are sequenced as **expand–contract**
   instead of a single slice. Applies `ready-for-agent` by default unless told
   otherwise. (Consolidates the two pre-v1.1.0 child-cutting skills.)
 - **`/to-spec`** — turns the current conversation thread into a spec and publishes it.
@@ -318,8 +319,9 @@ those handoffs explicit invocations.
 
 ## What they write
 
-- New issues (`to-tickets`, `to-spec`) via `gh issue create`, with native blocking /
-  sub-issue links (`to-tickets`) where the tracker supports them.
+- New issues (`to-tickets`, `to-spec`) via `gh issue create`, with native blocking
+  links between children (`to-tickets`) where the tracker supports them. (The epic→child
+  native sub-issue link is `/ark-consult`'s parent-side write, not theirs — see below.)
 - Labels on existing issues (`triage`) via `gh issue edit --add-label/--remove-label`.
 - Comments (`triage`, and any narrative comment) via `gh issue comment`.
 - Closes (`triage`) via `gh issue close --comment`.
@@ -352,6 +354,16 @@ This repo's four component labels (`consultant`, `conventions`, `vault`, `onboar
 are ark-specific and outside mattpocock's vocabulary (which knows only the 5 triage
 roles + 2 category roles). `ark-consult` applies component labels itself; delegating an
 issue to `/triage` only ever touches triage-state and category labels.
+
+## Native sub-issues are ark-consult's job, not mattpocock's
+
+GitHub's native sub-issue link is a **parent-side write** (POST to the epic's
+`/sub_issues`). The "never touch the parent" rule above binds mattpocock's child-cutter
+— it references the parent in the child body but never modifies it. `ark-consult`,
+which **owns** the epic, is therefore the one that attaches each cut child to the epic
+as a native sub-issue (in addition to the human-readable `- [ ] #NNN` checkbox). This
+is not a contradiction: the owner writing its own epic is exactly the boundary the rule
+protects.
 
 ## wayfinder — available but NOT wired (Minimal profile)
 
@@ -527,7 +539,76 @@ git commit -m "feat(vault): wire mattpocock /research output into OKF ingestion 
 
 ---
 
-## Task 8: Phase 4 version bump 2.2.1 → 2.3.0
+## Task 8: Native sub-issue attachment (epic → children)
+
+Today `/ark-consult` links an epic to its children with **markdown checkboxes only**
+(`- [ ] #NNN` + "Part of #epic" text) — GitHub's native sub-issue hierarchy is unused.
+This task makes `/ark-consult` also attach each child as a **native sub-issue**, so the
+GitHub UI shows the hierarchy panel + progress roll-up. `/ark-consult` owns the epic, so
+the parent-side write is legitimate (the "never touch the parent" rule binds mattpocock,
+not the epic owner — see the contract note added in Task 4).
+
+**Files:**
+- Modify: `skills/ark-consult/SKILL.md` (insert an attach paragraph before the `### 4 — Hand off` heading)
+- Modify: `docs/agents/issue-tracker.md` (add a sub-issue `gh` crib bullet)
+
+**Ordering:** run **after Task 3** (which rewrites the child-cutting bullets) and **after Task 6** (which renames the crib). Both insertions here land at locations those tasks do not touch, so there is no overlap.
+
+**Interfaces:**
+- Consumes: the epic + child issue numbers produced by `/ark-consult` step 3.
+- Produces: native `parent → sub-issue` links on the tracker.
+
+- [ ] **Step 1: Insert the attach paragraph in `skills/ark-consult/SKILL.md`**
+
+Immediately before the `### 4 — Hand off` heading (the child-cutting section ends just above it), insert this paragraph (the outer fence below is four backticks so the inner ```` ```bash ```` block nests cleanly — write plain triple-backticks into the actual file):
+````markdown
+**Attach each child as a native sub-issue.** The checkboxes above are the
+human-readable index; the machine hierarchy is GitHub's native sub-issue link, which
+gives the epic a progress roll-up and hierarchy panel. Because you own the epic, you do
+the parent-side attach yourself (the "never edit the parent" rule binds mattpocock's
+child-cutter, not the epic owner). After each child issue exists, attach it — treating a
+failure (already attached → HTTP 422, or a tracker/account without sub-issue support) as
+non-fatal, since the checkboxes still carry the hierarchy:
+
+```bash
+child_id=$(gh api "repos/<owner>/<repo>/issues/<child#>" --jq .id)
+# non-fatal: fall back to the checkboxes if the attach is rejected or unsupported
+gh api --method POST "repos/<owner>/<repo>/issues/<epic#>/sub_issues" \
+  -F sub_issue_id="$child_id" --silent 2>/dev/null || true
+```
+
+`sub_issue_id` is the child's **REST integer id** from `gh api .../issues/<child#> --jq .id`
+(e.g. `4831116462`) — NOT the issue number and NOT the `gh issue list --json id` node id
+(`I_kwDO…`), which this endpoint rejects. Keep the `- [ ] #NNN` checkboxes too — they
+render the roll-up in the epic body and survive trackers without the sub-issues API.
+````
+
+- [ ] **Step 2: Add the sub-issue crib bullet in `docs/agents/issue-tracker.md`**
+
+In the `## Conventions` list, immediately after the `- **Close**: …` bullet, add:
+```markdown
+- **Attach a child as a native sub-issue** (epic owner only — `/ark-consult`): `child_id=$(gh api repos/OWNER/REPO/issues/<child#> --jq .id) && gh api --method POST repos/OWNER/REPO/issues/<epic#>/sub_issues -F sub_issue_id="$child_id" --silent 2>/dev/null || true`. The `sub_issue_id` is the child's REST integer id (not its number); the trailing `|| true` makes it non-fatal — an already-attached child (HTTP 422) or a tracker without sub-issue support falls back to the markdown checkboxes.
+```
+
+- [ ] **Step 3: Verify the docs edits**
+
+Run: `git grep -n "sub_issues" -- skills/ark-consult/SKILL.md docs/agents/issue-tracker.md`
+Expected: the attach paragraph and the crib bullet both present.
+
+- [ ] **Step 4: (Runtime, exercised at next real epic) Confirm the attach works**
+
+This is a docs/skill change; the runtime check happens when `/ark-consult` next files an epic. The expected observable: after attach, `gh api repos/OWNER/REPO/issues/<epic#>/sub_issues --jq 'length'` returns the child count (verified reachable: the endpoint returned `0` for issue #41 during planning).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add skills/ark-consult/SKILL.md docs/agents/issue-tracker.md
+git commit -m "feat(ark-consult): attach epic children as native GitHub sub-issues"
+```
+
+---
+
+## Task 9: Phase 4 version bump 2.2.1 → 2.3.0
 
 New convergence behavior → minor bump. Four surfaces plus changelog.
 
@@ -575,7 +656,7 @@ retired names, which broke Check 3 and dangled the delegation contract.
 ### Changed
 
 - **`/ark-consult`** — the mattpocock lane now delegates child-cutting to `/to-tickets`
-  (native blocking edges + sub-issues + expand–contract for wide refactors); entry
+  (native blocking edges between children + expand–contract for wide refactors); entry
   points sharpened (`/to-spec`→`/to-tickets` for held-in-head builds, `/implement` for
   filed issues). Foggy multi-session work routes to the OMC lane; `/wayfinder` stays a
   manual off-profile choice under the Minimal label model (no `wayfinder:*` labels
@@ -588,6 +669,10 @@ retired names, which broke Check 3 and dangled the delegation contract.
 - **`/research` → vault ingestion** — `/research` cited-Markdown output lands in
   `vault/Research/` (declared in `CLAUDE.md`) and is a first-class `/vault` ingest
   source, so the mattpocock lane produces durable OKF knowledge.
+- **Native epic sub-issues** — `/ark-consult` now attaches each cut child to the epic
+  as a native GitHub sub-issue (via the `sub_issues` API, a parent-side write the epic
+  owner performs), giving the epic a hierarchy panel + progress roll-up. Markdown
+  checkboxes are kept as the human-readable fallback.
 ```
 
 - [ ] **Step 5: Verify version sync**
@@ -606,7 +691,7 @@ git commit -m "chore(release): bump 2.2.1 → 2.3.0 (mattpocock v1.1.0 convergen
 
 ---
 
-## Task 9: Whole-repo verification sweep
+## Task 10: Whole-repo verification sweep
 
 Final audit that no retired mattpocock name survives and every `review`/`qa` left is a legitimate non-mattpocock use.
 
@@ -643,14 +728,19 @@ Expected: `PASS: to-tickets+setup present, 3/3 optional`.
 Run: `grep -RnE "2\.3\.0" VERSION .claude-plugin/plugin.json .claude-plugin/marketplace.json`
 Expected: one hit each.
 
-- [ ] **Step 6: No commit** — verification only. If any check fails, return to the owning task.
+- [ ] **Step 6: Native sub-issue docs present**
+
+Run: `git grep -n "sub_issues" -- skills/ark-consult/SKILL.md docs/agents/issue-tracker.md`
+Expected: the attach paragraph (ark-consult) and the crib bullet (issue-tracker) both present.
+
+- [ ] **Step 7: No commit** — verification only. If any check fails, return to the owning task.
 
 ---
 
 ## Self-Review (completed by plan author)
 
-- **Spec coverage:** Phase 1 → Tasks 1–6; Phase 2 → Task 3 (+ contract in Task 4); Phase 3 → Tasks 6–7; Phase 4 → Task 8; whole-spec verification → Task 9. The stale-draft flag → Task 5. Every spec section maps to a task.
+- **Spec coverage:** Phase 1 → Tasks 1–6; Phase 2 → Task 3 (+ contract in Task 4); Phase 3 → Tasks 6–7; native sub-issues → Task 8 (+ contract note in Task 4); Phase 4 → Task 9; whole-spec verification → Task 10. The stale-draft flag → Task 5. Every spec section maps to a task.
 - **Placeholder scan:** no TBD/TODO; every edit shows exact before/after text or full replacement content.
-- **Type/name consistency:** the rename map is applied identically everywhere; `to-tickets`/`to-spec`/`code-review`/`wayfinder` spelled consistently across tasks; Check 3 roster in Task 2 matches the verification in Task 9.
-- **Classification safety:** the two generic-word sites (`ark-health:43`, `ark-consult:49`) are explicitly protected in Tasks 2 and 3 and re-audited in Task 9.
+- **Type/name consistency:** the rename map is applied identically everywhere; `to-tickets`/`to-spec`/`code-review`/`wayfinder` spelled consistently across tasks; Check 3 roster in Task 2 matches the verification in Task 10; `sub_issue_id` uses the REST integer id consistently in Task 8 and the contract (Task 4).
+- **Classification safety:** the two generic-word sites (`ark-health:43`, `ark-consult:49`) are explicitly protected in Tasks 2 and 3 and re-audited in Task 10.
 ```

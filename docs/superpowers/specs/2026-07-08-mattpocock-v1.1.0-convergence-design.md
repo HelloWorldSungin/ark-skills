@@ -1,7 +1,7 @@
 # Spec: Converge ark-skills onto mattpocock v1.1.0
 
 **Date:** 2026-07-08
-**Status:** Draft — CCG-reviewed (Codex: GO-WITH-CHANGES; Antigravity: scope "Just Right"); 5 must-fixes folded in; pending user review gate.
+**Status:** Draft — CCG-reviewed (spec + plan; Codex GO-WITH-CHANGES, Antigravity scope "Just Right"); all must-fixes folded in; native epic sub-issues (Phase 3b) added at user request; pending user review gate.
 **Scope decision (settled):** Minimal label model — keep `epic→story→task` + component + `P1–P3`; adopt `to-tickets` as the child-cutting engine; do **not** adopt `wayfinder:*` labels.
 
 ## Problem
@@ -44,7 +44,11 @@ Verified on disk: the retired names are **absent** from `~/.agents/skills/` and
 3. **Phase 3 — `research` → vault wire-up.** Make mattpocock's `research` output a
    first-class `/vault` ingestion source, so the mattpocock lane produces durable OKF
    knowledge.
-4. **Phase 4 — version + changelog.** Bump 2.2.1 → 2.3.0. No push.
+4. **Phase 3b — Native epic sub-issues.** Make `/ark-consult` attach each cut child to
+   the epic as a **native GitHub sub-issue** (the `sub_issues` API — a parent-side write
+   the epic owner performs), in addition to the existing markdown checkboxes. Closes the
+   gap where the epic→child hierarchy was checkbox-text only.
+5. **Phase 4 — version + changelog.** Bump 2.2.1 → 2.3.0. No push.
 
 ## Non-goals
 
@@ -222,6 +226,43 @@ SKILL.md` §2 names `research` output as an ingest source with that landing path
 
 ---
 
+## Phase 3b — Native epic sub-issues
+
+Today `/ark-consult` links epic→children with **markdown checkboxes only** (`- [ ] #NNN`
++ "Part of #epic" text). GitHub's native sub-issue hierarchy is unused, so the epic gets
+no hierarchy panel or progress roll-up.
+
+**Key constraint / resolution.** A native sub-issue is a **parent-side write** (POST to
+the epic's `/sub_issues`). The contract's "never touch the parent" rule binds
+*mattpocock's child-cutter*, not the epic owner — and `/ark-consult` **owns** the epic.
+So `/ark-consult` performs the attach itself; no doctrine violation.
+
+**Mechanics (verified).** `gh` 2.86.0 + the `sub_issues` REST endpoint is GA and
+reachable. `sub_issue_id` is the child's **REST integer id** (`gh api .../issues/<n>
+--jq .id`, e.g. `4831116462`) — NOT the issue number and NOT the `gh issue list --json
+id` node id (`I_kwDO…`).
+
+**Graceful degradation.** The attach is **non-fatal**: an already-attached child returns
+HTTP 422, and some personal-account/tracker configurations don't fully support the
+endpoint. In both cases `/ark-consult` swallows the error (`… --silent 2>/dev/null ||
+true`) and the markdown checkboxes remain the working fallback — the workflow never fails
+on a sub-issue attach.
+
+- `skills/ark-consult/SKILL.md`: after children are cut, attach each as a native
+  sub-issue; keep the checkboxes as the human-readable fallback.
+- `docs/agents/issue-tracker.md`: add the `sub_issues` `gh api` call to the conventions
+  crib.
+- `.omc/drafts/mattpocock-contract.md`: note that the parent-side sub-issue attach is
+  `/ark-consult`'s job (the epic owner), distinct from mattpocock's "never touch parent".
+
+Stays within the Minimal label model — no new labels, no epic→story→task change.
+
+### Phase 3b completion criterion
+
+`git grep -n "sub_issues" -- skills/ark-consult/SKILL.md docs/agents/issue-tracker.md`
+shows the attach paragraph + crib bullet; the contract carries the ownership note.
+Runtime attach is exercised when `/ark-consult` next files an epic.
+
 ## Phase 4 — version + changelog
 
 Bump 2.2.1 → **2.3.0** (new convergence behavior, minor):
@@ -257,16 +298,17 @@ All changes are Markdown/JSON — no executable test suite applies. Verification
    implement}` — and would still FAIL if `to-tickets` alone were missing.
 5. **Version sync:** all four version surfaces read `2.3.0` (grep the string across
    `VERSION plugin.json marketplace.json CHANGELOG.md`).
-6. Manual consistency read of the semantic additions in Phases 2–3.
+6. **Native sub-issue docs present:** `git grep -n "sub_issues" -- skills/ark-consult/SKILL.md docs/agents/issue-tracker.md` shows the attach paragraph + crib bullet (Phase 3b).
+7. Manual consistency read of the semantic additions in Phases 2–3b.
 
 ## File inventory
 
 | File | Phase | Change |
 |---|---|---|
-| `skills/ark-consult/SKILL.md` | 1a, 2 | rename + semantic additions |
+| `skills/ark-consult/SKILL.md` | 1a, 2, 3b | rename + semantic additions + native sub-issue attach |
 | `skills/ark-health/SKILL.md` | 1a | rename (Check 3 roster) |
 | `skills/ark-onboard/SKILL.md` | 1a | rename |
-| `docs/agents/issue-tracker.md` | 1a, 3 | rename + research-landing cross-ref |
+| `docs/agents/issue-tracker.md` | 1a, 3, 3b | rename + research-landing cross-ref + sub-issue crib |
 | `CLAUDE.md` | 3 | `Research notes → vault/Research/` config row |
 | `README.md` | 1b | rename |
 | `AGENTS.md` | 1b | rename |
