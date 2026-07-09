@@ -1,108 +1,106 @@
-# mattpocock skills delegation contract (validated 2026-07-06)
+# mattpocock skills delegation contract (re-validated 2026-07-08 for v1.1.0)
 
 Read against the actual installed SKILL.md files at
-`~/.claude/skills/{to-issues,triage,to-prd,setup-matt-pocock-skills}/SKILL.md`
-and the `docs/agents/*.md` this repo now has. This is the contract
-`ark-consult` (Phase 4) is authored against — not the pre-install research
-the original spec assumed (Architect change #4).
+`~/.claude/skills/{to-tickets,to-spec,triage,code-review,setup-matt-pocock-skills}/SKILL.md`
+and the `docs/agents/*.md` this repo has. This supersedes the 2026-07-06
+contract, which described the pre-v1.1.0 child-cutting and PRD-synthesis skills that
+v1.1.0 retired.
 
 ## Invocation surface
 
-All three skills declare `disable-model-invocation: true` in frontmatter —
-none of them auto-trigger on keywords. They are only reachable via an
-explicit slash command: `/to-issues`, `/triage`, `/to-prd`. This matters for
-`ark-consult`: "delegating to mattpocock" means literally telling the user
-(or invoking) the slash command — there is no ambient routing mattpocock
-does on its own. `ark-consult` cannot assume these skills will pick up work
-silently; the handoff must be an explicit invocation.
+`/to-tickets`, `/to-spec`, and `/triage` declare `disable-model-invocation: true` in
+frontmatter — they never auto-trigger and are reachable only via an explicit slash
+command. `/code-review` is the **exception**: its frontmatter does NOT set that flag,
+so it is model-invokable (it can auto-trigger and other skills can reach it). For the
+three flagged skills, "delegating to mattpocock" means literally invoking the slash
+command — there is no ambient routing they do on their own — so `ark-consult` must make
+those handoffs explicit invocations.
 
-- **`/to-issues`** — takes a plan/spec/PRD (already in context, or an
-  issue reference passed as an argument) and breaks it into vertical-slice
-  ("tracer bullet") issues, filed to the tracker after a quiz-the-user
-  iteration loop. Publishes in dependency order. Applies `ready-for-agent`
-  by default unless told otherwise.
+- **`/to-tickets`** — takes a plan/spec/conversation (in context, or a spec path /
+  issue reference passed as an argument) and breaks it into **tracer-bullet vertical
+  slices**, each declaring its **blocking edges**, filed after a quiz-the-user loop.
+  On a real tracker it uses **native blocking links** between children and publishes in
+  dependency order; **wide refactors** are sequenced as **expand–contract**
+  instead of a single slice. Applies `ready-for-agent` by default unless told
+  otherwise. (Consolidates the two pre-v1.1.0 child-cutting skills.)
+- **`/to-spec`** — turns the current conversation thread into a spec and publishes it.
+  Pure synthesis of what's already been discussed. (Successor to the pre-v1.1.0
+  PRD-synthesis skill.)
 - **`/triage`** — moves an issue/PR through the 5-role state machine
-  (`needs-triage`/`needs-info`/`ready-for-agent`/`ready-for-human`/
-  `wontfix`) plus 2 category roles (`bug`/`enhancement`). Invoked with
-  natural language ("show me anything that needs attention", "move #42 to
-  ready-for-agent"). Does codebase verification and optional grilling
-  before recommending a state.
-- **`/to-prd`** — synthesizes the current conversation into a PRD and
-  publishes it, applying `ready-for-agent` directly (no triage step). Does
-  NOT interview the user — pure synthesis of what's already been discussed.
+  (`needs-triage`/`needs-info`/`ready-for-agent`/`ready-for-human`/`wontfix`) plus
+  the `bug`/`enhancement` category roles. Invoked with natural language. Does
+  codebase verification and optional grilling before recommending a state. v1.1.0
+  `/triage` also handles external PRs.
+- **`/code-review`** — two-axis review of a diff against a fixed point: **Standards**
+  (repo coding standards + a fixed Fowler ~12-smell baseline) and **Spec** (does the
+  diff implement the originating issue/spec), run as parallel sub-agents and reported
+  side by side. (Successor to the retired `review`.) `ark-consult` does NOT own review
+  — it belongs to whichever ecosystem the work was handed to.
 
 ## What they read
 
-- `docs/agents/issue-tracker.md` — tracker identity (GitHub via `gh`, this
-  repo, no PR-triage surface), `gh` command conventions.
-- `docs/agents/triage-labels.md` — canonical-role → actual-label-string
-  mapping. This repo's mapping is identity (no remapping): the 5 canonical
-  roles use the exact same strings as this repo's own labels.
-- `docs/agents/domain.md` — `CONTEXT.md`/`docs/adr/` consumer rules
-  (neither file exists yet in this repo; skills are told to proceed
-  silently on their absence, not to require them).
-- `CONTEXT.md` / `docs/adr/` directly, when they exist (lazily created by
-  `/domain-modeling`, not by these three skills).
-- `.out-of-scope/*.md` (triage only) — prior-rejection knowledge base.
+- `docs/agents/issue-tracker.md` — tracker identity (GitHub via `gh`, this repo, no
+  PR-triage surface), `gh` conventions.
+- `docs/agents/triage-labels.md` — canonical-role → label-string mapping (identity
+  here: the 5 roles use this repo's exact label strings).
+- `docs/agents/domain.md` — `CONTEXT.md`/`docs/adr/` consumer rules (skills proceed
+  silently when neither exists).
+- `CONTEXT.md` / `docs/adr/` directly, when they exist.
 
 ## What they write
 
-- New issues (`to-issues`, `to-prd`) via `gh issue create`.
-- Labels on existing issues (`triage`) via `gh issue edit --add-label
-  / --remove-label`.
-- Comments (`triage`: agent briefs, triage notes, close-out comments; all
-  three: any narrative comment) via `gh issue comment`.
+- New issues (`to-tickets`, `to-spec`) via `gh issue create`, with native blocking
+  links between children (`to-tickets`) where the tracker supports them. (The epic→child
+  native sub-issue link is `/ark-consult`'s parent-side write, not theirs — see below.)
+- Labels on existing issues (`triage`) via `gh issue edit --add-label/--remove-label`.
+- Comments (`triage`, and any narrative comment) via `gh issue comment`.
 - Closes (`triage`) via `gh issue close --comment`.
-- `.out-of-scope/*.md` files (triage, for rejected-enhancement `wontfix`
-  outcomes only — not for "already implemented" `wontfix`).
-- `CONTEXT.md`/ADRs get updated as a side effect of triage's optional
-  grilling step (`/grilling` + `/domain-modeling` together), not by triage
-  itself directly.
+- `.out-of-scope/*.md` files (triage, for rejected-enhancement `wontfix` only).
 
 ## What they never do
 
-- **`to-issues` explicitly states: "Do NOT close or modify any parent
-  issue."** Children only ever reference the parent ("## Parent" section
-  in the issue template); they never edit it.
-- None of the three ever touch epic/parent issues directly — `ark-consult`
-  owns epic creation and epic-body child-list maintenance (checking off
-  `- [x] #NNN` as children close) itself; that responsibility is NOT
-  delegated to mattpocock.
-- `to-prd` never interviews — if `ark-consult`'s triage conversation hasn't
-  already surfaced enough detail, `to-prd` is the wrong handoff (use
-  `to-issues`'s quiz loop, or `/grilling` via `triage`, instead).
-- `triage`'s "already implemented" `wontfix` path explicitly does NOT write
-  to `.out-of-scope/` (that KB is for *rejected* requests only).
+- **`to-tickets` explicitly states: "Do NOT close or modify any parent issue."**
+  Children only reference the parent; they never edit it.
+- None of them touch epic/parent issues — `ark-consult` owns epic creation and
+  epic-body child-list maintenance (checking off `- [x] #NNN` as children close). That
+  is NOT delegated to mattpocock.
+- `to-spec` never interviews — it synthesizes an existing thread. If the conversation
+  hasn't surfaced enough detail, use `to-tickets`' quiz loop or `/grilling` via
+  `triage` instead.
 
-## AI-disclaimer convention — DISCREPANCY to reconcile in Phase 4
+## AI-disclaimer convention — two valid strings, do not reconcile
 
-Two different disclaimer strings exist right now:
+- **ark-wide** (this repo's `docs/agents/issue-tracker.md`): `> *This was generated by AI.*`
+- **mattpocock's `/triage`** (hardcoded in its own SKILL.md, outside this repo's
+  control): `> *This was generated by AI during triage.*`
 
-- **ark-wide convention** (this repo's `docs/agents/issue-tracker.md`,
-  drafted in Phase 2): `> *This was generated by AI.*`
-- **mattpocock's own `/triage` skill** (hardcoded in its SKILL.md, not
-  configurable via `docs/agents/`): `> *This was generated by AI during
-  triage.*`
-
-`to-issues` and `to-prd` don't specify their own disclaimer text at all —
-they inherit whatever `ark-consult`/the ark conventions dictate, since
-nothing in their SKILL.md overrides it. Only `/triage` hardcodes a
-skill-specific variant.
-
-**Recommendation for Phase 4:** `ark-consult` should NOT try to make
-`/triage`'s hardcoded string match the ark-wide one (it's baked into
-mattpocock's own skill, outside this repo's control and outside the
-contract-validation scope). Document both strings as valid AI-disclaimer
-prefixes in this repo: the ark-wide one for everything `ark-consult`/
-`to-issues`/`to-prd` post directly, and `/triage`'s own for whatever it
-posts under its own invocation. Do not attempt to patch mattpocock's
-installed skill files.
+`to-tickets`/`to-spec`/`code-review` specify no disclaimer of their own — they inherit
+the ark-wide string. Only `/triage` hardcodes its variant. Document both as valid; do
+NOT patch mattpocock's installed skill files.
 
 ## Component labels
 
-This repo's four component labels (`consultant`, `conventions`, `vault`,
-`onboarding`) are ark-skills-specific and outside mattpocock's vocabulary
-entirely — mattpocock only knows the 5 triage roles + 2 category roles
-(`bug`/`enhancement`). `ark-consult` is responsible for applying component
-labels itself; delegating an issue to `/triage` will only ever touch the
-triage-state and category labels, never the component label.
+This repo's four component labels (`consultant`, `conventions`, `vault`, `onboarding`)
+are ark-specific and outside mattpocock's vocabulary (which knows only the 5 triage
+roles + 2 category roles). `ark-consult` applies component labels itself; delegating an
+issue to `/triage` only ever touches triage-state and category labels.
+
+## Native sub-issues are ark-consult's job, not mattpocock's
+
+GitHub's native sub-issue link is a **parent-side write** (POST to the epic's
+`/sub_issues`). The "never touch the parent" rule above binds mattpocock's child-cutter
+— it references the parent in the child body but never modifies it. `ark-consult`,
+which **owns** the epic, is therefore the one that attaches each cut child to the epic
+as a native sub-issue (in addition to the human-readable `- [ ] #NNN` checkbox). This
+is not a contradiction: the owner writing its own epic is exactly the boundary the rule
+protects.
+
+## wayfinder — available but NOT wired (Minimal profile)
+
+v1.1.0 adds `/wayfinder` (foggy multi-session efforts as a `wayfinder:map` issue with
+child tickets + native blocking). ark-skills does **not** wire it into `ark-consult`
+routing under the current **Minimal label model**, because `wayfinder` hardcodes its
+own `wayfinder:map` / `wayfinder:<type>` labels, which the Minimal model does not
+adopt. Foggy multi-session work routes to the OMC lane (`ralplan`/`autopilot`); a user
+may invoke `/wayfinder` manually as an off-profile choice. Wiring it natively is the
+content of a future "Additive" bump.
