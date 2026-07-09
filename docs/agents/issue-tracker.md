@@ -10,6 +10,7 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
+- **Attach a child as a native sub-issue** (epic owner only — `/ark-consult`): `child_id=$(gh api repos/OWNER/REPO/issues/<child#> --jq .id) && gh api --method POST repos/OWNER/REPO/issues/<epic#>/sub_issues -F sub_issue_id="$child_id" --silent 2>/dev/null || true`. The `sub_issue_id` is the child's REST integer id (not its number); the trailing `|| true` makes it non-fatal — an already-attached child (HTTP 422) or a tracker without sub-issue support falls back to the markdown checkboxes.
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone. This repo: `HelloWorldSungin/ark-skills`.
 

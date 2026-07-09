@@ -132,6 +132,26 @@ You may cut child issues one of two ways:
   `/ark-consult` still owns the epic + `component` + `P1`/`P2`/`P3` labels. The `gh`
   fallback is always available if you don't delegate.
 
+
+**Attach each child as a native sub-issue.** The checkboxes above are the
+human-readable index; the machine hierarchy is GitHub's native sub-issue link, which
+gives the epic a progress roll-up and hierarchy panel. Because you own the epic, you do
+the parent-side attach yourself (the "never edit the parent" rule binds mattpocock's
+child-cutter, not the epic owner). After each child issue exists, attach it — treating a
+failure (already attached → HTTP 422, or a tracker/account without sub-issue support) as
+non-fatal, since the checkboxes still carry the hierarchy:
+
+```bash
+child_id=$(gh api "repos/<owner>/<repo>/issues/<child#>" --jq .id)
+# non-fatal: fall back to the checkboxes if the attach is rejected or unsupported
+gh api --method POST "repos/<owner>/<repo>/issues/<epic#>/sub_issues" \
+  -F sub_issue_id="$child_id" --silent 2>/dev/null || true
+```
+
+`sub_issue_id` is the child's **REST integer id** from `gh api .../issues/<child#> --jq .id`
+(e.g. `4831116462`) — NOT the issue number and NOT the `gh issue list --json id` node id
+(`I_kwDO…`), which this endpoint rejects. Keep the `- [ ] #NNN` checkboxes too — they
+render the roll-up in the epic body and survive trackers without the sub-issues API.
 ### 4 — Hand off
 
 Invoke the chosen ecosystem's entry skill (from the matrix) with the epic number as
