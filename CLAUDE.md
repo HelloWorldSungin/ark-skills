@@ -64,6 +64,7 @@ Ark vaults use `type:` (not `category:`), `source-sessions:` and `source-tasks:`
 | **Project docs path** | `vault/` (standalone layout — same as vault root) |
 | **Session Logs** | `vault/Session-Logs/` |
 | **Task Management** | GitHub Issues via `gh` CLI — labels: triage (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`), type (`epic`, `story`, `task`), priority (`P1`/`P2`/`P3`), components (`consultant`, `conventions`, `vault`, `onboarding`); see `docs/agents/issue-tracker.md` for the full convention (`gh issue create/view/list/edit/comment/close` crib) |
+| **Research notes** | `vault/Research/` — landing path for `/research` cited-Markdown output, then distilled by `/vault` |
 
 ## Agent skills
 
