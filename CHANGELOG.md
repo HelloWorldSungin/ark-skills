@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0] - 2026-07-08
+
+Converge ark-skills onto **mattpocock/skills v1.1.0**. v1.1.0 renamed the skills
+`/ark-consult` routes to and `/ark-health` checks for; ark-skills still referenced the
+retired names, which broke Check 3 and dangled the delegation contract.
+
+### Fixed
+
+- **Retired-name drift** — replaced `to-issues`/`to-prd`/`to-plan` refs with
+  `to-tickets`/`to-spec` across `ark-consult`, `ark-health`, `ark-onboard`,
+  `issue-tracker.md`, `README`, `AGENTS.md`, `skills/AGENTS.md`, and the tracked
+  `.omc/drafts/` contract + additions drafts.
+- **`/ark-health` Check 3** — hardened to require `to-tickets` + `setup-matt-pocock-skills`
+  plus ≥2 of `to-spec`/`triage`/`implement`, fixing a false-fail on upgraded installs
+  and a latent false-pass when `to-tickets` is missing.
+
+### Changed
+
+- **`/ark-consult`** — the mattpocock lane now delegates child-cutting to `/to-tickets`
+  (native blocking edges between children + expand–contract for wide refactors); entry
+  points sharpened (`/to-spec`→`/to-tickets` for held-in-head builds, `/implement` for
+  filed issues). Foggy multi-session work routes to the OMC lane; `/wayfinder` stays a
+  manual off-profile choice under the Minimal label model (no `wayfinder:*` labels
+  adopted).
+- **`.omc/drafts/mattpocock-contract.md`** — rewritten against the installed v1.1.0
+  skills (`to-tickets`/`to-spec`/`triage`/`code-review`).
+
+### Added
+
+- **`/research` → vault ingestion** — `/research` cited-Markdown output lands in
+  `vault/Research/` (declared in `CLAUDE.md`) and is a first-class `/vault` ingest
+  source, so the mattpocock lane produces durable OKF knowledge.
+- **Native epic sub-issues** — `/ark-consult` now attaches each cut child to the epic
+  as a native GitHub sub-issue (via the `sub_issues` API, a parent-side write the epic
+  owner performs), giving the epic a hierarchy panel + progress roll-up. Markdown
+  checkboxes are kept as the human-readable fallback.
+
 ## [2.2.1] - 2026-07-07
 
 Re-ground `/ark-onboard`'s greenfield vault seeding in the **OKF v0.1 SPEC** instead of the
