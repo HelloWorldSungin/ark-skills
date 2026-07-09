@@ -94,6 +94,6 @@ Top-level orchestrators may sequence other orchestrating skills only through exp
 
 ### External
 
-Optional integrations: the `gh` CLI (GitHub Issues task management), the `notebooklm` CLI (synthesized recall), and mattpocock/skills (`/to-issues`, `/triage`). See the parent `AGENTS.md` for details.
+Optional integrations: the `gh` CLI (GitHub Issues task management), the `notebooklm` CLI (synthesized recall), and mattpocock/skills (`/to-tickets`, `/triage`). See the parent `AGENTS.md` for details.
 
 <!-- MANUAL: -->
